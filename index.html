@@ -602,7 +602,7 @@ async function connectCloud(){
     const allRows=await r.json();
     const rows=allRows.filter(x=>String(x.id)===CLOUD_DEFAULT.room);
     if(!rows.length) throw new Error('Dhoma nuk u gjet në Cloud');
-    if(rows[0].data){ cloud.lastUpdated=rows[0].updated_at; applyRemote(rows[0].data); }
+    if(rows[0].data){ cloud.lastUpdated=JSON.stringify(rows[0].data); applyRemote(rows[0].data); }
     cloud.connected=true;
     setCloudStatus('Online · '+CLOUD_DEFAULT.room,'on');
     startPolling();
@@ -635,13 +635,14 @@ function startPolling(){
       const rows=allRows.filter(x=>String(x.id)===String(cloud.cfg.room));
       if(rows.length){
         const row=rows[0];
-        if(row.updated_at!==cloud.lastUpdated){
-          cloud.lastUpdated=row.updated_at;
+        const remoteHash=JSON.stringify(row.data);
+        if(remoteHash!==cloud.lastUpdated){
+          cloud.lastUpdated=remoteHash;
           if(row.by!==clientId) applyRemote(row.data);
         }
       }
     }catch(e){/* rrjeti — provo prapë herës tjetër */}
-  },5000);
+  },2000);
 }
 function applyRemote(d){
   cloud.applying=true;
