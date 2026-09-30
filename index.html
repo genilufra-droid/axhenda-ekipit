@@ -606,7 +606,7 @@ async function connectCloud(){
     const allRows=await r.json();
     const rows=allRows.filter(x=>String(x.id)===room);
     if(rows.length && rows[0].data){ cloud.lastUpdated=rows[0].updated_at; applyRemote(rows[0].data); }
-    else { await pushNow(); }
+    else { throw new Error('Dhoma nuk u gjet në Cloud'); }
     cloud.connected=true; setCloudStatus('Online · '+room,'on');
     startPolling();
     toast('U lidhe me Cloud ✓ ('+room+')','ok');
