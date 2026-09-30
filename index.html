@@ -628,20 +628,15 @@ function startPolling(){
   cloud.poll=setInterval(async()=>{
     if(!cloud.connected) return;
     try{
-      const stamp=await fetch(cloud.rest+'?id=eq.ekipi-im-2026&select=updated_at&'+cloud.qkey+'&_='+Date.now(),{mode:'cors',cache:'no-store'});
-      if(!stamp.ok) return;
-      const stamps=await stamp.json();
-      if(!stamps.length || stamps[0].updated_at===cloud.lastUpdated) return;
       const r=await fetch(cloud.rest+'?id=eq.ekipi-im-2026&select=data,by,updated_at&'+cloud.qkey+'&_='+Date.now(),{mode:'cors',cache:'no-store'});
       if(!r.ok) return;
       const rows=await r.json();
-      if(rows.length){
-        const row=rows[0];
-        cloud.lastUpdated=row.updated_at;
-        applyRemote(row.data);
+      if(rows.length && rows[0].data){
+        cloud.lastUpdated=rows[0].updated_at;
+        applyRemote(rows[0].data);
       }
-    }catch(e){/* rrjeti — provo prapë herës tjetër */}
-  },2000);
+    }catch(e){/* provo përsëri */}
+  },3000);
 }
 function applyRemote(d){
   cloud.applying=true;
