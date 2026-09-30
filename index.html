@@ -597,10 +597,9 @@ async function connectCloud(){
   cloud.headers={apikey:CLOUD_DEFAULT.key,Authorization:'Bearer '+CLOUD_DEFAULT.key,'Content-Type':'application/json'};
   try{
     setCloudStatus('Duke u lidhur...','');
-    const r=await fetch(cloud.rest+'?select=id,data,by,updated_at&apikey='+encodeURIComponent(CLOUD_DEFAULT.key),{mode:'cors',cache:'no-store'});
+    const r=await fetch(cloud.rest+'?id=eq.ekipi-im-2026&select=data,by,updated_at&apikey='+encodeURIComponent(CLOUD_DEFAULT.key),{mode:'cors',cache:'no-store'});
     if(!r.ok){ const t=await r.text(); throw new Error('HTTP '+r.status+' — '+t.slice(0,140)); }
-    const allRows=await r.json();
-    const rows=allRows.filter(x=>String(x.id)===CLOUD_DEFAULT.room);
+    const rows=await r.json();
     if(!rows.length) throw new Error('Dhoma nuk u gjet në Cloud');
     if(rows[0].data){ cloud.lastUpdated=JSON.stringify(rows[0].data); applyRemote(rows[0].data); }
     cloud.connected=true;
@@ -629,7 +628,7 @@ function startPolling(){
   cloud.poll=setInterval(async()=>{
     if(!cloud.connected) return;
     try{
-      const r=await fetch(cloud.rest+'?select=id,data,by,updated_at&'+cloud.qkey+'&_='+Date.now(),{mode:'cors',cache:'no-store'});
+      const r=await fetch(cloud.rest+'?id=eq.ekipi-im-2026&select=id,data,by,updated_at&'+cloud.qkey+'&_='+Date.now(),{mode:'cors',cache:'no-store'});
       if(!r.ok) return;
       const allRows=await r.json();
       const rows=allRows.filter(x=>String(x.id)===String(cloud.cfg.room));
