@@ -601,7 +601,7 @@ async function connectCloud(){
     if(!r.ok){ const t=await r.text(); throw new Error('HTTP '+r.status+' — '+t.slice(0,140)); }
     const rows=await r.json();
     if(!rows.length) throw new Error('Dhoma nuk u gjet në Cloud');
-    if(rows[0].data){ cloud.lastUpdated=JSON.stringify(rows[0].data); applyRemote(rows[0].data); }
+    if(rows[0].data){ cloud.lastUpdated=rows[0].updated_at; applyRemote(rows[0].data); }
     cloud.connected=true;
     setCloudStatus('Online · '+CLOUD_DEFAULT.room,'on');
     startPolling();
@@ -628,17 +628,17 @@ function startPolling(){
   cloud.poll=setInterval(async()=>{
     if(!cloud.connected) return;
     try{
-      const r=await fetch(cloud.rest+'?id=eq.ekipi-im-2026&select=id,data,by,updated_at&'+cloud.qkey+'&_='+Date.now(),{mode:'cors',cache:'no-store'});
+      const stamp=await fetch(cloud.rest+'?id=eq.ekipi-im-2026&select=updated_at&'+cloud.qkey+'&_='+Date.now(),{mode:'cors',cache:'no-store'});
+      if(!stamp.ok) return;
+      const stamps=await stamp.json();
+      if(!stamps.length || stamps[0].updated_at===cloud.lastUpdated) return;
+      const r=await fetch(cloud.rest+'?id=eq.ekipi-im-2026&select=data,by,updated_at&'+cloud.qkey+'&_='+Date.now(),{mode:'cors',cache:'no-store'});
       if(!r.ok) return;
-      const allRows=await r.json();
-      const rows=allRows.filter(x=>String(x.id)===String(cloud.cfg.room));
+      const rows=await r.json();
       if(rows.length){
         const row=rows[0];
-        const remoteHash=JSON.stringify(row.data);
-        if(remoteHash!==cloud.lastUpdated){
-          cloud.lastUpdated=remoteHash;
-          applyRemote(row.data);
-        }
+        cloud.lastUpdated=row.updated_at;
+        applyRemote(row.data);
       }
     }catch(e){/* rrjeti — provo prapë herës tjetër */}
   },2000);
