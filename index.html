@@ -637,7 +637,7 @@ function startPolling(){
         const remoteHash=JSON.stringify(row.data);
         if(remoteHash!==cloud.lastUpdated){
           cloud.lastUpdated=remoteHash;
-          if(row.by!==clientId) applyRemote(row.data);
+          applyRemote(row.data);
         }
       }
     }catch(e){/* rrjeti — provo prapë herës tjetër */}
