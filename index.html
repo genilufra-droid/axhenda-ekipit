@@ -125,7 +125,7 @@
   .ticker{display:inline-block;padding:9px 0 9px 110px;animation:ticker 28s linear infinite;font-size:13px;font-weight:600}
   .ticker-wrap:hover .ticker{animation-play-state:paused}
   .ticker b{color:#c62828} .ticker i{color:#a86a00;font-style:normal}
-  .ticker span{margin:0 26px;color:#3a4a52}
+  .ticker span{margin:0 26px;color:#3a4a52}.ticker-task{cursor:pointer}.ticker-task:hover{text-decoration:underline;color:var(--brand)}
   @keyframes ticker{from{transform:translateX(100%)}to{transform:translateX(-100%)}}
 
   /* ===== TABLE VIEW ===== */
@@ -137,7 +137,7 @@
   .ttable tbody tr:hover td{background:#f6f8fa}
   .ttable tr.done td{opacity:.6}
   .ttable tr.done .tt-title{text-decoration:line-through}
-  .tt-title{font-weight:700}
+  .tt-title{font-weight:700}.task-title-link,.task-desc-link{display:block;width:100%;padding:0;border:0;background:none;text-align:left;font:inherit;color:inherit;cursor:pointer}.task-title-link:hover{text-decoration:underline;color:var(--brand)}.task-desc-link{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px}
   .tt-desc{color:var(--muted);font-size:12px;margin-top:2px}
   .ttable .nowrap{white-space:nowrap}
   .ttable .tcell-first{display:flex;gap:8px;align-items:flex-start}
@@ -826,8 +826,8 @@ function buildTable(list,owner,filtering){
             <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M5 12l5 5L20 6"/></svg>
           </div>
           <div style="min-width:0">
-            <div class="tt-title" data-open="${t.id}" style="cursor:pointer" title="Kliko për detaje">${esc(t.title)}</div>
-            ${t.desc?`<div class="tt-desc" data-open="${t.id}" style="cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px">${esc(t.desc)}</div>`:''}
+            <button type="button" class="tt-title task-title-link" data-open="${t.id}" title="Hap detajet e detyrës">${esc(t.title)}</button>
+            ${t.desc?`<button type="button" class="tt-desc task-desc-link" data-open="${t.id}" title="Hap detajet">${esc(t.desc)}</button>`:''}
           </div>
         </div>
       </td>
@@ -855,7 +855,7 @@ function renderTicker(){
   wrap.style.display='block';
   const items=urgent.map(t=>{
     const over=isOverdue(t);
-    return `<span>${over?'<b>⏰ VONUAR:</b>':'<i>📅 Së shpejti:</i>'} ${esc(t.title)}${t.assignee?' — '+esc(t.assignee):''}${t.due?' ('+dueFmt(t.due)+')':''}</span>`;
+    return `<span class="ticker-task" data-open="${t.id}" title="Hap detajet e detyrës">${over?'<b>⏰ VONUAR:</b>':'<i>📅 Së shpejti:</i>'} ${esc(t.title)}${t.assignee?' — '+esc(t.assignee):''}${t.due?' ('+dueFmt(t.due)+')':''}</span>`;
   }).join('');
   const ticker=$('#ticker');
   if(ticker.dataset.content===items) return;
