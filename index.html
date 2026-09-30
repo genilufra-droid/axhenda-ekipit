@@ -584,7 +584,7 @@ const CLOUD_DEFAULT = {
 // ▲▲▲ ▲▲▲
 const clientId=localStorage.getItem('axh_client')||(()=>{const c=uid()+uid();localStorage.setItem('axh_client',c);return c;})();
 const savedCloud=JSON.parse(localStorage.getItem('axh_cloud')||'null');
-const cloud={connected:false,cfg:(savedCloud&&savedCloud.url)?savedCloud:{...CLOUD_DEFAULT},applying:false,rest:'',headers:null,lastUpdated:null,poll:null};
+const cloud={connected:false,cfg:(savedCloud&&savedCloud.url)?savedCloud:{...CLOUD_DEFAULT},applying:false,rest:'',headers:null,lastUpdated:null,poll:null,rt:null,rtChannel:null};
 let pushTimer=null;
 function setCloudStatus(txt,cls){$('#cloudTxt').textContent=txt;const d=$('#cloudDot');d.className='cdot'+(cls?' '+cls:'');}
 function snapshot(){ return {tasks:state.tasks,chat:state.chat,sms:state.sms}; }
@@ -602,6 +602,16 @@ async function connectCloud(){
     const rows=await r.json();
     if(!rows.length) throw new Error('Dhoma nuk u gjet në Cloud');
     if(rows[0].data){ cloud.lastUpdated=rows[0].updated_at; applyRemote(rows[0].data); }
+    // Realtime: njofton çdo PC/telefon menjëherë kur ndryshon rreshti
+    try{
+      const mod=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+      cloud.rt=mod.createClient(CLOUD_DEFAULT.url,CLOUD_DEFAULT.key);
+      cloud.rtChannel=cloud.rt.channel('axhenda-live-'+CLOUD_DEFAULT.room)
+        .on('postgres_changes',{event:'*',schema:'public',table:'axhenda',filter:'id=eq.'+CLOUD_DEFAULT.room},payload=>{
+          const d=payload.new&&payload.new.data;
+          if(d){ cloud.lastUpdated=payload.new.updated_at||Date.now(); applyRemote(d); }
+        }).subscribe();
+    }catch(rtErr){ console.warn('Realtime unavailable; fallback polling',rtErr); }
     cloud.connected=true;
     setCloudStatus('Online · '+CLOUD_DEFAULT.room,'on');
     startPolling();
@@ -636,7 +646,7 @@ function startPolling(){
         applyRemote(rows[0].data);
       }
     }catch(e){/* provo përsëri */}
-  },3000);
+  },15000);
 }
 function applyRemote(d){
   cloud.applying=true;
@@ -670,6 +680,7 @@ $('#cloudConnect').addEventListener('click',async()=>{
   if(cloud.connected){ showCloudStatus('✅ I lidhur me dhomën <b>'+cloud.cfg.room+'</b>. Të dhënat sinkronizohen automatikisht (çdo 5 sek).','ok'); }
 });
 $('#cloudDisconnect').addEventListener('click',()=>{
+  if(cloud.rtChannel&&cloud.rt) cloud.rt.removeChannel(cloud.rtChannel);
   clearInterval(cloud.poll);
   cloud.connected=false; cloud.cfg={}; localStorage.removeItem('axh_cloud');
   setCloudStatus('Offline (demo)'); $('#cloudOverlay').classList.remove('show'); toast('U shkëpute nga Cloud');
