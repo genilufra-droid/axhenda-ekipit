@@ -800,8 +800,12 @@ function render(){
     toast(t.done?'Detyra u shënua si e kryer ✓':'Detyra u rihap',t.done?'ok':'');
   });
   $$('[data-menu]').forEach(b=>b.onclick=()=>openActions(b.dataset.menu));
-  $$('[data-open]').forEach(b=>b.onclick=()=>openDetail(b.dataset.open));
-  $$('[data-dl]').forEach(b=>b.onclick=()=>{const[t,f]=b.dataset.dl.split('|');downloadFile(t,f);});
+  $$('[data-open]').forEach(b=>b.onclick=e=>{e.stopPropagation();openDetail(b.dataset.open);});
+  $$('[data-dl]').forEach(b=>b.onclick=e=>{e.stopPropagation();const[t,f]=b.dataset.dl.split('|');downloadFile(t,f);});
+  $$('.trow').forEach(row=>row.onclick=e=>{
+    if(e.target.closest('[data-toggle],[data-menu],[data-dl]')) return;
+    openDetail(row.dataset.id);
+  });
   setupDrag();
 
   $('#stTotal').textContent=state.tasks.length;
@@ -853,7 +857,10 @@ function renderTicker(){
     const over=isOverdue(t);
     return `<span>${over?'<b>⏰ VONUAR:</b>':'<i>📅 Së shpejti:</i>'} ${esc(t.title)}${t.assignee?' — '+esc(t.assignee):''}${t.due?' ('+dueFmt(t.due)+')':''}</span>`;
   }).join('');
-  $('#ticker').innerHTML=items+items; // dyfishim për rrjedhë të vazhdueshme
+  const ticker=$('#ticker');
+  if(ticker.dataset.content===items) return;
+  ticker.dataset.content=items;
+  ticker.innerHTML=items+items; // dyfishim për rrjedhë të vazhdueshme
 }
 function downloadFile(tid,fid){
   const t=state.tasks.find(x=>x.id===tid); if(!t)return;
