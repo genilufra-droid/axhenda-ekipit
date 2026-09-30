@@ -590,29 +590,26 @@ function setCloudStatus(txt,cls){$('#cloudTxt').textContent=txt;const d=$('#clou
 function snapshot(){ return {tasks:state.tasks,chat:state.chat,sms:state.sms}; }
 
 async function connectCloud(){
-  const cleanCloudValue=v=>String(v||'').trim().replace(/^['"]+|['"]+$/g,'').replace(/\\/g,'');
-  const url=cleanCloudValue(cloud.cfg.url);
-  const key=cleanCloudValue(cloud.cfg.key);
-  const room=cleanCloudValue(cloud.cfg.room);
-  if(!url||!key||!room){ setCloudStatus('Offline (demo)'); return; }
-  cloud.cfg={...cloud.cfg,url,key,room};
-  cloud.rest=url.replace(/\/+$/,'')+'/rest/v1/axhenda';
-  cloud.qkey='apikey='+encodeURIComponent(key);
-  cloud.headers={apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json'};
+  // Lidhje online direkte me konfigurimin zyrtar; injoron konfigurime te vjetra lokale.
+  cloud.cfg={...CLOUD_DEFAULT};
+  cloud.rest=CLOUD_DEFAULT.url+'/rest/v1/axhenda';
+  cloud.qkey='apikey='+encodeURIComponent(CLOUD_DEFAULT.key);
+  cloud.headers={apikey:CLOUD_DEFAULT.key,Authorization:'Bearer '+CLOUD_DEFAULT.key,'Content-Type':'application/json'};
   try{
     setCloudStatus('Duke u lidhur...','');
-    const r=await fetch(cloud.rest+'?select=id,data,by,updated_at&'+cloud.qkey+'&_='+Date.now(),{mode:'cors',cache:'no-store'});
+    const r=await fetch(cloud.rest+'?select=id,data,by,updated_at&apikey='+encodeURIComponent(CLOUD_DEFAULT.key),{mode:'cors',cache:'no-store'});
     if(!r.ok){ const t=await r.text(); throw new Error('HTTP '+r.status+' — '+t.slice(0,140)); }
     const allRows=await r.json();
-    const rows=allRows.filter(x=>String(x.id)===room);
-    if(rows.length && rows[0].data){ cloud.lastUpdated=rows[0].updated_at; applyRemote(rows[0].data); }
-    else { throw new Error('Dhoma nuk u gjet në Cloud'); }
-    cloud.connected=true; setCloudStatus('Online · '+room,'on');
+    const rows=allRows.filter(x=>String(x.id)===CLOUD_DEFAULT.room);
+    if(!rows.length) throw new Error('Dhoma nuk u gjet në Cloud');
+    if(rows[0].data){ cloud.lastUpdated=rows[0].updated_at; applyRemote(rows[0].data); }
+    cloud.connected=true;
+    setCloudStatus('Online · '+CLOUD_DEFAULT.room,'on');
     startPolling();
-    toast('U lidhe me Cloud ✓ ('+room+')','ok');
+    toast('U lidhe me Cloud ✓ ('+CLOUD_DEFAULT.room+')','ok');
   }catch(e){
     cloud.connected=false; setCloudStatus('Gabim lidhjeje','err');
-    showCloudStatus('❌ '+e.message+'<br><span style="color:var(--muted)">Nëse thotë “Failed to fetch”, provo në Google Chrome ose çaktivizo bllokuesin/anti-tracking.</span>','err');
+    showCloudStatus('❌ '+e.message,'err');
     toast('Lidhja dështoi: '+e.message,'err');
   }
 }
