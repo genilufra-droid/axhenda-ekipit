@@ -694,8 +694,17 @@ const dueFmt=(d)=>new Date(d).toLocaleDateString('sq-AL',{day:'2-digit',month:'s
 function isOverdue(t){return !t.done && t.due && new Date(t.due)<new Date(new Date().toDateString());}
 
 /* ROLE */
+const OWNER_PIN='1990';
 function applyRole(){
   const on=$('#roleToggle').checked;
+  if(on && !document.body.classList.contains('owner')){
+    const entered=prompt('Vendos PIN-in e Pronarit:');
+    if(entered!==OWNER_PIN){
+      $('#roleToggle').checked=false;
+      toast('PIN i gabuar','err');
+      return;
+    }
+  }
   document.body.classList.toggle('owner',on);
   $('#lblEmp').classList.toggle('on',!on);
   $('#lblOwn').classList.toggle('on',on);
