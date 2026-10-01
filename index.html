@@ -332,6 +332,7 @@
   <button class="cloud-pill" id="cloudPill" title="Cilësimet e Cloud">
     <span class="cdot" id="cloudDot"></span><span id="cloudTxt">Offline (demo)</span>
   </button>
+  <button class="act ghost sm" id="logoutBtn" style="margin-left:10px">Dil</button>
   <div class="role-switch">
     <label id="lblEmp" class="on">Punonjës</label>
     <div class="switch"><input type="checkbox" id="roleToggle"><span class="slider"></span></div>
@@ -1270,6 +1271,13 @@ async function loginUser(){
   unlockApp(data.user);
 }
 initAuth();
+$('#logoutBtn').addEventListener('click',async()=>{
+  if(authClient) await authClient.auth.signOut();
+  document.body.classList.add('auth-lock');
+  $('#authScreen').style.display='flex';
+  $('#loginPassword').value='';
+  toast('Dole nga llogaria');
+});
 
 /* INIT */
 $('#search').addEventListener('input',render);
