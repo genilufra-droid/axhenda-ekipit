@@ -687,7 +687,16 @@ function applyRemote(d){
   if(d.deleted) state.deleted=[...new Set(d.deleted)];
   if(d.audit) state.audit=d.audit;
   if(d.tasks) state.tasks=d.tasks.filter(t=>!state.deleted.includes(t.id));
-  if(d.chat) state.chat=d.chat;
+  if(d.chat){
+    const oldMsgs=d.chat.msgs||{};
+    const map={};
+    d.chat.contacts=(d.chat.contacts||[]).map(c=>{const old=c.id, id=stableContactId(c.name);map[old]=id;return {...c,id};});
+    const msgs={group:oldMsgs.group||[]};
+    Object.keys(oldMsgs).filter(k=>k!=='group').forEach(k=>{const nk=map[k]||k;msgs[nk]=[...(msgs[nk]||[]),...(oldMsgs[k]||[])];});
+    d.chat.msgs=msgs;
+    if(map[d.chat.active]) d.chat.active=map[d.chat.active];
+    state.chat=d.chat;
+  }
   if(d.sms) state.sms=d.sms;
   localStorage.setItem(LS.tasks,JSON.stringify(state.tasks));
   localStorage.setItem(LS.chat,JSON.stringify(state.chat));
@@ -994,6 +1003,7 @@ function initChat(){
 const palette=['#4f7cff','#00a884','#f5a623','#e14b4b','#6d5cff','#0a8a78','#c77700'];
 const colorFor=(name)=>palette[[...name].reduce((a,c)=>a+c.charCodeAt(0),0)%palette.length];
 const initials=(name)=>name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+const stableContactId=name=>'user-'+String(name||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 function convName(id){ return id==='group'?'👥 Grupi (të gjithë)':(state.chat.contacts.find(c=>c.id===id)?.name||'Bisedë'); }
 function convMsgs(id){ return state.chat.msgs[id]||(state.chat.msgs[id]=[]); }
 function lastMsg(id){ const m=convMsgs(id); return m.length?m[m.length-1]:null; }
@@ -1082,7 +1092,9 @@ $('#msgFileInput').addEventListener('change',async e=>{
 $('#identSel').addEventListener('change',e=>{state.chat.me=e.target.value;save();renderChat();});
 $('#addContact').addEventListener('click',()=>{
   const n=prompt('Emri i kontaktit të ri:'); if(!n||!n.trim())return;
-  state.chat.contacts.push({id:uid(),name:n.trim()}); save(); renderChat();
+  const name=n.trim(), id=stableContactId(name);
+  if(state.chat.contacts.some(x=>x.id===id)){toast('Ky punonjës ekziston','err');return;}
+  state.chat.contacts.push({id,name}); save(); renderChat();
 });
 
 /* ===== DRAG & DROP RIRENDITJE ===== */
