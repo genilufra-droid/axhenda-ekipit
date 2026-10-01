@@ -1101,11 +1101,17 @@ $('#msgFileInput').addEventListener('change',async e=>{
   e.target.value='';renderMsgPending();
 });
 $('#identSel').addEventListener('change',e=>{state.chat.me=e.target.value;save();renderChat();});
-$('#addContact').addEventListener('click',()=>{
-  const n=prompt('Emri i kontaktit të ri:'); if(!n||!n.trim())return;
+$('#addContact').addEventListener('click',async()=>{
+  const n=prompt('Emri i punonjësit:'); if(!n||!n.trim())return;
+  const email=prompt('Email-i i punonjësit:'); if(!email||!email.trim())return;
   const name=n.trim(), id=stableContactId(name);
   if(state.chat.contacts.some(x=>x.id===id)){toast('Ky punonjës ekziston','err');return;}
-  state.chat.contacts.push({id,name}); save(); renderChat();
+  if(!authClient){toast('Duhet të jesh i loguar','err');return;}
+  const {data,error}=await authClient.functions.invoke('create-employee',{body:{name,email:email.trim()}});
+  if(error||data?.error){toast('Punonjësi nuk u krijua: '+(data?.error||error.message),'err');return;}
+  state.chat.contacts.push({id,name,user_id:data.id});
+  logAudit('Punonjës i ri',name+' · '+email.trim());
+  save(); renderChat(); toast('Punonjësi u krijua dhe iu dërgua ftesa ✓','ok');
 });
 
 /* ===== DRAG & DROP RIRENDITJE ===== */
