@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Axhenda Online — Menaxhim Detyrash</title>
+<style>
+  :root{
+    --bg:#f0f2f5; --panel:#ffffff; --panel2:#f6f8fa; --line:#e4e8ee;
+    --txt:#1c2b33; --muted:#667781; --brand:#4f7cff; --brand2:#6d5cff;
+    --wa:#00a884; --wa2:#008f72; --ok:#1a9d5c; --warn:#c77700; --dang:#e13d3d;
+    --bubble:#ffffff; --chip:#eef1f5; --shadow:0 6px 20px rgba(20,30,50,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--txt); line-height:1.45;
+  }
+  header{
+    position:sticky; top:0; z-index:30;
+    background:linear-gradient(90deg, rgba(0,168,132,.16), rgba(79,124,255,.10)), var(--panel);
+    border-bottom:1px solid var(--line);
+    padding:12px 20px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  }
+  .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+  .logo .dot{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--wa),var(--brand));
+    display:grid;place-items:center;box-shadow:var(--shadow)}
+  .logo .dot svg{width:19px;height:19px}
+  .logo small{display:block;font-size:11px;color:var(--muted);font-weight:600}
+  .spacer{flex:1}
+  .role-switch{display:flex;align-items:center;gap:10px;background:var(--panel2);
+    padding:6px 12px;border-radius:999px;border:1px solid var(--line)}
+  .role-switch label{font-size:13px;color:var(--muted);cursor:pointer;user-select:none}
+  .role-switch .on{color:var(--txt);font-weight:700}
+  .switch{position:relative;width:46px;height:26px}
+  .switch input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer;z-index:2}
+  .slider{position:absolute;inset:0;background:#c3ccd4;border-radius:999px;transition:.2s;cursor:pointer;z-index:1;pointer-events:none}
+  .slider:before{content:"";position:absolute;height:20px;width:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+  .switch input:checked + .slider{background:linear-gradient(135deg,var(--wa),var(--brand))}
+  .switch input:checked + .slider:before{transform:translateX(20px)}
+  .cloud-pill{display:flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line);
+    color:var(--txt);padding:7px 12px;border-radius:999px;cursor:pointer;font-size:13px;font-weight:700}
+  .cloud-pill:hover{border-color:var(--wa)}
+  .cdot{width:9px;height:9px;border-radius:50%;background:#c3ccd4}
+  .cdot.on{background:var(--wa);box-shadow:0 0 0 3px rgba(0,168,132,.2)}
+  .cdot.err{background:var(--dang)}
+
+  .wrap{max-width:1200px;margin:0 auto;padding:18px 18px 24px}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow)}
+  .stat .n{font-size:26px;font-weight:800}
+  .stat .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .stat.ok .n{color:var(--ok)} .stat.warn .n{color:var(--warn)} .stat.brand .n{color:var(--brand)} .stat.dang .n{color:var(--dang)}
+
+  .grid{display:grid;grid-template-columns:1fr;gap:18px;align-items:start}
+  #toolsView{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+  #toolsView>.card{margin-top:0!important}
+  .manage-tabs{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;padding:4px 0}.manage-tabs .active{background:var(--brand);color:#fff}
+  .manage-search{width:100%;margin-bottom:10px}.data-table-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px}.manage-table{width:100%;border-collapse:collapse;font-size:12px}.manage-table th{background:var(--panel2);color:var(--muted);text-align:left;padding:10px;white-space:nowrap}.manage-table td{padding:10px;border-top:1px solid var(--line);max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.manage-table tbody tr{cursor:pointer}.manage-table tbody tr:hover{background:#f0f7ff}.manage-table .st{font-size:11px}
+  @media(max-width:900px){#toolsView{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+  .card h2{margin:0;padding:14px 18px;font-size:14px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px}
+  .card .body{padding:14px 16px}
+  .owner-only{display:none !important}
+  body.owner .owner-only{display:flex !important}
+  body.owner .owner-only.block{display:block !important}
+
+  /* ===== CHAT / CHECKLIST ===== */
+  .chat-head{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line);
+    background:var(--panel2)}
+  .chat-head .t{font-weight:800;font-size:15px}
+  .chat-head .s{font-size:12px;color:var(--muted)}
+.contact-edit,.contact-del{border:0;background:transparent;cursor:pointer;font-size:16px;padding:4px;color:var(--muted)}.contact-edit:hover{color:var(--brand)}.contact-del:hover{color:var(--dang)}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
+  .search{flex:1;min-width:150px}
+  .chat{
+    background:
+      linear-gradient(rgba(239,234,226,.6),rgba(239,234,226,.6)),
+      repeating-linear-gradient(45deg,#e8ecf0 0,#e8ecf0 12px,#eef1f4 12px,#eef1f4 24px);
+    padding:16px 16px 8px; min-height:340px; max-height:60vh; overflow-y:auto;
+    display:flex; flex-direction:column; gap:12px;
+  }
+  .daysep{align-self:center;background:var(--panel2);color:var(--muted);font-size:11px;font-weight:700;
+    padding:4px 12px;border-radius:999px;border:1px solid var(--line)}
+  .bubble{
+    align-self:flex-start; max-width:82%; background:var(--bubble);
+    border:1px solid var(--line); border-left:4px solid var(--muted);
+    border-radius:4px 12px 12px 12px; padding:10px 12px 8px; position:relative;
+    box-shadow:0 1px 2px rgba(20,30,50,.06);
+  }
+  .bubble.done{opacity:.7}
+  .bubble.p-Lart{border-left-color:#ff6b6b}
+  .bubble.p-Mesme{border-left-color:#f5a623}
+  .bubble.p-Ulet{border-left-color:#2fbf71}
+  .b-top{display:flex;align-items:flex-start;gap:10px}
+  .cbox{width:22px;height:22px;flex-shrink:0;border-radius:6px;border:2px solid #c3ccd4;
+    background:transparent;cursor:pointer;display:grid;place-items:center;margin-top:1px}
+  .cbox.checked{background:var(--wa);border-color:var(--wa)}
+  .cbox svg{width:13px;height:13px;opacity:0}
+  .cbox.checked svg{opacity:1}
+  .b-title{font-weight:700;font-size:15px;margin:0}
+  .bubble.done .b-title{text-decoration:line-through}
+  .b-desc{color:var(--muted);font-size:13px;margin:3px 0 0;white-space:pre-wrap}
+  .b-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .chip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--chip);color:var(--muted);
+    display:inline-flex;align-items:center;gap:5px}
+  .chip.assignee{background:#e3edff;color:#2b5bd0}
+  .chip.due{background:#fff2d6;color:#a86a00}
+  .chip.due.over{background:#ffe0e0;color:#c62828}
+  .chip.p-Lart{background:#ffe0e0;color:#c62828}
+  .chip.p-Mesme{background:#fff2d6;color:#a86a00}
+  .chip.p-Ulet{background:#dcf5e6;color:#1a8a4f}
+  .chip.file{background:#ece3ff;color:#6a45c0;cursor:pointer}
+  .chip.file:hover{filter:brightness(.97)}
+  .chip.cat{background:#d6f5ef;color:#0a8a78}
+  /* drag & drop */
+  body.owner .bubble{cursor:grab}
+  .bubble.dragging{opacity:.45;cursor:grabbing}
+  .bubble.drop-before{box-shadow:0 -3px 0 var(--wa)}
+  .bubble.drop-after{box-shadow:0 3px 0 var(--wa)}
+  .drag-handle{color:var(--muted);cursor:grab;font-size:14px;line-height:1;padding-top:2px;user-select:none;display:none}
+  body.owner .drag-handle{display:block}
+
+  /* ===== TICKER (titra lëvizëse) ===== */
+  .ticker-wrap{overflow:hidden;background:linear-gradient(90deg,#fff7e0,#fff);border-bottom:1px solid var(--line);
+    white-space:nowrap;position:relative}
+  .ticker-wrap::before{content:"⚡ URGJENTE";position:absolute;left:0;top:0;bottom:0;z-index:2;display:flex;align-items:center;
+    padding:0 12px;background:#f5a623;color:#fff;font-size:11px;font-weight:800;letter-spacing:.5px}
+  .ticker{display:inline-block;padding:9px 0 9px 110px;animation:ticker 28s linear infinite;font-size:13px;font-weight:600}
+  .ticker-wrap:hover .ticker{animation-play-state:paused}
+  .ticker b{color:#c62828} .ticker i{color:#a86a00;font-style:normal}
+  .ticker span{margin:0 26px;color:#3a4a52}.ticker-task{cursor:pointer}.ticker-task:hover{text-decoration:underline;color:var(--brand)}
+  @keyframes ticker{from{transform:translateX(100%)}to{transform:translateX(-100%)}}
+
+  /* ===== TABLE VIEW ===== */
+  .chat.table-mode{background:#fff;padding:0;display:block;overflow:auto}
+  table.ttable{width:100%;border-collapse:collapse;font-size:13px}
+  .ttable thead th{position:sticky;top:0;z-index:3;background:var(--panel2);color:var(--muted);font-size:11px;
+    text-transform:uppercase;letter-spacing:.4px;text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  .ttable td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  .ttable tbody tr:hover td{background:#f6f8fa}
+  .ttable tr.done td{opacity:.6}
+  .ttable tr.done .tt-title{text-decoration:line-through}
+  .tt-title{font-weight:700}.task-title-link,.task-desc-link{display:block;width:100%;padding:0;border:0;background:none;text-align:left;font:inherit;color:inherit;cursor:pointer}.task-title-link:hover{text-decoration:underline;color:var(--brand)}.task-desc-link{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px}
+  .tt-desc{color:var(--muted);font-size:12px;margin-top:2px}
+  .ttable .nowrap{white-space:nowrap}
+  .ttable .tcell-first{display:flex;gap:8px;align-items:flex-start}
+  tr.trow[draggable="true"]{cursor:grab}
+  tr.trow.dragging{opacity:.4}
+  tr.trow.drop-before td{border-top:2px solid var(--wa)}
+  tr.trow.drop-after td{border-bottom:2px solid var(--wa)}
+  .tfiles{display:flex;flex-direction:column;gap:4px}
+
+  /* ===== MESSENGER ===== */
+  .messenger{display:flex;height:62vh;min-height:420px}
+  .convlist{width:210px;flex-shrink:0;border-right:1px solid var(--line);background:var(--panel2);
+    display:flex;flex-direction:column}
+  .convlist-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;
+    font-weight:800;font-size:13px;border-bottom:1px solid var(--line)}
+  .addc{width:28px;height:28px;border-radius:8px;border:none;background:var(--wa);color:#fff;font-size:18px;cursor:pointer;line-height:1}
+  #convList{flex:1;overflow:auto}
+  .conv{display:flex;gap:10px;align-items:center;padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .conv:hover{background:#eef2f5}
+  .conv.active{background:#e7f4f0;border-left:3px solid var(--wa);padding-left:9px}
+  .conv .av{width:38px;height:38px;flex-shrink:0;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:14px}
+  .conv .ci{min-width:0;flex:1}
+  .conv .cn{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .conv .cp{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .conv .cb{background:var(--wa);color:#fff;font-size:10px;font-weight:800;border-radius:999px;padding:1px 6px}
+  .ident{padding:10px 12px;border-top:1px solid var(--line);display:flex;align-items:center;gap:6px}
+  .ident label{font-size:11px;color:var(--muted);font-weight:700}
+  .ident select{flex:1;padding:6px 8px;font-size:12px;border-radius:8px}
+  .thread{flex:1;display:flex;flex-direction:column;min-width:0}
+  .thread-head{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel2)}
+  .thread-head .av{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800}
+  .thread-head .tn{font-weight:800;font-size:14px}
+  .thread-head .ts{font-size:11px;color:var(--muted)}
+  .chat-export{margin-left:auto;border:0;border-radius:9px;background:#20b26b;color:#fff;font-weight:800;font-size:12px;padding:9px 13px;cursor:pointer;white-space:nowrap;box-shadow:0 2px 5px rgba(32,178,107,.2)}
+  .chat-export:hover{background:#159957}.chat-export:active{transform:scale(.97)}
+  .chat-print{margin-left:6px;border:1px solid #20b26b;border-radius:9px;background:#fff;color:#168c58;font-weight:800;font-size:12px;padding:8px 10px;cursor:pointer;white-space:nowrap}
+  .chat-print:hover{background:#e9fff4}
+  @media(max-width:600px){.chat-export{font-size:0;padding:9px 10px}.chat-export::before{content:'⬇';font-size:16px}.chat-print{font-size:0;padding:9px 10px}.chat-print::before{content:'🖨';font-size:16px}.thread-head{padding:8px 10px}}
+  .msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:7px;
+    background:linear-gradient(rgba(239,234,226,.55),rgba(239,234,226,.55)),
+      repeating-linear-gradient(45deg,#e8ecf0 0,#e8ecf0 12px,#eef1f4 12px,#eef1f4 24px)}
+  .msg{max-width:76%;padding:7px 10px 5px;border-radius:9px;font-size:13px;box-shadow:0 1px 1px rgba(20,30,50,.08);position:relative}
+  .msg.in{align-self:flex-start;background:#fff;border-radius:2px 10px 10px 10px}
+  .msg.out{align-self:flex-end;background:#d9fdd3;border-radius:10px 2px 10px 10px}
+  .msg .sn{font-size:11px;font-weight:800;color:var(--brand);margin-bottom:2px}
+  .msg .mtxt{white-space:pre-wrap;word-break:break-word}
+  .msg .mfile{display:inline-flex;align-items:center;gap:6px;margin-top:5px;padding:6px 9px;border-radius:8px;
+    background:rgba(0,0,0,.05);cursor:pointer;font-size:12px;font-weight:600}
+  .msg .mfile:hover{background:rgba(0,0,0,.09)}
+  .msg .mt{font-size:10px;color:#667781;text-align:right;margin-top:2px}
+  .msg-composer{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--line);background:var(--panel2)}
+  #msgInput{flex:1;background:#fff;border:1px solid var(--line);border-radius:22px;padding:10px 16px;outline:none;font-size:14px}
+  #msgInput:focus{border-color:var(--wa)}
+  .msg-empty{margin:auto;color:var(--muted);text-align:center;font-size:13px}
+  @media(max-width:620px){.convlist{width:74px}.convlist-head span,.conv .ci,.ident label{display:none}}
+
+  /* ===== DETAIL MODAL ===== */
+  .detail-row{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .detail-row .k{width:96px;flex-shrink:0;color:var(--muted);font-size:12px;font-weight:700;padding-top:2px}
+  .detail-row .v{flex:1;min-width:0}
+  .detail-desc{white-space:pre-wrap;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px}
+  .dfile{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;background:var(--panel2)}
+  .dfile .dn{flex:1;min-width:0;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* ===== VIEW TOGGLE ===== */
+  .view-toggle{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .view-toggle button{background:transparent;border:none;color:var(--muted);padding:8px 12px;font-size:13px;font-weight:700;
+    cursor:pointer;display:flex;align-items:center;gap:5px}
+  .view-toggle button.active{background:var(--wa);color:#fff}
+  .view-toggle svg{width:15px;height:15px}
+  .b-times{display:flex;flex-direction:column;gap:2px;margin-top:9px;padding-top:8px;border-top:1px dashed var(--line)}
+  .b-time{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .b-time.done-t{color:#1a8a4f}
+  .b-time svg{width:13px;height:13px;flex-shrink:0}
+  .b-actions{display:flex;gap:6px;margin-top:10px;justify-content:flex-end}
+  .del-btn{background:transparent;color:var(--muted);border:none;cursor:pointer;font-size:15px;padding:2px 6px}
+  .del-btn:hover{color:var(--dang)}
+  .empty{text-align:center;color:var(--muted);padding:40px 10px;font-size:14px;margin:auto}
+
+  /* ===== WHATSAPP COMPOSER ===== */
+  .composer{border-top:1px solid var(--line);background:var(--panel2);padding:10px 12px}
+  .comp-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .comp-meta input,.comp-meta select{background:var(--panel);border:1px solid var(--line);color:var(--txt);
+    padding:7px 10px;border-radius:8px;outline:none;font-size:13px}
+  .comp-meta input:focus,.comp-meta select:focus{border-color:var(--wa)}
+  .comp-meta .prio-pills{display:flex;gap:4px}
+  .pill{font-size:12px;font-weight:700;padding:7px 12px;border-radius:8px;border:1px solid var(--line);
+    background:var(--panel);color:var(--muted);cursor:pointer}
+  .pill.active[data-p="Lart"]{background:#ffe0e0;color:#c62828;border-color:#e88}
+  .pill.active[data-p="Mesme"]{background:#fff2d6;color:#a86a00;border-color:#e0b060}
+  .pill.active[data-p="Ulet"]{background:#dcf5e6;color:#1a8a4f;border-color:#7fd0a0}
+  .comp-bar{display:flex;align-items:flex-end;gap:8px}
+  .attach-btn{width:42px;height:42px;flex-shrink:0;border-radius:50%;background:var(--panel);border:1px solid var(--line);
+    color:var(--muted);cursor:pointer;display:grid;place-items:center}
+  .attach-btn:hover{color:var(--txt);border-color:var(--wa)}
+  .attach-btn svg{width:20px;height:20px}
+  .comp-input{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:6px 14px;
+    display:flex;flex-direction:column}
+  #tTitle{background:transparent;border:none;color:var(--txt);outline:none;font-size:15px;padding:6px 0;width:100%}
+  #tDesc{background:transparent;border:none;color:var(--txt);outline:none;font-size:13px;resize:none;
+    width:100%;max-height:90px;font-family:inherit;border-top:1px solid var(--line);padding:6px 0 2px;display:none}
+  .comp-input.expanded #tDesc{display:block}
+  .send-btn{width:46px;height:46px;flex-shrink:0;border-radius:50%;background:var(--wa);border:none;color:#fff;
+    cursor:pointer;display:grid;place-items:center;box-shadow:0 4px 12px rgba(0,168,132,.4)}
+  .send-btn:hover{background:var(--wa2)} .send-btn:active{transform:scale(.94)}
+  .send-btn svg{width:22px;height:22px}
+  .pending-files{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .locked-note{padding:12px 16px;color:var(--muted);font-size:13px;text-align:center;border-top:1px solid var(--line);background:var(--panel2)}
+
+  /* right column reused */
+  input[type=text],input[type=tel],input[type=date],input[type=password],select,textarea{
+    background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    padding:9px 12px;border-radius:10px;outline:none;width:100%;font-size:14px;font-family:inherit}
+  input:focus,select:focus,textarea:focus{border-color:var(--brand)}
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+  .field label{font-size:12px;color:var(--muted);font-weight:600}
+  .row{display:flex;gap:10px} .row .field{flex:1}
+  button.act{cursor:pointer;border:none;border-radius:10px;padding:10px 14px;font-weight:700;color:#fff;
+    background:linear-gradient(135deg,var(--brand),var(--brand2))}
+  button.act:hover{filter:brightness(1.08)} button.act:active{transform:translateY(1px)}
+  button.ghost{background:var(--panel2);border:1px solid var(--line);color:var(--txt)}
+  button.sm{padding:7px 11px;font-size:13px}
+  .tabs{display:flex;gap:6px;padding:10px 12px 0}
+  .tab{background:transparent;color:var(--muted);border:none;padding:8px 12px;font-size:13px;font-weight:700;
+    border-bottom:2px solid transparent;cursor:pointer}
+  .tab.active{color:var(--txt);border-bottom-color:var(--wa)}
+  .sms-log{max-height:230px;overflow:auto;margin-top:12px}
+  .sms-item{border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px;font-size:13px;background:var(--panel2)}
+  .sms-item .to{font-weight:700}
+  .st{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px}
+  .st.sent{background:#dcf5e6;color:#1a8a4f} .st.fail{background:#ffe0e0;color:#c62828} .st.sim{background:#e3edff;color:#2b5bd0}
+  .time{color:var(--muted);font-size:11px}
+  .hint{font-size:12px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px}
+  .hint b{color:var(--warn)}
+  details.cfg{margin-top:10px} details.cfg summary{cursor:pointer;color:var(--muted);font-size:13px;font-weight:600;padding:6px 0}
+  /* ===== MODAL ===== */
+  .kebab{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:20px;line-height:1;
+    padding:2px 8px;border-radius:8px}
+  .kebab:hover{color:var(--txt);background:var(--panel2)}
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);z-index:80;
+    display:none;align-items:center;justify-content:center;padding:20px}
+  .overlay.show{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);
+    width:100%;max-width:440px;max-height:88vh;overflow:auto;animation:pop .18s ease}
+  @keyframes pop{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
+  .modal-head{display:flex;align-items:flex-start;gap:12px;padding:18px 20px;border-bottom:1px solid var(--line)}
+  .modal-head .ic{width:40px;height:40px;flex-shrink:0;border-radius:10px;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--wa),var(--brand))}
+  .modal-head .ic svg{width:20px;height:20px}
+  .modal-head .mt{font-weight:800;font-size:16px;margin:0}
+  .modal-head .ms{font-size:12px;color:var(--muted);margin:2px 0 0}
+  .modal-head .x{margin-left:auto;background:transparent;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1}
+  .modal-head .x:hover{color:var(--txt)}
+  .modal-body{padding:14px 20px 20px}
+  .act-list{display:flex;flex-direction:column;gap:8px}
+  .act-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);
+    border-radius:12px;background:var(--panel2);cursor:pointer;color:var(--txt);font-size:14px;font-weight:600;
+    text-align:left;width:100%}
+  .act-item:hover{border-color:var(--wa);background:#eafaf4}
+  .act-item .ai{width:34px;height:34px;flex-shrink:0;border-radius:9px;display:grid;place-items:center;background:var(--chip)}
+  .act-item .ai svg{width:18px;height:18px}
+  .act-item small{display:block;color:var(--muted);font-weight:500;font-size:12px}
+  .act-item.danger:hover{border-color:var(--dang);background:#ffecec}
+  .act-item.danger .ai{background:#ffe0e0;color:#c62828}
+  .modal-foot{display:flex;gap:10px;padding:14px 20px 20px;border-top:1px solid var(--line)}
+  .modal-foot button{flex:1}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:12px 18px;border-radius:12px;
+    box-shadow:var(--shadow);opacity:0;transition:.25s;z-index:100;font-size:14px;max-width:90vw}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.ok{border-color:var(--ok)} .toast.err{border-color:var(--dang)}
+  .auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:var(--bg)}
+  .auth-card{width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:var(--shadow)}
+  .auth-card h1{margin:0 0 6px;font-size:22px}.auth-card p{color:var(--muted);font-size:13px;margin:0 0 18px}.auth-card input{width:100%;margin:7px 0}.auth-card button{width:100%;margin-top:10px}.auth-error{color:var(--dang);font-size:13px;min-height:18px;margin-top:8px}
+  .auth-lock>header,.auth-lock>.wrap,.auth-lock>.overlay,.auth-lock>#toast{display:none!important}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body class="auth-lock">
+<div class="auth-screen" id="authScreen">
+  <div class="auth-card">
+    <h1>🔐 Axhenda Online</h1>
+    <p>Hyr me email-in dhe fjalëkalimin e punës.</p>
+    <input type="email" id="loginEmail" placeholder="Email" autocomplete="username">
+    <input type="password" id="loginPassword" placeholder="Fjalëkalimi" autocomplete="current-password">
+    <button class="act" id="loginBtn">Hyr</button>
+    <div class="auth-error" id="loginError"></div>
+  </div>
+</div>
+<header>
+  <div class="logo">
+    <span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+    <span>Axhenda Online<small>Menaxhim detyrash për ekipin</small></span>
+  </div>
+  <div class="spacer"></div>
+  <button class="cloud-pill" id="cloudPill" title="Cilësimet e Cloud">
+    <span class="cdot" id="cloudDot"></span><span id="cloudTxt">Offline (demo)</span>
+  </button>
+  <button class="act ghost sm" id="logoutBtn" style="margin-left:10px">Dil</button>
+  <div class="role-switch">
+    <label id="lblEmp" class="on">Punonjës</label>
+    <div class="switch"><input type="checkbox" id="roleToggle"><span class="slider"></span></div>
+    <label id="lblOwn">Pronar</label>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="stats">
+    <div class="stat brand"><div class="n" id="stTotal">0</div><div class="l">Detyra gjithsej</div></div>
+    <div class="stat warn"><div class="n" id="stOpen">0</div><div class="l">Në pritje</div></div>
+    <div class="stat ok"><div class="n" id="stDone">0</div><div class="l">Kryer</div></div>
+    <div class="stat dang"><div class="n" id="stOver">0</div><div class="l">Vonuar</div></div>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT: CHAT CHECKLIST -->
+    <div class="card">
+      <div class="chat-head">
+        <span class="dot" id="leftIcon" style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--wa),var(--brand));display:grid;place-items:center">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </span>
+        <div style="flex:1">
+          <div class="t" id="leftTitle">Lista e Detyrave</div>
+          <div class="s" id="chatSub">check-list e ekipit</div>
+        </div>
+        <div class="view-toggle">
+          <button data-view="table" title="Detyrat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>Detyrat
+          </button>
+          <button data-view="chat" title="Chat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chat
+          </button>
+          <button data-view="tools" title="SMS, histori dhe skedarë">⚙️ Menaxhim</button>
+        </div>
+      </div>
+
+      <!-- ===== TABLE / TASKS VIEW ===== -->
+      <div id="tableView">
+      <div class="ticker-wrap" id="tickerWrap" style="display:none"><div class="ticker" id="ticker"></div></div>
+      <div class="toolbar">
+        <input class="search" type="text" id="search" placeholder="🔎 Kërko detyrë ose punonjës..." />
+        <button class="act ghost sm" id="activeTasksTab">📋 Aktive</button>
+        <button class="act ghost sm" id="closedTasksTab">📁 Të mbyllura</button>
+        <button class="act ghost sm owner-only" id="resetAllTasks">🗑️ Reset total</button>
+        <button class="act ghost sm owner-only" id="exportBackup">⬇️ Backup</button>
+        <button class="act ghost sm owner-only" id="importBackupBtn">⬆️ Rikthe</button>
+        <input type="file" id="importBackup" accept="application/json" style="display:none" />
+        <select id="filterStatus" style="width:auto;display:none">
+          <option value="open" selected>Në pritje</option>
+          <option value="all">Të gjitha</option>
+          <option value="done">Kryer</option>
+        </select>
+        <select id="filterCat" style="width:auto"><option value="all">🏷️ Të gjitha kategoritë</option></select>
+      </div>
+
+      <div class="chat" id="taskList"></div>
+
+      <!-- WhatsApp-style composer (owner) -->
+      <div class="composer owner-only block">
+        <div class="pending-files" id="pendingFiles"></div>
+        <div class="comp-meta">
+          <input type="text" id="tAssignee" list="employeeList" placeholder="👤 Caktuar për..." style="flex:1;min-width:110px" />
+          <datalist id="employeeList"></datalist>
+          <input type="text" id="tCategory" list="catList" placeholder="🏷️ Kategori..." style="flex:1;min-width:110px" />
+          <datalist id="catList"></datalist>
+          <input type="date" id="tDue" title="Afati" />
+          <div class="prio-pills">
+            <span class="pill" data-p="Ulet">Ulët</span>
+            <span class="pill active" data-p="Mesme">Mesme</span>
+            <span class="pill" data-p="Lart">Lart</span>
+          </div>
+        </div>
+        <div class="comp-bar">
+          <button class="attach-btn" id="attachBtn" title="Bashkangjit skedar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <input type="file" id="fileInput" multiple style="display:none" />
+          <div class="comp-input" id="compInput">
+            <input type="text" id="tTitle" placeholder="Shkruaj një detyrë..." autocomplete="off" />
+            <textarea id="tDesc" placeholder="Shto detaje (opsionale)..." rows="1"></textarea>
+          </div>
+          <button class="send-btn" id="addTaskBtn" title="Dërgo detyrën">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5v-6l8-2.5-8-2.5v-6l19 8.5z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="locked-note" id="lockedNote">🔒 Vetëm <b>pronari</b> mund të shtojë detyra. Kalo te modaliteti Pronar për të shkruar.</div>
+      </div><!-- /tableView -->
+
+      <!-- ===== CHAT / MESSENGER VIEW ===== -->
+      <div id="chatView" style="display:none">
+        <div class="messenger">
+          <aside class="convlist">
+            <div class="convlist-head">
+              <span>Bisedat</span>
+              <button class="addc owner-only" id="addContact" title="Shto kontakt">＋</button>
+            </div>
+            <div id="convList"></div>
+            <div class="ident">
+              <label>Ti je:</label>
+              <select id="identSel"></select>
+            </div>
+          </aside>
+          <section class="thread">
+            <div class="thread-head" id="threadHead"></div>
+            <div class="msgs" id="msgs"></div>
+            <div class="pending-files" id="msgPending" style="padding:0 12px 6px"></div>
+            <div class="msg-composer">
+              <button class="attach-btn" id="msgAttachBtn" title="Bashkangjit skedar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              </button>
+              <input type="file" id="msgFileInput" multiple style="display:none" />
+              <input type="text" id="msgInput" placeholder="Shkruaj një mesazh..." autocomplete="off" />
+              <button class="send-btn" id="msgSend" title="Dërgo">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5v-6l8-2.5-8-2.5v-6l19 8.5z"/></svg>
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: SMS + FILES -->
+    <div id="toolsView" style="display:none">
+      <div class="manage-tabs">
+        <button class="act active" data-manage="sms">📤 SMS</button>
+        <button class="act ghost" data-manage="audit">📜 Veprime</button>
+        <button class="act ghost" data-manage="files">📁 Skedarë</button>
+      </div>
+      <div class="card" id="smsManageCard">
+        <div class="tabs">
+          <button class="tab active" data-tab="send">📤 Dërgo SMS</button>
+          <button class="tab" data-tab="log">📥 Historiku</button>
+        </div>
+        <div class="body">
+          <div id="tab-send">
+            <div class="field"><label>Marrësi (numri me kod, p.sh. +355...)</label><input type="tel" id="smsTo" placeholder="+3556..." /></div>
+            <div class="field"><label>Mesazhi</label><textarea id="smsBody" placeholder="Shkruaj mesazhin..."></textarea></div>
+            <div class="row">
+              <button class="act" id="smsSend" style="flex:1">Dërgo SMS</button>
+              <button class="act ghost" id="smsFromTask" title="Njofto për detyrën e fundit">Njofto detyrën</button>
+            </div>
+            <details class="cfg" open>
+              <summary>⚙️ SMS me textbee (falas)</summary>
+              <div class="hint" style="margin-top:8px">SMS dërgohet përmes serverit të përbashkët.</div>
+
+            </details>
+          </div>
+          <div id="tab-log" style="display:none"><input class="search manage-search" id="smsSearch" placeholder="🔎 Kërko SMS..." /><div class="data-table-wrap"><table class="manage-table"><thead><tr><th>Marrësi</th><th>Mesazhi</th><th>Data</th><th>Statusi</th></tr></thead><tbody id="smsLog"></tbody></table></div></div>
+        </div>
+      </div>
+
+      <div class="card" id="auditManageCard" style="margin-top:18px owner-only block">
+        <h2>📜 Historiku i veprimeve</h2>
+        <div class="body"><input class="search manage-search" id="auditSearch" placeholder="🔎 Kërko veprim..." /><div class="data-table-wrap"><table class="manage-table"><thead><tr><th>Veprimi</th><th>Përshkrimi</th><th>Përdoruesi</th><th>Data</th></tr></thead><tbody id="auditLog"></tbody></table></div></div>
+      </div>
+      <div class="card" id="filesManageCard" style="margin-top:18px">
+        <h2>🗂️ Skedarët e ngarkuar</h2>
+        <div class="body"><input class="search manage-search" id="fileSearch" placeholder="🔎 Kërko skedar..." /><div class="data-table-wrap"><table class="manage-table"><thead><tr><th>Skedari</th><th>Detyra</th><th>Madhësia</th><th>Veprim</th></tr></thead><tbody id="fileVault"></tbody></table></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ACTIONS MODAL ===== -->
+<div class="overlay" id="actOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>
+      <div style="flex:1;min-width:0">
+        <p class="mt" id="actTitle">Veprime</p>
+        <p class="ms" id="actSub">Zgjidh një veprim</p>
+      </div>
+      <button class="x" data-close-act>&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="act-list" id="actList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== EDIT MODAL ===== -->
+<div class="overlay" id="editOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></span>
+      <div style="flex:1"><p class="mt">Redakto detyrën</p><p class="ms">Ndrysho fushat dhe ruaj</p></div>
+      <button class="x" data-close-edit>&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>Titulli</label><input type="text" id="eTitle" /></div>
+      <div class="field"><label>Përshkrimi</label><textarea id="eDesc"></textarea></div>
+      <div class="row">
+        <div class="field"><label>Caktuar për</label><input type="text" id="eAssignee" /></div>
+        <div class="field"><label>Prioriteti</label><select id="ePriority"><option>Ulet</option><option>Mesme</option><option>Lart</option></select></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Kategori</label><input type="text" id="eCategory" list="catList" /></div>
+        <div class="field"><label>Afati</label><input type="date" id="eDue" /></div>
+      </div>
+      <div class="field">
+        <label>Skedarët</label>
+        <div class="pending-files" id="eFiles"></div>
+        <button class="act ghost sm" id="eAddFile">📎 Shto skedar</button>
+        <input type="file" id="eFileInput" multiple style="display:none" />
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="act ghost" data-close-edit>Anulo</button>
+      <button class="act" id="eSave">Ruaj ndryshimet</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CLOUD SETTINGS MODAL ===== -->
+<div class="overlay" id="cloudOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></span>
+      <div style="flex:1"><p class="mt">Cloud — të dhëna të përbashkëta</p><p class="ms">Supabase (falas) për të gjithë ekipin</p></div>
+      <button class="x" data-close-cloud>&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="hint" style="margin-top:0">Vendos të dhënat nga projekti yt <b>Supabase</b>. Të gjithë që përdorin të njëjtin <b>Kod ekipi</b> ndajnë të njëjtat detyra, mesazhe e skedarë, në kohë reale. Shih skedarin <b>UDHEZUES-FALAS.md</b> për hapat.</div>
+      <div class="field"><label>Supabase URL</label><input type="text" id="sbUrl" placeholder="https://xxxx.supabase.co" /></div>
+      <div class="field"><label>Supabase anon key</label><input type="password" id="sbKey" placeholder="eyJhbGci..." /></div>
+      <div class="field"><label>Kodi i ekipit (dhoma)</label><input type="text" id="sbRoom" placeholder="p.sh. ekipi-im-2026" /></div>
+      <div id="cloudStatus" class="hint" style="display:none"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="act ghost" id="cloudDisconnect">Shkëput</button>
+      <button class="act" id="cloudConnect">Lidhu</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DETAIL MODAL ===== -->
+<div class="overlay" id="detailOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="ic" id="dIc"></span>
+      <div style="flex:1;min-width:0"><p class="mt" id="dTitle">Detyra</p><p class="ms" id="dStatus"></p></div>
+      <button class="x" data-close-detail>&times;</button>
+    </div>
+    <div class="modal-body" id="dBody"></div>
+    <div class="modal-foot">
+      <button class="act ghost" data-close-detail>Mbyll</button>
+      <button class="act" id="dActions">Veprime ⋮</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $=(s)=>document.querySelector(s), $$=(s)=>document.querySelectorAll(s);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const LS={tasks:'axh_tasks',sms:'axh_sms',cfg:'axh_cfg',chat:'axh_chat',deleted:'axh_deleted',audit:'axh_audit'};
+let state={
+  tasks:JSON.parse(localStorage.getItem(LS.tasks)||'[]'),
+  deleted:JSON.parse(localStorage.getItem(LS.deleted)||'[]'),
+  audit:JSON.parse(localStorage.getItem(LS.audit)||'[]'),
+  sms:JSON.parse(localStorage.getItem(LS.sms)||'[]'),
+  cfg:JSON.parse(localStorage.getItem(LS.cfg)||'{}'),
+  chat:JSON.parse(localStorage.getItem(LS.chat)||'null'),
+  pending:[], msgPending:[], priority:'Mesme', view:(localStorage.getItem('axh_view')||'table')
+};
+function save(){localStorage.setItem(LS.tasks,JSON.stringify(state.tasks));localStorage.setItem(LS.deleted,JSON.stringify(state.deleted));localStorage.setItem(LS.audit,JSON.stringify(state.audit));localStorage.setItem(LS.sms,JSON.stringify(state.sms));localStorage.setItem(LS.cfg,JSON.stringify(state.cfg));localStorage.setItem(LS.chat,JSON.stringify(state.chat));schedulePush();}
+
+/* ===== CLOUD (Supabase) ===== */
+// ▼▼▼ VENDOS KREDENCIALET KËTU NJË HERË — pastaj lidhet vetvetiu sa herë e hap ▼▼▼
+const CLOUD_DEFAULT = {
+  url:  'https://ruwxxypntyhxdwegkmkl.supabase.co',   // Supabase URL
+  key:  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1d3h4eXBudHloeGR3ZWdrbWtsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3ODUwMTAsImV4cCI6MjEwNjM2MTAxMH0.JnDswGJDorNL73uuzVHgxOu4VwDzcQ7_Y7kob0LMI2Q', // anon key
+  room: 'ekipi-im-2026'                               // Kodi i ekipit (i njëjti për të gjithë)
+};
+// ▲▲▲ ▲▲▲
+const clientId=localStorage.getItem('axh_client')||(()=>{const c=uid()+uid();localStorage.setItem('axh_client',c);return c;})();
+const savedCloud=JSON.parse(localStorage.getItem('axh_cloud')||'null');
+const cloud={connected:false,cfg:(savedCloud&&savedCloud.url)?savedCloud:{...CLOUD_DEFAULT},applying:false,rest:'',headers:null,lastUpdated:null,poll:null,rt:null,rtChannel:null,role:'employee',userName:'',userId:null};
+let pushTimer=null;
+function setCloudStatus(txt,cls){$('#cloudTxt').textContent=txt;const d=$('#cloudDot');d.className='cdot'+(cls?' '+cls:'');}
+function snapshot(){ return {tasks:state.tasks,deleted:state.deleted,audit:state.audit,chat:state.chat,sms:state.sms}; }
+function logAudit(action,detail){state.audit.unshift({id:uid(),action,detail,at:Date.now(),by:state.chat?.me||'Përdorues'});state.audit=state.audit.slice(0,500);}
+
+async function connectCloud(){
+  // Lidhje online direkte me konfigurimin zyrtar; injoron konfigurime te vjetra lokale.
+  cloud.cfg={...CLOUD_DEFAULT};
+  cloud.rest=CLOUD_DEFAULT.url+'/rest/v1/axhenda';
+  cloud.qkey='apikey='+encodeURIComponent(CLOUD_DEFAULT.key);
+  cloud.headers={apikey:CLOUD_DEFAULT.key,Authorization:'Bearer '+CLOUD_DEFAULT.key,'Content-Type':'application/json'};
+  try{
+    setCloudStatus('Duke u lidhur...','');
+    const sessionData=authClient?await authClient.auth.getSession():{data:{session:null}};
+    const authHeaders=sessionData.data.session?{apikey:CLOUD_DEFAULT.key,Authorization:'Bearer '+sessionData.data.session.access_token}:{};
+    const r=await fetch(cloud.rest+'?id=eq.ekipi-im-2026&select=data,by,updated_at&apikey='+encodeURIComponent(CLOUD_DEFAULT.key),{mode:'cors',cache:'no-store',headers:authHeaders});
+    if(!r.ok){ const t=await r.text(); throw new Error('HTTP '+r.status+' — '+t.slice(0,140)); }
+    const rows=await r.json();
+    if(!rows.length) throw new Error('Dhoma nuk u gjet në Cloud');
+    if(rows[0].data){ cloud.lastUpdated=rows[0].updated_at; applyRemote(rows[0].data); }
+    // Realtime: njofton çdo PC/telefon menjëherë kur ndryshon rreshti
+    try{
+      const mod=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+      cloud.rt=mod.createClient(CLOUD_DEFAULT.url,CLOUD_DEFAULT.key,{global:{headers:authHeaders}});
+      if(sessionData.data.session) await cloud.rt.realtime.setAuth(sessionData.data.session.access_token);
+      cloud.rtChannel=cloud.rt.channel('axhenda-live-'+CLOUD_DEFAULT.room)
+        .on('postgres_changes',{event:'*',schema:'public',table:'axhenda',filter:'id=eq.'+CLOUD_DEFAULT.room},payload=>{
+          const d=payload.new&&payload.new.data;
+          if(d){ cloud.lastUpdated=payload.new.updated_at||Date.now(); applyRemote(d); }
+        })
+        .on('postgres_changes',{event:'*',schema:'public',table:'chat_messages'},()=>{
+          secureRefreshChat();
+        }).subscribe();
+    }catch(rtErr){ console.warn('Realtime unavailable; fallback polling',rtErr); }
+    cloud.connected=true;
+    setCloudStatus('Online · '+CLOUD_DEFAULT.room,'on');
+    startPolling();
+    toast('U lidhe me Cloud ✓ ('+CLOUD_DEFAULT.room+')','ok');
+  }catch(e){
+    cloud.connected=false; setCloudStatus('Gabim lidhjeje','err');
+    showCloudStatus('❌ '+e.message,'err');
+    toast('Lidhja dështoi: '+e.message,'err');
+  }
+}
+async function pushNow(){
+  const ts=new Date().toISOString();
+  const body=[{id:cloud.cfg.room,data:snapshot(),by:clientId,updated_at:ts}];
+  let pushHeaders={...cloud.headers};
+  if(authClient){
+    const sessionData=await authClient.auth.getSession();
+    if(sessionData.data.session) pushHeaders={apikey:CLOUD_DEFAULT.key,Authorization:'Bearer '+sessionData.data.session.access_token,'Content-Type':'application/json'};
+  }
+  const r=await fetch(cloud.rest+'?on_conflict=id&'+cloud.qkey,{
+    method:'POST',
+    headers:{...pushHeaders,Prefer:'resolution=merge-duplicates,return=minimal'},
+    body:JSON.stringify(body)
+  });
+  if(!r.ok){ const t=await r.text(); throw new Error('push HTTP '+r.status+' — '+t.slice(0,300)); }
+  cloud.lastUpdated=ts;
+}
+function startPolling(){
+  clearInterval(cloud.poll);
+  cloud.poll=setInterval(async()=>{
+    if(!cloud.connected) return;
+    try{
+      const sessionData=authClient?await authClient.auth.getSession():{data:{session:null}};
+      const authHeaders=sessionData.data.session?{apikey:CLOUD_DEFAULT.key,Authorization:'Bearer '+sessionData.data.session.access_token}:{};
+      const r=await fetch(cloud.rest+'?id=eq.ekipi-im-2026&select=data,by,updated_at&'+cloud.qkey+'&_='+Date.now(),{mode:'cors',cache:'no-store',headers:authHeaders});
+      if(!r.ok) return;
+      const rows=await r.json();
+      if(rows.length && rows[0].data){
+        cloud.lastUpdated=rows[0].updated_at;
+        applyRemote(rows[0].data);
+      }
+      if(currentUser) secureRefreshChat();
+    }catch(e){/* provo përsëri */}
+  },3000);
+}
+function applyRemote(d){
+  cloud.applying=true;
+  if(d.deleted) state.deleted=[...new Set(d.deleted)];
+  if(d.audit) state.audit=d.audit;
+  if(d.tasks) state.tasks=d.tasks.filter(t=>!state.deleted.includes(t.id));
+  if(d.chat){
+    const localChat=state.chat||{};
+    const oldMsgs=d.chat.msgs||{};
+    const map={};
+    const remoteContacts=(d.chat.contacts||[]).map(c=>{const old=c.id, id=stableContactId(c.name);map[old]=id;return {...c,id};});
+    const contacts=[...(localChat.contacts||[])];
+    remoteContacts.forEach(rc=>{if(!contacts.some(c=>c.id===rc.id)) contacts.push(rc);});
+    const msgs={group:oldMsgs.group||[]};
+    Object.keys(oldMsgs).filter(k=>k!=='group').forEach(k=>{const nk=map[k]||k;msgs[nk]=[...(msgs[nk]||[]),...(oldMsgs[k]||[])]});
+    state.chat={...d.chat,contacts,msgs,active:localChat.active||'group',me:localChat.me||d.chat.me||'Përdoruesi'};
+  }
+  if(d.sms) state.sms=d.sms;
+  localStorage.setItem(LS.tasks,JSON.stringify(state.tasks));
+  localStorage.setItem(LS.chat,JSON.stringify(state.chat));
+  localStorage.setItem(LS.sms,JSON.stringify(state.sms));
+  applyView(); renderSms();
+  cloud.applying=false;
+}
+function schedulePush(){
+  if(!cloud.connected||cloud.applying) return;
+  clearTimeout(pushTimer);
+  pushTimer=setTimeout(()=>{ pushNow().catch(e=>{console.warn('push fail',e);toast('Ruajtja në server dështoi: '+e.message,'err');}); },600);
+}
+function showCloudStatus(msg,cls){const el=$('#cloudStatus');el.style.display='block';el.innerHTML=msg;el.className='hint '+(cls||'');}
+$('#cloudPill').addEventListener('click',()=>{
+  $('#sbUrl').value=cloud.cfg.url||''; $('#sbKey').value=cloud.cfg.key||''; $('#sbRoom').value=cloud.cfg.room||'';
+  $('#cloudStatus').style.display='none';
+  $('#cloudOverlay').classList.add('show');
+});
+$$('[data-close-cloud]').forEach(b=>b.onclick=()=>$('#cloudOverlay').classList.remove('show'));
+$('#cloudOverlay').addEventListener('click',e=>{if(e.target.id==='cloudOverlay')$('#cloudOverlay').classList.remove('show');});
+$('#cloudConnect').addEventListener('click',async()=>{
+  cloud.cfg={url:$('#sbUrl').value.trim(),key:$('#sbKey').value.trim(),room:$('#sbRoom').value.trim()};
+  localStorage.setItem('axh_cloud',JSON.stringify(cloud.cfg));
+  showCloudStatus('⏳ Duke u lidhur...','');
+  await connectCloud();
+  if(cloud.connected){ showCloudStatus('✅ I lidhur me dhomën <b>'+cloud.cfg.room+'</b>. Të dhënat sinkronizohen automatikisht (çdo 5 sek).','ok'); }
+});
+$('#cloudDisconnect').addEventListener('click',()=>{
+  if(cloud.rtChannel&&cloud.rt) cloud.rt.removeChannel(cloud.rtChannel);
+  clearInterval(cloud.poll);
+  cloud.connected=false; cloud.cfg={}; localStorage.removeItem('axh_cloud');
+  setCloudStatus('Offline (demo)'); $('#cloudOverlay').classList.remove('show'); toast('U shkëpute nga Cloud');
+});
+function toast(m,t=''){const e=$('#toast');e.textContent=m;e.className='toast show '+t;setTimeout(()=>e.className='toast '+t,2600);}
+function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function human(b){if(b<1024)return b+' B';if(b<1048576)return (b/1024).toFixed(0)+' KB';return (b/1048576).toFixed(1)+' MB';}
+const dt=(ts)=>new Date(ts).toLocaleString('sq-AL',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+const dOnly=(ts)=>new Date(ts).toLocaleDateString('sq-AL',{day:'2-digit',month:'long',year:'numeric'});
+const dueFmt=(d)=>new Date(d).toLocaleDateString('sq-AL',{day:'2-digit',month:'short'});
+function isOverdue(t){return !t.done && t.due && new Date(t.due)<new Date(new Date().toDateString());}
+
+/* ROLE */
+function applyRole(){
+  const on=cloud.role==='owner';
+  $('#roleToggle').checked=on;
+  $('#roleToggle').disabled=true;
+  document.body.classList.toggle('owner',on);
+  $('#lblEmp').classList.toggle('on',!on);
+  $('#lblOwn').classList.toggle('on',on);
+  $('#lockedNote').style.display=on?'none':'block';
+  if(state.chat){ state.chat.me = on?'Pronari':(state.chat.contacts[0]?.name||'Pronari'); save(); }
+  applyView();
+  toast(on?'Modaliteti: Pronar 👑':'Modaliteti: Punonjës');
+}
+$('#roleToggle').addEventListener('change',applyRole);
+$('#lblEmp').addEventListener('click',()=>{$('#roleToggle').checked=false;applyRole();});
+$('#lblOwn').addEventListener('click',()=>{$('#roleToggle').checked=true;applyRole();});
+
+/* PRIORITY PILLS */
+$$('.pill').forEach(p=>p.onclick=()=>{
+  $$('.pill').forEach(x=>x.classList.remove('active'));
+  p.classList.add('active'); state.priority=p.dataset.p;
+});
+
+/* COMPOSER: expand desc on focus */
+$('#tTitle').addEventListener('focus',()=>$('#compInput').classList.add('expanded'));
+$('#tTitle').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();addTask();} });
+$('#tDesc').addEventListener('input',e=>{e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,90)+'px';});
+
+/* FILES */
+$('#attachBtn').addEventListener('click',()=>$('#fileInput').click());
+$('#fileInput').addEventListener('change',async e=>{
+  for(const f of e.target.files){
+    if(f.size>3*1024*1024){toast('"'+f.name+'" > 3MB, u kapërcye','err');continue;}
+    const data=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f);});
+    state.pending.push({id:uid(),name:f.name,size:f.size,type:f.type,data});
+  }
+  e.target.value=''; renderPending();
+});
+function renderPending(){
+  $('#pendingFiles').innerHTML=state.pending.map(f=>`<span class="chip file" data-rm="${f.id}">📎 ${esc(f.name)} · ${human(f.size)} ✕</span>`).join('');
+  $$('#pendingFiles .chip').forEach(c=>c.onclick=()=>{state.pending=state.pending.filter(f=>f.id!==c.dataset.rm);renderPending();});
+}
+
+/* ADD TASK */
+$('#addTaskBtn').addEventListener('click',addTask);
+function addTask(){
+  const title=$('#tTitle').value.trim();
+  if(!title){toast('Shkruaj një detyrë','err');return;}
+  state.tasks.push({
+    id:uid(), title, desc:$('#tDesc').value.trim(),
+    assignee:$('#tAssignee').value.trim(), category:$('#tCategory').value.trim(),
+    priority:state.priority, due:$('#tDue').value, files:state.pending.slice(),
+    done:false, createdAt:Date.now(), doneAt:null
+  });
+  state.pending=[]; renderPending();
+  $('#tTitle').value=''; $('#tDesc').value=''; $('#tCategory').value=''; $('#tDesc').style.height='auto';
+  $('#compInput').classList.remove('expanded');
+  logAudit('Detyrë e re',title);
+  save(); render();
+  toast('Detyra u shtua ✓','ok');
+  const c=$('#taskList'); c.scrollTop=c.scrollHeight;
+}
+
+/* SVG icons */
+const icClock='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+const icCheck2='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M2 13l4 4L14 7"/><path d="M9 15l1 1L22 6"/></svg>';
+
+/* RENDER */
+function render(){
+  const q=$('#search').value.toLowerCase(), fs=$('#filterStatus').value, fc=$('#filterCat').value;
+  // populate category dropdowns
+  const cats=[...new Set(state.tasks.map(t=>t.category).filter(Boolean))].sort();
+  $('#catList').innerHTML=cats.map(c=>`<option value="${esc(c)}">`).join('');
+  $('#employeeList').innerHTML=state.chat.contacts.map(c=>`<option value="${esc(c.name)}">`).join('');
+  const cur=$('#filterCat').value;
+  $('#filterCat').innerHTML='<option value="all">🏷️ Të gjitha kategoritë</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  $('#filterCat').value=cats.includes(cur)?cur:'all';
+
+  const owner=document.body.classList.contains('owner');
+  const filtering=q||fs!=='all'||$('#filterCat').value!=='all';
+  let list=state.tasks.filter(t=>{
+    const m=(t.title+' '+t.desc+' '+t.assignee+' '+(t.category||'')).toLowerCase().includes(q);
+    const s=fs==='all'||(fs==='open'&&!t.done)||(fs==='done'&&t.done);
+    const c=$('#filterCat').value==='all'||t.category===$('#filterCat').value;
+    return m&&s&&c;
+  });
+
+  const el=$('#taskList');
+  el.classList.add('table-mode');
+  if(!list.length){
+    el.innerHTML='<div class="empty">Asnjë detyrë për t\'u shfaqur.<br>'+(owner?'Shto detyra nga shiriti poshtë 👇':'Pronari nuk ka ngarkuar detyra ende.')+'</div>';
+  } else {
+    el.innerHTML=buildTable(list,owner,filtering);
+  }
+  renderTicker();
+
+  $$('[data-toggle]').forEach(b=>b.onclick=()=>{
+    const t=state.tasks.find(x=>x.id===b.dataset.toggle);
+    t.done=!t.done; t.doneAt=t.done?Date.now():null; save(); render();
+    toast(t.done?'Detyra u shënua si e kryer ✓':'Detyra u rihap',t.done?'ok':'');
+  });
+  $$('[data-menu]').forEach(b=>b.onclick=()=>openActions(b.dataset.menu));
+  $$('[data-open]').forEach(b=>b.onclick=e=>{e.stopPropagation();openDetail(b.dataset.open);});
+  $$('[data-dl]').forEach(b=>b.onclick=e=>{e.stopPropagation();const[t,f]=b.dataset.dl.split('|');downloadFile(t,f);});
+  $$('.trow').forEach(row=>row.onclick=e=>{
+    if(e.target.closest('[data-toggle],[data-menu],[data-dl]')) return;
+    openDetail(row.dataset.id);
+  });
+  setupDrag();
+
+  $('#stTotal').textContent=state.tasks.length;
+  $('#stOpen').textContent=state.tasks.filter(t=>!t.done).length;
+  $('#stDone').textContent=state.tasks.filter(t=>t.done).length;
+  $('#stOver').textContent=state.tasks.filter(isOverdue).length;
+  $('#chatSub').textContent=state.tasks.filter(t=>!t.done).length+' në pritje · '+state.tasks.filter(t=>t.done).length+' kryer';
+  renderVault();
+  renderAudit();
+}
+function buildTable(list,owner,filtering){
+  const drag=owner&&!filtering;
+  const rows=list.map(t=>`
+    <tr class="trow ${t.done?'done':''}" data-id="${t.id}" ${drag?'draggable="true"':''}>
+      <td>
+        <div class="tcell-first">
+          ${drag?`<span class="drag-handle" title="Tërhiq për të rirenditur">⠿</span>`:''}
+          <div class="cbox ${t.done?'checked':''}" data-toggle="${t.id}" title="Shëno si kryer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M5 12l5 5L20 6"/></svg>
+          </div>
+          <div style="min-width:0">
+            <button type="button" class="tt-title task-title-link" data-open="${t.id}" title="Hap detajet e detyrës">${esc(t.title)}</button>
+            ${t.desc?`<button type="button" class="tt-desc task-desc-link" data-open="${t.id}" title="Hap detajet">${esc(t.desc)}</button>`:''}
+          </div>
+        </div>
+      </td>
+      <td>${t.category?`<span class="chip cat">🏷️ ${esc(t.category)}</span>`:'<span class="tt-desc">—</span>'}</td>
+      <td>${t.assignee?`<span class="chip assignee">👤 ${esc(t.assignee)}</span>`:'<span class="tt-desc">—</span>'}</td>
+      <td><span class="chip p-${t.priority}">● ${t.priority}</span></td>
+      <td class="nowrap">${t.due?`<span class="chip due ${isOverdue(t)?'over':''}">📅 ${dueFmt(t.due)}${isOverdue(t)?' · vonuar':''}</span>`:'<span class="tt-desc">—</span>'}</td>
+      <td class="nowrap tt-desc">${dt(t.createdAt)}</td>
+      <td class="nowrap">${t.done&&t.doneAt?`<span style="color:#1a8a4f;font-weight:600">${dt(t.doneAt)}</span>`:'<span class="tt-desc">—</span>'}</td>
+      <td>${(t.files||[]).length?`<div class="tfiles">${t.files.map(f=>`<span class="chip file" data-dl="${t.id}|${f.id}">📎 ${esc(f.name)}</span>`).join('')}</div>`:'<span class="tt-desc">—</span>'}</td>
+      <td><button class="kebab" data-menu="${t.id}" title="Veprime">⋮</button></td>
+    </tr>`).join('');
+  return `<table class="ttable">
+    <thead><tr>
+      <th>Detyra</th><th>Kategori</th><th>Caktuar</th><th>Prioritet</th>
+      <th>Afati</th><th>Ngarkuar</th><th>Kryer</th><th>Skedarë</th><th></th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+function renderTicker(){
+  const urgent=state.tasks.filter(t=>!t.done && (t.priority==='Lart' || isOverdue(t) || (t.due && (new Date(t.due)-Date.now())<3*864e5)));
+  const wrap=$('#tickerWrap');
+  if(!urgent.length){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  const items=urgent.map(t=>{
+    const over=isOverdue(t);
+    return `<span class="ticker-task" data-open="${t.id}" title="Hap detajet e detyrës">${over?'<b>⏰ VONUAR:</b>':'<i>📅 Së shpejti:</i>'} ${esc(t.title)}${t.assignee?' — '+esc(t.assignee):''}${t.due?' ('+dueFmt(t.due)+')':''}</span>`;
+  }).join('');
+  const ticker=$('#ticker');
+  if(ticker.dataset.content===items) return;
+  ticker.dataset.content=items;
+  ticker.innerHTML=items+items; // dyfishim për rrjedhë të vazhdueshme
+}
+function downloadFile(tid,fid){
+  const t=state.tasks.find(x=>x.id===tid); if(!t)return;
+  const f=(t.files||[]).find(x=>x.id===fid); if(!f)return;
+  const a=document.createElement('a'); a.href=f.data; a.download=f.name; a.click(); toast('Duke shkarkuar '+f.name);
+}
+function renderAudit(){
+  const el=$('#auditLog'); if(!el)return;
+  const q=($('#auditSearch')?.value||'').toLowerCase();
+  const rows=state.audit.filter(a=>(a.action+' '+(a.detail||'')+' '+(a.by||'')).toLowerCase().includes(q)).slice(0,200);
+  el.innerHTML=rows.length?rows.map((a,i)=>`<tr data-audit-row="${i}"><td>${esc(a.action)}</td><td>${esc(a.detail||'')}</td><td>${esc(a.by||'')}</td><td>${dt(a.at)}</td></tr>`).join(''):'<tr><td colspan="4">Asnjë veprim.</td></tr>';
+  $$('#auditLog [data-audit-row]').forEach((r,i)=>r.onclick=()=>{const a=rows[i];alert(a.action+'\n\n'+(a.detail||'')+'\n\n'+dt(a.at)+' · '+(a.by||''));});
+}
+function renderVault(){
+  const all=[]; state.tasks.forEach(t=>(t.files||[]).forEach(f=>all.push({...f,task:t.title,tid:t.id})));
+  const el=$('#fileVault');
+  const q=($('#fileSearch')?.value||'').toLowerCase();
+  const rows=all.filter(f=>(f.name+' '+f.task).toLowerCase().includes(q));
+  el.innerHTML=rows.length?rows.map(f=>`<tr data-file-row="${f.tid}|${f.id}"><td>📎 ${esc(f.name)}</td><td>${esc(f.task)}</td><td>${human(f.size)}</td><td><button class="act ghost sm" data-vdl="${f.tid}|${f.id}">⬇ Shkarko</button></td></tr>`).join(''):'<tr><td colspan="4">Asnjë skedar i ngarkuar.</td></tr>';
+  $$('[data-vdl]').forEach(b=>b.onclick=e=>{e.stopPropagation();const[t,f]=b.dataset.vdl.split('|');downloadFile(t,f);});
+}
+
+/* ===== DETAIL POPUP ===== */
+let detailId=null;
+function openDetail(id){
+  const t=state.tasks.find(x=>x.id===id); if(!t)return;
+  detailId=id;
+  $('#dIc').innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>';
+  $('#dTitle').textContent=t.title;
+  $('#dStatus').innerHTML=t.done?'<span class="st sent">✓ Kryer</span>':(isOverdue(t)?'<span class="st fail">⏰ Vonuar</span>':'<span class="st sim">◔ Në pritje</span>');
+  const rows=[];
+  rows.push(['Prioriteti',`<span class="chip p-${t.priority}">● ${t.priority}</span>`]);
+  if(t.category)rows.push(['Kategori',`<span class="chip cat">🏷️ ${esc(t.category)}</span>`]);
+  if(t.assignee)rows.push(['Caktuar',`<span class="chip assignee">👤 ${esc(t.assignee)}</span>`]);
+  if(t.due)rows.push(['Afati',`<span class="chip due ${isOverdue(t)?'over':''}">📅 ${dueFmt(t.due)}${isOverdue(t)?' · vonuar':''}</span>`]);
+  rows.push(['Ngarkuar',dt(t.createdAt)]);
+  if(t.editedAt)rows.push(['Redaktuar',dt(t.editedAt)]);
+  if(t.done&&t.doneAt)rows.push(['Kryer',`<span style="color:#1a8a4f;font-weight:700">${dt(t.doneAt)}</span>`]);
+  let html=rows.map(r=>`<div class="detail-row"><span class="k">${r[0]}</span><span class="v">${r[1]}</span></div>`).join('');
+  if(t.desc)html+=`<div style="margin-top:12px"><div class="detail-row" style="border:none;padding-bottom:6px"><span class="k">Përshkrimi</span></div><div class="detail-desc">${esc(t.desc)}</div></div>`;
+  if((t.files||[]).length){
+    html+=`<div style="margin-top:14px"><div class="k" style="margin-bottom:8px">📎 Skedarët (${t.files.length})</div>`;
+    html+=t.files.map(f=>`<div class="dfile"><span style="font-size:20px">📄</span><span class="dn">${esc(f.name)}</span><span class="time">${human(f.size)}</span><button class="act ghost sm" data-ddl="${t.id}|${f.id}">⬇</button></div>`).join('');
+    html+='</div>';
+  }
+  $('#dBody').innerHTML=html;
+  $$('#dBody [data-ddl]').forEach(b=>b.onclick=()=>{const[ti,fi]=b.dataset.ddl.split('|');downloadFile(ti,fi);});
+  $('#detailOverlay').classList.add('show');
+}
+const closeDetail=()=>$('#detailOverlay').classList.remove('show');
+$$('[data-close-detail]').forEach(b=>b.onclick=closeDetail);
+$('#detailOverlay').addEventListener('click',e=>{if(e.target.id==='detailOverlay')closeDetail();});
+$('#dActions').addEventListener('click',()=>{closeDetail();openActions(detailId);});
+
+/* ===== VIEW SWITCH ===== */
+function applyView(){
+  const chat=state.view==='chat', tools=state.view==='tools';
+  $('#tableView').style.display=chat||tools?'none':'block';
+  $('#chatView').style.display=chat?'block':'none';
+  $('#toolsView').style.display=tools?'grid':'none';
+  $$('.view-toggle button').forEach(b=>b.classList.toggle('active',b.dataset.view===state.view));
+  if(chat){
+    $('#leftTitle').textContent='Mesazhet';
+    $('#chatSub').textContent='chat i ekipit — grup & individual';
+    renderChat();
+  }else{
+    $('#leftTitle').textContent='Lista e Detyrave';
+    render();
+  }
+}
+
+/* ===== MESSENGER (WhatsApp-style) ===== */
+function initChat(){
+  if(state.chat) return;
+  const names=[...new Set(state.tasks.map(t=>t.assignee).filter(Boolean))];
+  const seed=(names.length?names:['Ardit','Elsa','Blerina']);
+  state.chat={
+    me:'Pronari',
+    active:'group',
+    contacts:seed.map(n=>({id:uid(),name:n})),
+    msgs:{ group:[
+      {id:uid(),from:'Pronari',text:'Mirë se erdhët në grupin e ekipit! 👋',at:Date.now()-6*36e5},
+      {id:uid(),from:seed[0]||'Ardit',text:'Faleminderit, jemi gati!',at:Date.now()-5*36e5}
+    ]}
+  };
+  save();
+}
+const palette=['#4f7cff','#00a884','#f5a623','#e14b4b','#6d5cff','#0a8a78','#c77700'];
+const colorFor=(name)=>palette[[...name].reduce((a,c)=>a+c.charCodeAt(0),0)%palette.length];
+const initials=(name)=>name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+const stableContactId=name=>'user-'+String(name||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+function convName(id){ return id==='group'?'👥 Grupi (të gjithë)':(state.chat.contacts.find(c=>c.id===id)?.name||'Bisedë'); }
+function convMsgs(id){ return state.chat.msgs[id]||(state.chat.msgs[id]=[]); }
+function lastMsg(id){ const m=convMsgs(id); return m.length?m[m.length-1]:null; }
+
+function exportActiveChat(){
+  const c=state.chat;
+  const name=convName(c.active).replace(/^👥\s*/,'')||'Bisedë';
+  const messages=convMsgs(c.active);
+  let out='Axhenda Online — '+name+'\n';
+  out+='Eksportuar më: '+new Date().toLocaleString('sq-AL')+'\n';
+  out+='='.repeat(54)+'\n\n';
+  if(!messages.length) out+='Nuk ka mesazhe në këtë bisedë.\n';
+  else messages.forEach(m=>{
+    const when=new Date(m.at||Date.now()).toLocaleString('sq-AL');
+    out+='['+when+'] '+(m.from||'Përdorues')+': '+(m.text||'')+'\n';
+    if(m.file) out+='[Skedar: '+m.file.name+']\n';
+    out+='\n';
+  });
+  const blob=new Blob([out],{type:'text/plain;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='axhenda-'+name.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+new Date().toISOString().slice(0,10)+'.txt';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast('Biseda u eksportua ✓','ok');
+}
+async function exportCompleteChat(){
+  const c=state.chat,name=convName(c.active).replace(/^👥\s*/,'')||'Bisedë',messages=convMsgs(c.active);
+  const mod=await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
+  const zip=new mod.default();
+  let txt='Axhenda Online — '+name+'\nEksportuar më: '+new Date().toLocaleString('sq-AL')+'\n'+'='.repeat(54)+'\n\n';
+  let n=0;
+  for(const m of messages){
+    txt+='['+new Date(m.at||Date.now()).toLocaleString('sq-AL')+'] '+(m.from||'Përdorues')+': '+(m.text||'')+'\n';
+    if(m.file?.path&&authClient){const {data}=await authClient.storage.from('chat-files').createSignedUrl(m.file.path,300);if(data?.signedUrl){try{const blob=await (await fetch(data.signedUrl)).blob();const fn='skedare/'+(++n)+'-'+m.file.name;zip.file(fn,blob);txt+='[Skedar: '+fn+']\n';}catch(e){txt+='[Skedar: '+m.file.name+' — nuk u shkarkua]\n';}}}
+    txt+='\n';
+  }
+  zip.file('biseda.txt',txt);
+  const blob=await zip.generateAsync({type:'blob'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='axhenda-'+name.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'-'+new Date().toISOString().slice(0,10)+'.zip';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('Biseda dhe skedarët u eksportuan ✓','ok');
+}
+function printActiveChatA4(){
+  const c=state.chat,name=convName(c.active),messages=convMsgs(c.active);
+  const rows=messages.map(m=>'<div class="pmsg"><b>'+esc(m.from||'Përdorues')+'</b><span>'+new Date(m.at||Date.now()).toLocaleString('sq-AL')+'</span><p>'+esc(m.text||'')+'</p>'+(m.file?'<i>Skedar: '+esc(m.file.name)+'</i>':'')+'</div>').join('');
+  const w=window.open('','_blank');if(!w){toast('Lejo popup-et për printim','err');return;}
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+esc(name)+'</title><style>@page{size:A4 portrait;margin:16mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#18232b;font-size:11pt}h1{font-size:18pt;margin:0 0 4px;border-bottom:2px solid #20a878;padding-bottom:7px}h2{font-size:10pt;color:#667;margin:0 0 16px}.pmsg{border-bottom:1px solid #d9e0e4;padding:7px 0;break-inside:avoid}.pmsg b{font-size:10pt}.pmsg span{float:right;color:#667;font-size:9pt}.pmsg p{white-space:pre-wrap;margin:4px 0}.pmsg i{color:#557;font-size:9pt}</style></head><body><h1>Axhenda Online — '+esc(name)+'</h1><h2>Eksport bisede · '+new Date().toLocaleString('sq-AL')+'</h2>'+rows+'</body></html>');w.document.close();w.focus();setTimeout(()=>w.print(),300);
+}
+function renderChat(){
+  const c=state.chat;
+  // identity selector
+  const idents=[c.me||'Përdoruesi'];
+  $('#identSel').innerHTML=idents.map(n=>`<option selected>${esc(n)}</option>`).join('');
+  $('#identSel').disabled=true;
+  // conversation list
+  const convs=['group',...c.contacts.map(x=>x.id)];
+  $('#convList').innerHTML=convs.map(id=>{
+    const nm=convName(id), lm=lastMsg(id), av=id==='group'?'👥':initials(nm);
+    const bg=id==='group'?'#6d5cff':colorFor(nm);
+    return `<div class="conv ${id===c.active?'active':''}" data-conv="${id}">
+      <span class="av" style="background:${bg}">${av}</span>
+      <div class="ci"><div class="cn">${esc(nm)}</div><div class="cp">${lm?esc((lm.from!==c.me?lm.from+': ':'')+(lm.text||'📎 Skedar')):'Pa mesazhe'}</div></div>
+      ${document.body.classList.contains('owner')&&id!=='group'?`<button class="contact-edit" data-edit-contact="${id}" title="Redakto">✎</button><button class="contact-del" data-del-contact="${id}" title="Fshi">×</button>`:''}
+    </div>`;
+  }).join('');
+  $$('#convList .conv').forEach(b=>b.onclick=()=>{c.active=b.dataset.conv;save();renderChat();});
+  $$('#convList [data-edit-contact]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    const contact=c.contacts.find(x=>x.id===b.dataset.editContact); if(!contact)return;
+    const n=prompt('Emri i ri:',contact.name); if(!n||!n.trim())return;
+    contact.name=n.trim(); if(c.me===contact.name) c.me=contact.name;
+    save(); renderChat(); toast('Punonjësi u modifikua ✓','ok');
+  });
+  $$('#convList [data-del-contact]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    const contact=c.contacts.find(x=>x.id===b.dataset.delContact); if(!contact)return;
+    if(!confirm('Fshi punonjësin "'+contact.name+'"?'))return;
+    c.contacts=c.contacts.filter(x=>x.id!==contact.id);
+    if(c.active===contact.id)c.active='group';
+    if(c.me===contact.name)c.me='Pronari';
+    delete c.msgs[contact.id]; save(); renderChat(); toast('Punonjësi u fshi');
+  });
+  // thread head
+  const anm=convName(c.active), abg=c.active==='group'?'#6d5cff':colorFor(anm);
+  $('#threadHead').innerHTML=`<span class="av" style="background:${abg}">${c.active==='group'?'👥':initials(anm)}</span>
+    <div style="flex:1;min-width:0"><div class="tn">${esc(anm)}</div><div class="ts">${c.active==='group'?c.contacts.length+' anëtarë':'bisedë private'}</div></div>
+    <button class="chat-export" id="exportChatBtn" title="Shkarko bisedën dhe skedarët">⬇ Eksporto</button><button class="chat-print" id="printChatBtn" title="Printo A4">🖨 A4</button>`;
+  $('#exportChatBtn').onclick=()=>exportCompleteChat();
+  $('#printChatBtn').onclick=()=>printActiveChatA4();
+  // messages
+  const ms=convMsgs(c.active);
+  const box=$('#msgs');
+  if(!ms.length){ box.innerHTML='<div class="msg-empty">Asnjë mesazh ende.<br>Shkruaj i pari 👇</div>'; }
+  else box.innerHTML=ms.map(m=>{
+    const out=m.from===c.me;
+    const file=m.file?`<div class="mfile" data-mdl="${m.id}">📄 ${esc(m.file.name)} · ${human(m.file.size)} ⬇</div>`:'';
+    return `<div class="msg ${out?'out':'in'}">
+      ${(!out&&c.active==='group')?`<div class="sn" style="color:${colorFor(m.from)}">${esc(m.from)}</div>`:''}
+      ${m.text?`<div class="mtxt">${esc(m.text)}</div>`:''}
+      ${file}
+      <div class="mt">${new Date(m.at).toLocaleTimeString('sq-AL',{hour:'2-digit',minute:'2-digit'})}</div>
+    </div>`;
+  }).join('');
+  $$('#msgs [data-mdl]').forEach(b=>b.onclick=async()=>{
+    const m=ms.find(x=>x.id===b.dataset.mdl); if(!m?.file)return;
+    if(m.file.path&&authClient){const {data,error}=await authClient.storage.from('chat-files').createSignedUrl(m.file.path,300);if(error){toast('Skedari nuk u hap: '+error.message,'err');return;}const a=document.createElement('a');a.href=data.signedUrl;a.download=m.file.name;a.target='_blank';a.click();}
+  });
+  renderMsgPending();
+  box.scrollTop=box.scrollHeight;
+  if(currentUser&&!secureRefreshing) secureRefreshChat();
+}
+function renderMsgPending(){
+  $('#msgPending').innerHTML=state.msgPending.map(f=>`<span class="chip file" data-mrm="${f.id}">📎 ${esc(f.name)} ✕</span>`).join('');
+  $$('#msgPending .chip').forEach(c=>c.onclick=()=>{state.msgPending=state.msgPending.filter(f=>f.id!==c.dataset.mrm);renderMsgPending();});
+}
+async function sendMsg(){
+  const inp=$('#msgInput'), text=inp.value.trim();
+  if(!text && !state.msgPending.length) return;
+  if(currentUser&&authClient){
+    let recipient_id=null;
+    if(state.chat.active!=='group'){
+      const name=convName(state.chat.active);
+      const {data}=await authClient.from('profiles').select('id').eq('display_name',name).maybeSingle();
+      recipient_id=data?.id||null;
+      if(!recipient_id){toast('Punonjësi nuk ka profil login-i','err');return;}
+    }
+    if(text){
+      const {error}=await authClient.from('chat_messages').insert({sender_id:currentUser.id,recipient_id,message:text});
+      if(error){toast('Serveri: '+(error.message||'gabim')+(error.details?' — '+error.details:''),'err');return;}
+    }
+    for(const f of state.msgPending){
+      const path=currentUser.id+'/'+Date.now()+'-'+String(f.name).replace(/[^a-zA-Z0-9._-]/g,'_');
+      const up=await authClient.storage.from('chat-files').upload(path,await (await fetch(f.data)).blob(),{contentType:f.type||'application/octet-stream',upsert:false});
+      if(up.error){toast('Skedari nuk u ruajt: '+up.error.message,'err');continue;}
+      const ins=await authClient.from('chat_messages').insert({sender_id:currentUser.id,recipient_id,message:'📎 '+f.name,file_path:path,file_name:f.name,file_type:f.type||'application/octet-stream',file_size:f.size||0});
+      if(ins.error){toast('Skedari u ngarkua por mesazhi dështoi: '+ins.error.message,'err');return;}
+    }
+    state.msgPending=[]; inp.value=''; await secureRefreshChat(); return;
+  }
+  const msg={id:uid(),from:state.chat.me,text,at:Date.now()};
+  convMsgs(state.chat.active).push(msg); state.msgPending=[]; inp.value=''; save(); renderChat();
+}
+$('#msgSend').addEventListener('click',sendMsg);
+$('#msgInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendMsg();}});
+$('#msgAttachBtn').addEventListener('click',()=>$('#msgFileInput').click());
+$('#msgFileInput').addEventListener('change',async e=>{
+  for(const f of e.target.files){
+    if(f.size>3*1024*1024){toast('"'+f.name+'" > 3MB','err');continue;}
+    const data=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f);});
+    state.msgPending.push({id:uid(),name:f.name,size:f.size,type:f.type,data});
+  }
+  e.target.value='';renderMsgPending();
+});
+$('#identSel').addEventListener('change',e=>{state.chat.me=e.target.value;save();renderChat();});
+$('#addContact').addEventListener('click',async()=>{
+  const n=prompt('Emri i punonjësit:'); if(!n||!n.trim())return;
+  const username=prompt('Username i punonjësit, p.sh. mariglen:'); if(!username||!username.trim())return;
+  const password=prompt('Fjalëkalimi fillestar (minimum 8 karaktere):'); if(!password||password.length<8){toast('Fjalëkalimi duhet të ketë të paktën 8 karaktere','err');return;}
+  const name=n.trim(), id=stableContactId(name);
+  if(state.chat.contacts.some(x=>x.id===id)){toast('Ky punonjës ekziston','err');return;}
+  if(!authClient){toast('Duhet të jesh i loguar','err');return;}
+  const {data,error}=await authClient.functions.invoke('create-employee',{body:{name,username:username.trim(),password}});
+  if(error||data?.error){toast('Punonjësi nuk u krijua: '+(data?.error||error.message),'err');return;}
+  state.chat.contacts.push({id,name,user_id:data.id});
+  logAudit('Punonjës i ri',name+' · '+username.trim());
+  save(); renderChat(); toast('Punonjësi u krijua dhe iu dërgua ftesa ✓','ok');
+});
+
+/* ===== DRAG & DROP RIRENDITJE ===== */
+let dragId=null;
+function setupDrag(){
+  const clearAll=()=>$$('[data-id]').forEach(x=>x.classList.remove('dragging','drop-before','drop-after'));
+  $$('[data-id][draggable="true"]').forEach(b=>{
+    b.addEventListener('dragstart',e=>{dragId=b.dataset.id;b.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
+    b.addEventListener('dragend',()=>{dragId=null;clearAll();});
+    b.addEventListener('dragover',e=>{
+      e.preventDefault();
+      if(b.dataset.id===dragId)return;
+      const r=b.getBoundingClientRect(), after=e.clientY>r.top+r.height/2;
+      $$('[data-id]').forEach(x=>x.classList.remove('drop-before','drop-after'));
+      b.classList.add(after?'drop-after':'drop-before');
+    });
+    b.addEventListener('drop',e=>{
+      e.preventDefault();
+      if(!dragId||b.dataset.id===dragId)return;
+      const r=b.getBoundingClientRect(), after=e.clientY>r.top+r.height/2;
+      const from=state.tasks.findIndex(t=>t.id===dragId);
+      const moved=state.tasks.splice(from,1)[0];
+      let to=state.tasks.findIndex(t=>t.id===b.dataset.id);
+      if(after)to++;
+      state.tasks.splice(to,0,moved);
+      save();render();toast('Detyra u rirendit');
+    });
+  });
+}
+
+/* ===== ACTIONS MODAL ===== */
+let editId=null, editFiles=[];
+const svg={
+  edit:'<svg viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="#1a8a4f" stroke-width="2.2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>',
+  undo:'<svg viewBox="0 0 24 24" fill="none" stroke="#a86a00" stroke-width="2" stroke-linecap="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 1 0 3-7L3 9"/></svg>',
+  sms:'<svg viewBox="0 0 24 24" fill="none" stroke="#2b5bd0" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  dl:'<svg viewBox="0 0 24 24" fill="none" stroke="#6a45c0" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>',
+  del:'<svg viewBox="0 0 24 24" fill="none" stroke="#c62828" stroke-width="2" stroke-linecap="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>'
+};
+function openActions(id){
+  const t=state.tasks.find(x=>x.id===id); if(!t)return;
+  $('#actTitle').textContent=t.title;
+  $('#actSub').textContent=(t.done?'E kryer':'Në pritje')+(t.assignee?' · '+t.assignee:'');
+  const owner=document.body.classList.contains('owner');
+  const items=[];
+  items.push({t:t.done?'Rihap detyrën':'Shëno si kryer',s:t.done?'Ktheje në pritje':'Shëno që u përfundua',ic:t.done?svg.undo:svg.check,fn:()=>{
+    t.done=!t.done;t.doneAt=t.done?Date.now():null;save();render();close();toast(t.done?'Shënuar si kryer ✓':'Rihapur',t.done?'ok':'');
+  }});
+  if((t.files||[]).length) items.push({t:'Shkarko skedarët',s:t.files.length+' skedar(ë)',ic:svg.dl,fn:()=>{t.files.forEach(f=>downloadFile(t.id,f.id));close();}});
+  items.push({t:'Njofto me SMS',s:'Përgatit mesazhin për këtë detyrë',ic:svg.sms,fn:()=>{
+    $('#smsBody').value=`Përshëndetje ${t.assignee||''}, ke një detyrë: "${t.title}"${t.due?' (afati '+dueFmt(t.due)+')':''}.`;
+    close();$('#smsBody').scrollIntoView({behavior:'smooth',block:'center'});toast('Mesazhi u përgatit — plotëso numrin');
+  }});
+  if(owner){
+    items.push({t:'Redakto detyrën',s:'Ndrysho titull, afat, prioritet, skedarë',ic:svg.edit,fn:()=>{close();openEdit(t.id);}});
+    items.push({t:'Fshi detyrën',s:'Hiqe përgjithmonë',ic:svg.del,danger:true,fn:()=>{
+      if(confirm('Fshi detyrën "'+t.title+'"?')){state.deleted=[...new Set([...state.deleted,t.id])];state.tasks=state.tasks.filter(x=>x.id!==t.id);logAudit('Detyrë e fshirë',t.title);save();render();close();toast('Detyra u fshi përgjithmonë');}
+    }});
+  }
+  $('#actList').innerHTML=items.map((it,i)=>`<button class="act-item ${it.danger?'danger':''}" data-i="${i}"><span class="ai">${it.ic}</span><span>${it.t}<small>${it.s}</small></span></button>`).join('');
+  $$('#actList .act-item').forEach(b=>b.onclick=()=>items[b.dataset.i].fn());
+  $('#actOverlay').classList.add('show');
+}
+const close=()=>$('#actOverlay').classList.remove('show');
+$$('[data-close-act]').forEach(b=>b.onclick=close);
+$('#actOverlay').addEventListener('click',e=>{if(e.target.id==='actOverlay')close();});
+
+/* ===== EDIT MODAL ===== */
+function openEdit(id){
+  const t=state.tasks.find(x=>x.id===id); if(!t)return;
+  editId=id; editFiles=(t.files||[]).slice();
+  $('#eTitle').value=t.title; $('#eDesc').value=t.desc||'';
+  $('#eAssignee').value=t.assignee||''; $('#ePriority').value=t.priority; $('#eDue').value=t.due||'';
+  $('#eCategory').value=t.category||'';
+  renderEditFiles();
+  $('#editOverlay').classList.add('show');
+}
+function renderEditFiles(){
+  $('#eFiles').innerHTML=editFiles.length?editFiles.map(f=>`<span class="chip file" data-erm="${f.id}">📎 ${esc(f.name)} · ${human(f.size)} ✕</span>`).join(''):'<span class="time">Asnjë skedar</span>';
+  $$('#eFiles .chip').forEach(c=>c.onclick=()=>{editFiles=editFiles.filter(f=>f.id!==c.dataset.erm);renderEditFiles();});
+}
+$('#eAddFile').addEventListener('click',()=>$('#eFileInput').click());
+$('#eFileInput').addEventListener('change',async e=>{
+  for(const f of e.target.files){
+    if(f.size>3*1024*1024){toast('"'+f.name+'" > 3MB','err');continue;}
+    const data=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f);});
+    editFiles.push({id:uid(),name:f.name,size:f.size,type:f.type,data});
+  }
+  e.target.value='';renderEditFiles();
+});
+const closeEdit=()=>$('#editOverlay').classList.remove('show');
+$$('[data-close-edit]').forEach(b=>b.onclick=closeEdit);
+$('#editOverlay').addEventListener('click',e=>{if(e.target.id==='editOverlay')closeEdit();});
+$('#eSave').addEventListener('click',()=>{
+  const t=state.tasks.find(x=>x.id===editId); if(!t)return;
+  const title=$('#eTitle').value.trim(); if(!title){toast('Titulli s\'mund të jetë bosh','err');return;}
+  t.title=title; t.desc=$('#eDesc').value.trim(); t.assignee=$('#eAssignee').value.trim();
+  t.priority=$('#ePriority').value; t.due=$('#eDue').value; t.category=$('#eCategory').value.trim(); t.files=editFiles.slice();
+  t.editedAt=Date.now();
+  logAudit('Detyrë e redaktuar',t.title);
+  save();render();closeEdit();toast('Ndryshimet u ruajtën ✓','ok');
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){close();closeEdit();}});
+
+/* SMS */
+['Key','Device','Proxy'].forEach(k=>{const v=state.cfg['tb'+k];if(v)$('#tb'+k).value=v;});
+if($('#saveCfg')){
+  ['Key','Device','Proxy'].forEach(k=>$('#tb'+k).value=state.cfg['tb'+k]||'');
+  $('#saveCfg').addEventListener('click',()=>{['Key','Device','Proxy'].forEach(k=>state.cfg['tb'+k]=$('#tb'+k).value.trim());save();toast('Konfigurimi i SMS u ruajt ✓','ok');});
+}
+$$('.tab').forEach(t=>t.onclick=()=>{
+  $$('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');
+  $('#tab-send').style.display=t.dataset.tab==='send'?'block':'none';
+  $('#tab-log').style.display=t.dataset.tab==='log'?'block':'none';
+});
+$('#smsFromTask').addEventListener('click',()=>{
+  const t=state.tasks.find(x=>!x.done)||state.tasks[state.tasks.length-1];
+  if(!t){toast('Nuk ka detyra','err');return;}
+  $('#smsBody').value=`Përshëndetje ${t.assignee||''}, ke një detyrë: "${t.title}"${t.due?' (afati '+dueFmt(t.due)+')':''}.`;
+  toast('Mesazhi u përgatit nga detyra');
+});
+$('#smsSend').addEventListener('click',sendSms);
+async function sendSms(){
+  let to=$('#smsTo').value.trim();const body=$('#smsBody').value.trim();
+  if(!to||!body){toast('Plotëso numrin dhe mesazhin','err');return;}
+  // normalizim E.164 për Shqipërinë
+  if(!to.startsWith('+')){ to=to.replace(/^0+/,''); to='+355'+to; }
+  const key=state.cfg.tbKey||'';
+  const device=state.cfg.tbDevice||'';
+  const proxy=state.cfg.tbProxy||'https://ruwxxypntyhxdwegkmkl.supabase.co/functions/v1/sms';
+  const entry={id:uid(),to,body,at:Date.now(),status:'sim'};
+  if(proxy){
+    try{const r=await fetch(proxy,{method:'POST',headers:{'Content-Type':'application/json',apikey:CLOUD_DEFAULT.key,Authorization:'Bearer '+CLOUD_DEFAULT.key},body:JSON.stringify({recipients:[to],message:body})});
+      entry.status=r.ok?'sent':'fail';toast(r.ok?'SMS u dërgua përmes proxy ✓':'Proxy ktheu gabim',r.ok?'ok':'err');
+    }catch(e){entry.status='fail';toast('Nuk u lidh me proxy-n','err');}
+  }else if(key){
+    try{
+      const url='https://api.textbee.dev/api/v1/gateway/send-sms';
+      const r=await fetch(url,{method:'POST',headers:{'x-api-key':key,'Content-Type':'application/json'},
+        body:JSON.stringify({recipients:[to],message:body,...(device?{deviceId:device}:{})})});
+      entry.status=r.ok?'sent':'fail';
+      toast(r.ok?'SMS u dërgua përmes textbee ✓':'textbee ktheu gabim',r.ok?'ok':'err');
+    }catch(e){entry.status='fail';toast('Bllokuar nga browser (CORS). Përdor Proxy URL.','err');}
+  }else{toast('SMS u simulua (vendos textbee API Key për dërgim real)');}
+  state.sms.unshift(entry);save();renderSms();$('#smsBody').value='';
+}
+function renderSms(){
+  const el=$('#smsLog'); if(!el)return;
+  const q=($('#smsSearch')?.value||'').toLowerCase();
+  const lbl={sent:'Dërguar',fail:'Dështoi',sim:'Simuluar'};
+  const rows=state.sms.filter(s=>(s.to+' '+s.body+' '+(lbl[s.status]||'')).toLowerCase().includes(q));
+  el.innerHTML=rows.length?rows.map((s,i)=>`<tr data-sms-row="${i}"><td>${esc(s.to)}</td><td>${esc(s.body)}</td><td>${dt(s.at)}</td><td><span class="st ${s.status}">${lbl[s.status]}</span></td></tr>`).join(''):'<tr><td colspan="4">Asnjë SMS.</td></tr>';
+  $$('#smsLog [data-sms-row]').forEach((r,i)=>r.onclick=()=>{const s=rows[i];alert('Marrësi: '+s.to+'\n\nMesazhi: '+s.body+'\n\nData: '+dt(s.at)+'\nStatusi: '+lbl[s.status]);});
+}
+
+/* SEED */
+if(!state.tasks.length && !localStorage.getItem('axh_seeded')){
+  const now=Date.now();
+  state.tasks=[
+    {id:uid(),title:'Përgatit raportin e shitjeve',desc:'Raporti mujor për shtatorin.',assignee:'Ardit',category:'Financë',priority:'Lart',due:new Date(now+2*864e5).toISOString().slice(0,10),files:[],done:false,createdAt:now-3*36e5,doneAt:null},
+    {id:uid(),title:'Kontrollo inventarin e magazinës',desc:'Numëro artikujt dhe përditëso listën.',assignee:'Elsa',category:'Magazina',priority:'Mesme',due:new Date(now-864e5).toISOString().slice(0,10),files:[],done:false,createdAt:now-2*36e5,doneAt:null},
+    {id:uid(),title:'Dërgo faturat te klientët',desc:'',assignee:'Blerina',category:'Financë',priority:'Ulet',due:'',files:[],done:true,createdAt:now-5*36e5,doneAt:now-1*36e5}
+  ];
+  localStorage.setItem('axh_seeded','1');
+  save();
+}
+
+/* AUTHENTICATION */
+let authClient=null, currentUser=null, secureRefreshing=false;
+async function secureRefreshChat(){
+  if(!authClient||!currentUser||secureRefreshing)return;
+  secureRefreshing=true;
+  try{
+    const {data:rows,error}=await authClient.from('chat_messages').select('*').order('created_at',{ascending:true});
+    if(error) throw error;
+    const {data:profiles}=await authClient.from('profiles').select('id,display_name,role');
+    const names=new Map((profiles||[]).map(p=>[p.id,p.display_name]));
+    const msgs={group:[]};
+    (rows||[]).forEach(r=>{
+      const other=r.sender_id===currentUser.id?r.recipient_id:r.sender_id;
+      const key=r.recipient_id===null?'group':stableContactId(names.get(other)||'Bisedë');
+      (msgs[key]||(msgs[key]=[])).push({id:r.id,from:names.get(r.sender_id)||'Përdorues',text:r.message,at:new Date(r.created_at).getTime(),file:r.file_path?{path:r.file_path,name:r.file_name||'Skedar',type:r.file_type||'',size:r.file_size||0}:null});
+    });
+    state.chat.msgs=msgs;
+    const visibleContacts=state.chat.contacts||[];
+    Object.keys(msgs).filter(k=>k!=='group').forEach(k=>{
+      if(!visibleContacts.some(c=>c.id===k)){
+        const display=(profiles||[]).find(p=>stableContactId(p.display_name)===k)?.display_name;
+        if(display) visibleContacts.push({id:k,name:display});
+      }
+    });
+    state.chat.contacts=visibleContacts;
+    if(cloud.role==='employee'){
+      const ownerProfile=(profiles||[]).find(p=>p.role==='owner');
+      if(ownerProfile){
+        const oid=stableContactId(ownerProfile.display_name);
+        if(!state.chat.contacts.some(c=>c.id===oid)) state.chat.contacts.push({id:oid,name:ownerProfile.display_name});
+        if(!state.chat.active || (state.chat.active!=='group' && !state.chat.contacts.some(c=>c.id===state.chat.active))) state.chat.active=oid;
+      }
+    }
+    renderChat();
+  }catch(e){console.warn('secure chat',e)}
+  secureRefreshing=false;
+}
+async function initAuth(){
+  try{
+    const mod=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    authClient=mod.createClient(CLOUD_DEFAULT.url,CLOUD_DEFAULT.key);
+    const {data}=await authClient.auth.getSession();
+    if(data.session){unlockApp(data.session.user);}
+    $('#loginBtn').onclick=loginUser;
+  }catch(e){ $('#loginError').textContent='Nuk u ngarkua sistemi i hyrjes.'; }
+}
+async function unlockApp(user){
+  currentUser=user;
+  document.body.classList.remove('auth-lock');
+  $('#authScreen').style.display='none';
+  const {data:profile}=await authClient.from('profiles').select('display_name,username,role,must_change_password').eq('id',user.id).maybeSingle();
+  cloud.userId=user.id;
+  cloud.role=profile?.role==='owner'?'owner':'employee';
+  cloud.userName=profile?.display_name||user.email.split('@')[0];
+  state.chat.me=cloud.userName;
+  applyRole();
+  if(profile?.must_change_password){
+    let p='';
+    while(!p||p.length<8){ p=prompt('Ky është hyrja e parë. Vendos një fjalëkalim të ri (minimum 8 karaktere):')||''; if(!p)break; }
+    if(p.length>=8){
+      const {error}=await authClient.auth.updateUser({password:p});
+      if(error){alert('Fjalëkalimi nuk u ndryshua: '+error.message);return;}
+      await authClient.from('profiles').update({must_change_password:false}).eq('id',user.id);
+    }
+  }
+  if(cloud.cfg.url&&cloud.cfg.key&&cloud.cfg.room) await connectCloud();
+  renderChat();
+  await secureRefreshChat();
+}
+async function loginUser(){
+  const email=$('#loginEmail').value.trim(), password=$('#loginPassword').value;
+  if(!email||!password){$('#loginError').textContent='Plotëso email-in dhe fjalëkalimin.';return;}
+  $('#loginError').textContent='Duke hyrë...';
+  const loginEmail=email.includes('@')?email:email.toLowerCase()+'@axhenda.local';
+  const {data,error}=await authClient.auth.signInWithPassword({email:loginEmail,password});
+  if(error){$('#loginError').textContent='Email ose fjalëkalim i gabuar.';return;}
+  unlockApp(data.user);
+}
+initAuth();
+$('#logoutBtn').addEventListener('click',async()=>{
+  try{ if(authClient) await authClient.auth.signOut({scope:'global'}); }catch(e){}
+  Object.keys(localStorage).filter(k=>k.startsWith('sb-')&&k.toLowerCase().includes('auth')).forEach(k=>localStorage.removeItem(k));
+  location.reload();
+});
+
+/* INIT */
+$('#search').addEventListener('input',render);
+$('#filterStatus').addEventListener('change',render);
+$('#filterCat').addEventListener('change',render);
+$('#smsSearch').addEventListener('input',renderSms);
+$('#auditSearch').addEventListener('input',renderAudit);
+$('#fileSearch').addEventListener('input',renderVault);
+$('#activeTasksTab').addEventListener('click',()=>{ $('#filterStatus').value='open'; render(); });
+$('#closedTasksTab').addEventListener('click',()=>{ $('#filterStatus').value='done'; render(); });
+function setManageTab(tab){
+  $('#smsManageCard').style.display=tab==='sms'?'block':'none';
+  $('#auditManageCard').style.display=tab==='audit'?'block':'none';
+  $('#filesManageCard').style.display=tab==='files'?'block':'none';
+  $$('.manage-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.manage===tab));
+}
+$$('.manage-tabs button').forEach(b=>b.addEventListener('click',()=>setManageTab(b.dataset.manage)));
+setManageTab('sms');
+$('#resetAllTasks').addEventListener('click',async()=>{
+  if(cloud.role!=='owner'){toast('Vetëm pronari mund ta bëjë reset-in','err');return;}
+  if(!confirm('Fshi në SERVER të gjitha detyrat, chat-et, SMS-të dhe historikun? Ky veprim nuk zhbëhet.'))return;
+  if(!authClient){toast('Duhet të jesh i loguar','err');return;}
+  const {data,error}=await authClient.functions.invoke('reset-all',{body:{}});
+  if(error||data?.error){toast('Reset-i dështoi: '+(data?.error||error.message),'err');return;}
+  localStorage.setItem('axh_seeded','1');
+  state.tasks=[];state.deleted=[];state.audit=[];state.sms=[];state.chat={...state.chat,contacts:[],msgs:{group:[]},active:'group'};
+  localStorage.setItem(LS.tasks,'[]');localStorage.setItem(LS.deleted,'[]');localStorage.setItem(LS.audit,'[]');localStorage.setItem(LS.sms,'[]');localStorage.setItem(LS.chat,JSON.stringify(state.chat));
+  render();renderChat();renderSms();renderAudit();
+  toast('Serveri u pastrua — gjithçka është 0','ok');
+});
+$$('.view-toggle button').forEach(b=>b.onclick=()=>{state.view=b.dataset.view;localStorage.setItem('axh_view',state.view);applyView();});
+initChat();
+render();renderSms();renderPending();
+applyView();
+// Cloud lidhet pasi përdoruesi të bëjë login.
+</script>
+</body>
+</html>
