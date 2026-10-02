@@ -1166,10 +1166,12 @@ $('#addContact').addEventListener('click',async()=>{
   const n=prompt('Emri i punonjësit:'); if(!n||!n.trim())return;
   const username=prompt('Username i punonjësit, p.sh. mariglen:'); if(!username||!username.trim())return;
   const password=prompt('Fjalëkalimi fillestar (minimum 8 karaktere):'); if(!password||password.length<8){toast('Fjalëkalimi duhet të ketë të paktën 8 karaktere','err');return;}
+  const phone=prompt('Numri i telefonit (+3556XXXXXXXX):');
+  if(!phone||!/^\+3556\d{8}$/.test(phone.trim())){toast('Numri duhet të jetë në formatin +3556XXXXXXXX','err');return;}
   const name=n.trim(), id=stableContactId(name);
   if(state.chat.contacts.some(x=>x.id===id)){toast('Ky punonjës ekziston','err');return;}
   if(!authClient){toast('Duhet të jesh i loguar','err');return;}
-  const {data,error}=await authClient.functions.invoke('create-employee',{body:{name,username:username.trim(),password}});
+  const {data,error}=await authClient.functions.invoke('create-employee',{body:{name,username:username.trim(),password,phone:phone.trim()}});
   if(error||data?.error){toast('Punonjësi nuk u krijua: '+(data?.error||error.message),'err');return;}
   state.chat.contacts.push({id,name,user_id:data.id});
   logAudit('Punonjës i ri',name+' · '+username.trim());
@@ -1350,7 +1352,7 @@ async function secureRefreshChat(){
   try{
     const {data:rows,error}=await authClient.from('chat_messages').select('*').order('created_at',{ascending:true});
     if(error) throw error;
-    const {data:profiles}=await authClient.from('profiles').select('id,display_name,role');
+    const {data:profiles}=await authClient.from('profiles').select('id,display_name,role,phone');
     const profileMap=new Map((profiles||[]).map(p=>[p.id,p]));
     const names=new Map((profiles||[]).map(p=>[p.id,p.display_name]));
     const msgs={group:[]};
