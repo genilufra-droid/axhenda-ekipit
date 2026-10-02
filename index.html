@@ -1130,6 +1130,7 @@ function renderMsgPending(){
 async function sendMsg(){
   const inp=$('#msgInput'), text=inp.value.trim();
   if(!text && !state.msgPending.length) return;
+  if(state.chat.active.startsWith('pair-')){toast('Kjo bisedë është vetëm për shikim të pronarit','err');return;}
   if(currentUser&&authClient){
     let recipient_id=null;
     if(state.chat.active!=='group'){
@@ -1355,11 +1356,24 @@ async function secureRefreshChat(){
     const {data:rows,error}=await authClient.from('chat_messages').select('*').order('created_at',{ascending:true});
     if(error) throw error;
     const {data:profiles}=await authClient.from('profiles').select('id,display_name,role');
+    const profileMap=new Map((profiles||[]).map(p=>[p.id,p]));
     const names=new Map((profiles||[]).map(p=>[p.id,p.display_name]));
     const msgs={group:[]};
+    const oversightContacts=[];
     (rows||[]).forEach(r=>{
-      const other=r.sender_id===currentUser.id?r.recipient_id:r.sender_id;
-      const key=r.recipient_id===null?'group':stableContactId(names.get(other)||'Bisedë');
+      let key='group';
+      if(r.recipient_id!==null){
+        if(cloud.role==='owner' && r.sender_id!==currentUser.id && r.recipient_id!==currentUser.id){
+          const a=profileMap.get(r.sender_id), b=profileMap.get(r.recipient_id);
+          const ids=[r.sender_id,r.recipient_id].sort();
+          key='pair-'+ids.join('-');
+          const pairName=(a?.display_name||'Përdorues')+' ↔ '+(b?.display_name||'Përdorues');
+          if(!oversightContacts.some(c=>c.id===key)) oversightContacts.push({id:key,name:pairName,readonly:true});
+        }else{
+          const other=r.sender_id===currentUser.id?r.recipient_id:r.sender_id;
+          key=stableContactId(names.get(other)||'Bisedë');
+        }
+      }
       (msgs[key]||(msgs[key]=[])).push({id:r.id,from:names.get(r.sender_id)||'Përdorues',text:r.message,at:new Date(r.created_at).getTime(),file:r.file_path?{path:r.file_path,name:r.file_name||'Skedar',type:r.file_type||'',size:r.file_size||0}:null});
     });
     state.chat.msgs=msgs;
@@ -1370,6 +1384,7 @@ async function secureRefreshChat(){
         if(display) visibleContacts.push({id:k,name:display});
       }
     });
+    oversightContacts.forEach(c=>{if(!visibleContacts.some(x=>x.id===c.id)) visibleContacts.push(c);});
     state.chat.contacts=visibleContacts;
     if(cloud.role==='employee'){
       const ownerProfile=(profiles||[]).find(p=>p.role==='owner');
