@@ -648,6 +648,9 @@ async function connectCloud(){
         .on('postgres_changes',{event:'*',schema:'public',table:'axhenda',filter:'id=eq.'+CLOUD_DEFAULT.room},payload=>{
           const d=payload.new&&payload.new.data;
           if(d){ cloud.lastUpdated=payload.new.updated_at||Date.now(); applyRemote(d); }
+        })
+        .on('postgres_changes',{event:'*',schema:'public',table:'chat_messages'},()=>{
+          secureRefreshChat();
         }).subscribe();
     }catch(rtErr){ console.warn('Realtime unavailable; fallback polling',rtErr); }
     cloud.connected=true;
@@ -690,6 +693,7 @@ function startPolling(){
         cloud.lastUpdated=rows[0].updated_at;
         applyRemote(rows[0].data);
       }
+      if(currentUser) secureRefreshChat();
     }catch(e){/* provo përsëri */}
   },3000);
 }
