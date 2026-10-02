@@ -1083,11 +1083,15 @@ function renderChat(){
   $$('#convList [data-del-contact]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
     const contact=c.contacts.find(x=>x.id===b.dataset.delContact); if(!contact)return;
-    if(!confirm('Fshi punonjësin "'+contact.name+'"?'))return;
+    if(contact.readonly){toast('Kjo bisedë është vetëm për shikim','err');return;}
+    if(!contact.user_id){toast('Ky kontakt nuk ka ID reale në server','err');return;}
+    if(!confirm('Fshi përgjithmonë punonjësin "'+contact.name+'"?'))return;
+    if(!authClient){toast('Duhet të jesh i loguar','err');return;}
+    const {data,error}=await authClient.functions.invoke('delete-employee',{body:{user_id:contact.user_id}});
+    if(error||data?.error){toast('Fshirja dështoi: '+(data?.error||error?.message||'gabim serveri'),'err');return;}
     c.contacts=c.contacts.filter(x=>x.id!==contact.id);
     if(c.active===contact.id)c.active='group';
-    if(c.me===contact.name)c.me='Pronari';
-    delete c.msgs[contact.id]; save(); renderChat(); toast('Punonjësi u fshi');
+    delete c.msgs[contact.id]; save(); renderChat(); toast('Punonjësi u fshi nga Auth dhe platforma ✓','ok');
   });
   // thread head
   const anm=convName(c.active), abg=c.active==='group'?'#6d5cff':colorFor(anm);
