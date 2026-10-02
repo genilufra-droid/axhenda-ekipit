@@ -703,14 +703,15 @@ function applyRemote(d){
   if(d.audit) state.audit=d.audit;
   if(d.tasks) state.tasks=d.tasks.filter(t=>!state.deleted.includes(t.id));
   if(d.chat){
+    const localChat=state.chat||{};
     const oldMsgs=d.chat.msgs||{};
     const map={};
-    d.chat.contacts=(d.chat.contacts||[]).map(c=>{const old=c.id, id=stableContactId(c.name);map[old]=id;return {...c,id};});
+    const remoteContacts=(d.chat.contacts||[]).map(c=>{const old=c.id, id=stableContactId(c.name);map[old]=id;return {...c,id};});
+    const contacts=[...(localChat.contacts||[])];
+    remoteContacts.forEach(rc=>{if(!contacts.some(c=>c.id===rc.id)) contacts.push(rc);});
     const msgs={group:oldMsgs.group||[]};
-    Object.keys(oldMsgs).filter(k=>k!=='group').forEach(k=>{const nk=map[k]||k;msgs[nk]=[...(msgs[nk]||[]),...(oldMsgs[k]||[])];});
-    d.chat.msgs=msgs;
-    if(map[d.chat.active]) d.chat.active=map[d.chat.active];
-    state.chat=d.chat;
+    Object.keys(oldMsgs).filter(k=>k!=='group').forEach(k=>{const nk=map[k]||k;msgs[nk]=[...(msgs[nk]||[]),...(oldMsgs[k]||[])]});
+    state.chat={...d.chat,contacts,msgs,active:localChat.active||'group',me:localChat.me||d.chat.me||'Përdoruesi'};
   }
   if(d.sms) state.sms=d.sms;
   localStorage.setItem(LS.tasks,JSON.stringify(state.tasks));
@@ -1315,7 +1316,7 @@ async function secureRefreshChat(){
       if(ownerProfile){
         const oid=stableContactId(ownerProfile.display_name);
         if(!state.chat.contacts.some(c=>c.id===oid)) state.chat.contacts.push({id:oid,name:ownerProfile.display_name});
-        state.chat.active=oid;
+        if(!state.chat.active || (state.chat.active!=='group' && !state.chat.contacts.some(c=>c.id===state.chat.active))) state.chat.active=oid;
       }
     }
     renderChat();
