@@ -673,7 +673,7 @@ async function pushNow(){
     headers:{...pushHeaders,Prefer:'resolution=merge-duplicates,return=minimal'},
     body:JSON.stringify(body)
   });
-  if(!r.ok){ const t=await r.text(); throw new Error('push HTTP '+r.status+' — '+t.slice(0,140)); }
+  if(!r.ok){ const t=await r.text(); throw new Error('push HTTP '+r.status+' — '+t.slice(0,300)); }
   cloud.lastUpdated=ts;
 }
 function startPolling(){
@@ -718,7 +718,7 @@ function applyRemote(d){
 function schedulePush(){
   if(!cloud.connected||cloud.applying) return;
   clearTimeout(pushTimer);
-  pushTimer=setTimeout(()=>{ pushNow().catch(e=>console.warn('push fail',e)); },600);
+  pushTimer=setTimeout(()=>{ pushNow().catch(e=>{console.warn('push fail',e);toast('Ruajtja në server dështoi: '+e.message,'err');}); },600);
 }
 function showCloudStatus(msg,cls){const el=$('#cloudStatus');el.style.display='block';el.innerHTML=msg;el.className='hint '+(cls||'');}
 $('#cloudPill').addEventListener('click',()=>{
@@ -1083,7 +1083,7 @@ async function sendMsg(){
       if(!recipient_id){toast('Punonjësi nuk ka profil login-i','err');return;}
     }
     const {error}=await authClient.from('chat_messages').insert({sender_id:currentUser.id,recipient_id,message:text||'📎 Skedar'});
-    if(error){toast('Mesazhi nuk u ruajt në server','err');return;}
+    if(error){toast('Serveri: '+(error.message||'gabim')+(error.details?' — '+error.details:''),'err');return;}
     state.msgPending=[]; inp.value=''; await secureRefreshChat(); return;
   }
   const msg={id:uid(),from:state.chat.me,text,at:Date.now()};
@@ -1358,16 +1358,17 @@ function setManageTab(tab){
 }
 $$('.manage-tabs button').forEach(b=>b.addEventListener('click',()=>setManageTab(b.dataset.manage)));
 setManageTab('sms');
-$('#resetAllTasks').addEventListener('click',()=>{
-  if(!document.body.classList.contains('owner')){ toast('Vetëm pronari mund ta bëjë reset-in','err'); return; }
-  if(!confirm('Fshi të gjitha detyrat dhe ktheje listën në 0? Ky veprim nuk zhbëhet.')) return;
+$('#resetAllTasks').addEventListener('click',async()=>{
+  if(cloud.role!=='owner'){toast('Vetëm pronari mund ta bëjë reset-in','err');return;}
+  if(!confirm('Fshi në SERVER të gjitha detyrat, chat-et, SMS-të dhe historikun? Ky veprim nuk zhbëhet.'))return;
+  if(!authClient){toast('Duhet të jesh i loguar','err');return;}
+  const {data,error}=await authClient.functions.invoke('reset-all',{body:{}});
+  if(error||data?.error){toast('Reset-i dështoi: '+(data?.error||error.message),'err');return;}
   localStorage.setItem('axh_seeded','1');
-  state.deleted=[...new Set([...state.deleted,...state.tasks.map(t=>t.id)])];
-  logAudit('Reset total','Të gjitha detyrat u fshinë');
-  state.tasks=[];
-  save();
-  render();
-  toast('Të gjitha detyrat u fshinë — 0 detyra','ok');
+  state.tasks=[];state.deleted=[];state.audit=[];state.sms=[];state.chat={...state.chat,contacts:[],msgs:{group:[]},active:'group'};
+  localStorage.setItem(LS.tasks,'[]');localStorage.setItem(LS.deleted,'[]');localStorage.setItem(LS.audit,'[]');localStorage.setItem(LS.sms,'[]');localStorage.setItem(LS.chat,JSON.stringify(state.chat));
+  render();renderChat();renderSms();renderAudit();
+  toast('Serveri u pastrua — gjithçka është 0','ok');
 });
 $$('.view-toggle button').forEach(b=>b.onclick=()=>{state.view=b.dataset.view;localStorage.setItem('axh_view',state.view);applyView();});
 initChat();
