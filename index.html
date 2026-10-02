@@ -997,16 +997,11 @@ function applyView(){
 /* ===== MESSENGER (WhatsApp-style) ===== */
 function initChat(){
   if(state.chat) return;
-  const names=[...new Set(state.tasks.map(t=>t.assignee).filter(Boolean))];
-  const seed=(names.length?names:['Ardit','Elsa','Blerina']);
   state.chat={
     me:'Pronari',
     active:'group',
-    contacts:seed.map(n=>({id:uid(),name:n})),
-    msgs:{ group:[
-      {id:uid(),from:'Pronari',text:'Mirë se erdhët në grupin e ekipit! 👋',at:Date.now()-6*36e5},
-      {id:uid(),from:seed[0]||'Ardit',text:'Faleminderit, jemi gati!',at:Date.now()-5*36e5}
-    ]}
+    contacts:[],
+    msgs:{group:[]}
   };
   save();
 }
@@ -1377,13 +1372,9 @@ async function secureRefreshChat(){
       (msgs[key]||(msgs[key]=[])).push({id:r.id,from:names.get(r.sender_id)||'Përdorues',text:r.message,at:new Date(r.created_at).getTime(),file:r.file_path?{path:r.file_path,name:r.file_name||'Skedar',type:r.file_type||'',size:r.file_size||0}:null});
     });
     state.chat.msgs=msgs;
-    const visibleContacts=state.chat.contacts||[];
-    Object.keys(msgs).filter(k=>k!=='group').forEach(k=>{
-      if(!visibleContacts.some(c=>c.id===k)){
-        const display=(profiles||[]).find(p=>stableContactId(p.display_name)===k)?.display_name;
-        if(display) visibleContacts.push({id:k,name:display});
-      }
-    });
+    const visibleContacts=(profiles||[])
+      .filter(p=>p.id!==currentUser.id && p.display_name)
+      .map(p=>({id:stableContactId(p.display_name),name:p.display_name,user_id:p.id}));
     oversightContacts.forEach(c=>{if(!visibleContacts.some(x=>x.id===c.id)) visibleContacts.push(c);});
     state.chat.contacts=visibleContacts;
     if(cloud.role==='employee'){
