@@ -54,6 +54,10 @@
   .stat.ok .n{color:var(--ok)} .stat.warn .n{color:var(--warn)} .stat.brand .n{color:var(--brand)} .stat.dang .n{color:var(--dang)}
 
   .grid{display:grid;grid-template-columns:1fr;gap:18px;align-items:start}
+  #toolsView{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+  #toolsView>.card{margin-top:0!important}
+  .manage-tabs{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;padding:4px 0}.manage-tabs .active{background:var(--brand);color:#fff}
+  @media(max-width:900px){#toolsView{grid-template-columns:1fr}}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
   .card h2{margin:0;padding:14px 18px;font-size:14px;border-bottom:1px solid var(--line);
     display:flex;align-items:center;gap:8px}
@@ -458,7 +462,12 @@
 
     <!-- RIGHT: SMS + FILES -->
     <div id="toolsView" style="display:none">
-      <div class="card">
+      <div class="manage-tabs">
+        <button class="act active" data-manage="sms">📤 SMS</button>
+        <button class="act ghost" data-manage="audit">📜 Veprime</button>
+        <button class="act ghost" data-manage="files">📁 Skedarë</button>
+      </div>
+      <div class="card" id="smsManageCard">
         <div class="tabs">
           <button class="tab active" data-tab="send">📤 Dërgo SMS</button>
           <button class="tab" data-tab="log">📥 Historiku</button>
@@ -481,11 +490,11 @@
         </div>
       </div>
 
-      <div class="card" style="margin-top:18px owner-only block">
+      <div class="card" id="auditManageCard" style="margin-top:18px owner-only block">
         <h2>📜 Historiku i veprimeve</h2>
         <div class="body"><div id="auditLog"></div></div>
       </div>
-      <div class="card" style="margin-top:18px">
+      <div class="card" id="filesManageCard" style="margin-top:18px">
         <h2>🗂️ Skedarët e ngarkuar</h2>
         <div class="body"><div id="fileVault"></div></div>
       </div>
@@ -898,7 +907,7 @@ function buildTable(list,owner,filtering){
   </table>`;
 }
 function renderTicker(){
-  const urgent=state.tasks.filter(t=>!t.done && (isOverdue(t) || (t.due && (new Date(t.due)-Date.now())<3*864e5)));
+  const urgent=state.tasks.filter(t=>!t.done && (t.priority==='Lart' || isOverdue(t) || (t.due && (new Date(t.due)-Date.now())<3*864e5)));
   const wrap=$('#tickerWrap');
   if(!urgent.length){ wrap.style.display='none'; return; }
   wrap.style.display='block';
@@ -974,7 +983,7 @@ function applyView(){
   const chat=state.view==='chat', tools=state.view==='tools';
   $('#tableView').style.display=chat||tools?'none':'block';
   $('#chatView').style.display=chat?'block':'none';
-  $('#toolsView').style.display=tools?'block':'none';
+  $('#toolsView').style.display=tools?'grid':'none';
   $$('.view-toggle button').forEach(b=>b.classList.toggle('active',b.dataset.view===state.view));
   if(chat){
     $('#leftTitle').textContent='Mesazhet';
@@ -1351,6 +1360,14 @@ $('#filterStatus').addEventListener('change',render);
 $('#filterCat').addEventListener('change',render);
 $('#activeTasksTab').addEventListener('click',()=>{ $('#filterStatus').value='open'; render(); });
 $('#closedTasksTab').addEventListener('click',()=>{ $('#filterStatus').value='done'; render(); });
+function setManageTab(tab){
+  $('#smsManageCard').style.display=tab==='sms'?'block':'none';
+  $('#auditManageCard').style.display=tab==='audit'?'block':'none';
+  $('#filesManageCard').style.display=tab==='files'?'block':'none';
+  $$('.manage-tabs button').forEach(b=>b.classList.toggle('active',b.dataset.manage===tab));
+}
+$$('.manage-tabs button').forEach(b=>b.addEventListener('click',()=>setManageTab(b.dataset.manage)));
+setManageTab('sms');
 $('#resetAllTasks').addEventListener('click',()=>{
   if(!document.body.classList.contains('owner')){ toast('Vetëm pronari mund ta bëjë reset-in','err'); return; }
   if(!confirm('Fshi të gjitha detyrat dhe ktheje listën në 0? Ky veprim nuk zhbëhet.')) return;
