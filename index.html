@@ -216,6 +216,30 @@
     .attach-btn{width:40px;height:40px}.send-btn{width:44px;height:44px;min-width:44px;pointer-events:auto;touch-action:manipulation}
   }
 
+  /* ===== WHATSAPP: read receipts / typing / prezenca ===== */
+  /* Shenjat ✓ (dërguar) dhe ✓✓ (lexuar, me bojë blu) te mesazhet e mia */
+  .msg .ticks{display:inline-block;margin-left:4px;font-size:12px;line-height:1;color:#8aa0ab;vertical-align:-1px;font-weight:700}
+  .msg .ticks.read{color:#53bdeb}
+  /* Treguesi "po shkruan..." me tri pika që kërcejnë */
+  .typing-row{padding:2px 14px 6px;display:none}
+  .typing-indicator{display:inline-flex;align-items:center;gap:4px;background:#fff;border-radius:2px 12px 12px 12px;
+    padding:9px 13px;box-shadow:0 1px 1px rgba(20,30,50,.08)}
+  .typing-indicator span{width:7px;height:7px;border-radius:50%;background:#9aa7b0;display:inline-block;
+    animation:typingdot 1.3s infinite ease-in-out}
+  .typing-indicator span:nth-child(2){animation-delay:.18s}
+  .typing-indicator span:nth-child(3){animation-delay:.36s}
+  @keyframes typingdot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:1}}
+  /* Dot-i i statusit online/offline te header i bisedës */
+  .thread-head .status-dot{width:9px;height:9px;border-radius:50%;background:#c3ccd4;display:inline-block;
+    margin-right:5px;vertical-align:middle}
+  .thread-head .status-dot.online{background:#20b26b;box-shadow:0 0 0 3px rgba(32,178,107,.2)}
+  .thread-head .ts.typing{color:#20b26b;font-weight:700}
+  /* Dot-i i prezencës te avatari në listën e bisedave */
+  .conv .av{position:relative}
+  .conv .presence{position:absolute;bottom:-1px;right:-1px;width:11px;height:11px;border-radius:50%;
+    background:#c3ccd4;border:2px solid var(--panel2)}
+  .conv .presence.online{background:#20b26b}
+
   /* ===== DETAIL MODAL ===== */
   .detail-row{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
   .detail-row .k{width:96px;flex-shrink:0;color:var(--muted);font-size:12px;font-weight:700;padding-top:2px}
@@ -1097,14 +1121,17 @@ function renderChat(){
   $('#convList').innerHTML=convs.map(id=>{
     const nm=convName(id), lm=lastMsg(id), av=id==='group'?'👥':initials(nm);
     const bg=id==='group'?'#6d5cff':colorFor(nm);
+    // Dot-i i prezencës (online/offline) për kontaktet 1:1
+    const convContact=(id!=='group'&&!String(id).startsWith('pair-'))?c.contacts.find(x=>x.id===id):null;
+    const presDot=(convContact?.user_id&&presenceState[convContact.user_id])?`<span class="presence ${presenceState[convContact.user_id].is_online?'online':''}"></span>`:'';
     return `<div class="conv ${id===c.active?'active':''}" data-conv="${id}">
-      <span class="av" style="background:${bg}">${av}</span>
+      <span class="av" style="background:${bg}">${av}${presDot}</span>
       <div class="ci"><div class="cn">${esc(nm)}</div><div class="cp">${lm?esc((lm.from!==c.me?lm.from+': ':'')+(lm.text||'📎 Skedar')):'Pa mesazhe'}</div></div>
       ${unread[id]?`<span class="unread">${unread[id]>99?'99+':unread[id]}</span>`:''}
       ${document.body.classList.contains('owner')&&id!=='group'?`<button class="contact-edit" data-edit-contact="${id}" title="Redakto">✎</button><button class="contact-del" data-del-contact="${id}" title="Fshi">×</button>`:''}
     </div>`;
   }).join('');
-  $$('#convList .conv').forEach(b=>b.onclick=()=>{c.active=b.dataset.conv;clearUnread(c.active);save();renderChat();});
+  $$('#convList .conv').forEach(b=>b.onclick=()=>{c.active=b.dataset.conv;clearUnread(c.active);save();renderChat();markReadForActive();});
   $$('#convList [data-edit-contact]').forEach(b=>b.onclick=e=>{
     e.stopPropagation();
     const contact=c.contacts.find(x=>x.id===b.dataset.editContact); if(!contact)return;
@@ -1127,8 +1154,13 @@ function renderChat(){
   });
   // thread head
   const anm=convName(c.active), abg=c.active==='group'?'#6d5cff':colorFor(anm);
+  const headContact=(c.active!=='group'&&!String(c.active).startsWith('pair-'))?c.contacts.find(x=>x.id===c.active):null;
+  let headStatus;
+  if(c.active==='group') headStatus=c.contacts.length+' anëtarë';
+  else if(String(c.active).startsWith('pair-')) headStatus='bisedë private (mbikëqyrje)';
+  else { const pst=headContact?.user_id?presenceText(headContact.user_id):{dot:'',txt:'bisedë private'}; headStatus=`<span class="status-dot ${pst.dot}"></span>${esc(pst.txt)}`; }
   $('#threadHead').innerHTML=`<span class="av" style="background:${abg}">${c.active==='group'?'👥':initials(anm)}</span>
-    <div style="flex:1;min-width:0"><div class="tn">${esc(anm)}</div><div class="ts">${c.active==='group'?c.contacts.length+' anëtarë':'bisedë private'}</div></div>
+    <div style="flex:1;min-width:0"><div class="tn">${esc(anm)}</div><div class="ts" id="threadStatus">${headStatus}</div></div>
     <button class="chat-export" id="exportChatBtn" title="Shkarko bisedën dhe skedarët">⬇ Eksporto</button><button class="chat-print" id="printChatBtn" title="Printo A4">🖨 A4</button>`;
   $('#exportChatBtn').onclick=()=>exportCompleteChat();
   $('#printChatBtn').onclick=()=>printActiveChatA4();
@@ -1137,13 +1169,16 @@ function renderChat(){
   const box=$('#msgs');
   if(!ms.length){ box.innerHTML='<div class="msg-empty">Asnjë mesazh ende.<br>Shkruaj i pari 👇</div>'; }
   else box.innerHTML=ms.map(m=>{
-    const out=m.from===c.me;
+    const out=(currentUser&&m.sid)?(m.sid===currentUser.id):(m.from===c.me);
+    const isDirect=c.active!=='group'&&!String(c.active).startsWith('pair-');
     const file=m.file?`<div class="mfile" data-mdl="${m.id}">📄 ${esc(m.file.name)} · ${human(m.file.size)} ⬇</div>`:'';
+    // Read receipts: ✓ = dërguar, ✓✓ me bojë blu = lexuar (vetëm te mesazhet e mia në bisedë 1:1)
+    const ticks=(out&&isDirect&&currentUser)?`<span class="ticks ${m.is_read?'read':''}" title="${m.is_read?'Lexuar':'Dërguar'}">${m.is_read?'✓✓':'✓'}</span>`:'';
     return `<div class="msg ${out?'out':'in'}">
       ${(!out&&c.active==='group')?`<div class="sn" style="color:${colorFor(m.from)}">${esc(m.from)}</div>`:''}
       ${m.text?`<div class="mtxt">${esc(m.text)}</div>`:''}
       ${file}
-      <div class="mt">${new Date(m.at).toLocaleTimeString('sq-AL',{hour:'2-digit',minute:'2-digit'})}</div>
+      <div class="mt">${new Date(m.at).toLocaleTimeString('sq-AL',{hour:'2-digit',minute:'2-digit'})}${ticks}</div>
     </div>`;
   }).join('');
   $$('#msgs [data-mdl]').forEach(b=>b.onclick=async()=>{
@@ -1151,6 +1186,8 @@ function renderChat(){
     if(m.file.path&&authClient){const {data,error}=await authClient.storage.from('chat-files').createSignedUrl(m.file.path,300);if(error){toast('Skedari nuk u hap: '+error.message,'err');return;}const a=document.createElement('a');a.href=data.signedUrl;a.download=m.file.name;a.target='_blank';a.click();}
   });
   renderMsgPending();
+  ensureTypingRow();
+  updateActivePresence();
   box.scrollTop=box.scrollHeight;
   if(currentUser&&!secureRefreshing) secureRefreshChat();
 }
@@ -1185,13 +1222,21 @@ async function sendMsg(){
       const ins=await authClient.from('chat_messages').insert({sender_id:currentUser.id,recipient_id,message:'📎 '+f.name,file_path:path,file_name:f.name,file_type:f.type||'application/octet-stream',file_size:f.size||0});
       if(ins.error){toast('Skedari u ngarkua por mesazhi dështoi: '+ins.error.message,'err');return;}
     }
-    state.msgPending=[]; inp.value=''; await secureRefreshChat(); return;
+    state.msgPending=[]; inp.value=''; presenceStopTyping(); await secureRefreshChat(); return;
   }
   const msg={id:uid(),from:state.chat.me,text,at:Date.now()};
-  convMsgs(state.chat.active).push(msg); state.msgPending=[]; inp.value=''; save(); renderChat();
+  convMsgs(state.chat.active).push(msg); state.msgPending=[]; inp.value=''; presenceStopTyping(); save(); renderChat();
 }
 $('#msgSend').addEventListener('click',sendMsg);
 $('#msgInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendMsg();}});
+// Typing indicator: njofto partnerin se po shkruajmë, pastro pas 3 sekondash inaktiviteti
+$('#msgInput').addEventListener('input',()=>{
+  const partnerId=activePartnerUserId();
+  if(!partnerId) return;
+  presenceSetTyping(partnerId);
+  clearTimeout(typingClearTimer);
+  typingClearTimer=setTimeout(()=>presenceStopTyping(),3000);
+});
 $('#msgAttachBtn').addEventListener('click',()=>$('#msgFileInput').click());
 $('#msgFileInput').addEventListener('change',async e=>{
   for(const f of e.target.files){
@@ -1384,16 +1429,155 @@ if(!state.tasks.length && !localStorage.getItem('axh_seeded')){
   save();
 }
 
+/* ============================================================
+   PREZENCA + TYPING + READ RECEIPTS (funksionalitete si WhatsApp)
+   ============================================================ */
+let presenceState={};           // user_id -> {is_online,last_seen,is_typing_to,typing_updated_at}
+let presenceChannel=null;       // kanali realtime për user_presence
+let chatChannel=null;           // kanali realtime për chat_messages (read receipts)
+let typingClearTimer=null;      // timer që pastron statusin "po shkruan" pas 3 sek
+let heartbeatTimer=null;        // rrahje zemre: mban user-in online dhe përditëson last_seen
+let presenceTickTimer=null;     // rifreskon tekstin "Aktiv X më parë" + skadimin e typing
+let sessionToken=null;          // token-i i sesionit (për realtime me RLS dhe beacon offline)
+let _lastTypingSent=0;          // për të kufizuar sa shpesh dërgojmë statusin e typing
+
+// Kthen kohën e kaluar në format shqip (p.sh. "5 minuta")
+function timeAgo(ts){
+  const d=new Date(ts).getTime(); if(!d) return '';
+  const s=Math.floor((Date.now()-d)/1000);
+  if(s<45) return 'pak sekonda';
+  if(s<90) return 'një minutë';
+  if(s<3600) return Math.floor(s/60)+' minuta';
+  if(s<7200) return 'një orë';
+  if(s<86400) return Math.floor(s/3600)+' orë';
+  if(s<172800) return 'një ditë';
+  return Math.floor(s/86400)+' ditë';
+}
+// Kthen {dot, txt} për statusin e një përdoruesi
+function presenceText(userId){
+  const p=presenceState[userId];
+  if(!p) return {dot:'',txt:'offline'};
+  if(p.is_online) return {dot:'online',txt:'Aktiv tani'};
+  if(p.last_seen) return {dot:'',txt:'Aktiv '+timeAgo(p.last_seen)+' më parë'};
+  return {dot:'',txt:'offline'};
+}
+// Kthen user_id të partnerit të bisedës aktive 1:1 (ose null)
+function activePartnerUserId(){
+  const c=state.chat; if(!c||c.active==='group'||String(c.active).startsWith('pair-')) return null;
+  const contact=c.contacts.find(x=>x.id===c.active); return contact?.user_id||null;
+}
+// Vendos statusin online/offline të përdoruesit aktual
+async function presenceSetOnline(online){
+  if(!authClient||!currentUser) return;
+  try{ await authClient.from('user_presence').upsert({user_id:currentUser.id,is_online:online,last_seen:new Date().toISOString()},{onConflict:'user_id'}); }
+  catch(e){/* tabela user_presence mund të mos ekzistojë ende */}
+}
+// Njofto se po shkruajmë te një partner (me kufizim frekuence)
+async function presenceSetTyping(partnerId){
+  if(!authClient||!currentUser||!partnerId) return;
+  const now=Date.now(); if(now-_lastTypingSent<1400) return; _lastTypingSent=now;
+  try{ await authClient.from('user_presence').upsert({user_id:currentUser.id,is_online:true,last_seen:new Date().toISOString(),is_typing_to:partnerId,typing_updated_at:new Date().toISOString()},{onConflict:'user_id'}); }catch(e){}
+}
+// Ndalo statusin "po shkruan"
+async function presenceStopTyping(){
+  clearTimeout(typingClearTimer); _lastTypingSent=0;
+  if(!authClient||!currentUser) return;
+  try{ await authClient.from('user_presence').upsert({user_id:currentUser.id,is_online:true,last_seen:new Date().toISOString(),is_typing_to:null,typing_updated_at:null},{onConflict:'user_id'}); }catch(e){}
+}
+// Shëno si të lexuara mesazhet e marra nga partneri i bisedës aktive
+async function markReadForActive(){
+  const partnerId=activePartnerUserId(); if(!partnerId||!currentUser||!authClient) return;
+  try{ await authClient.from('chat_messages').update({is_read:true}).eq('recipient_id',currentUser.id).eq('sender_id',partnerId).eq('is_read',false); }catch(e){}
+}
+// Krijon një herë rreshtin e treguesit "po shkruan..." mbi kompozuesin
+function ensureTypingRow(){
+  if(document.getElementById('typingRow')) return;
+  const composer=document.querySelector('#chatView .msg-composer');
+  if(!composer||!composer.parentNode) return;
+  const row=document.createElement('div');
+  row.id='typingRow'; row.className='typing-row';
+  row.innerHTML='<div class="typing-indicator"><span></span><span></span><span></span></div>';
+  composer.parentNode.insertBefore(row,composer);
+}
+// Përditëson header-in e statusit dhe treguesin e typing për bisedën aktive
+function updateActivePresence(){
+  const c=state.chat; if(!c) return;
+  const typingRow=document.getElementById('typingRow');
+  const statusEl=document.getElementById('threadStatus');
+  const contact=(c.active&&c.active!=='group'&&!String(c.active).startsWith('pair-'))?c.contacts.find(x=>x.id===c.active):null;
+  if(!contact||!contact.user_id||!currentUser){ if(typingRow)typingRow.style.display='none'; return; }
+  const p=presenceState[contact.user_id];
+  const isTyping=!!(p&&p.is_typing_to&&p.is_typing_to===currentUser.id&&p.typing_updated_at&&(Date.now()-new Date(p.typing_updated_at).getTime()<6000));
+  if(statusEl){
+    if(isTyping){ statusEl.className='ts typing'; statusEl.textContent='po shkruan…'; }
+    else { const pst=presenceText(contact.user_id); statusEl.className='ts'; statusEl.innerHTML=`<span class="status-dot ${pst.dot}"></span>${esc(pst.txt)}`; }
+  }
+  if(typingRow) typingRow.style.display=isTyping?'block':'none';
+}
+// Thirret kur ndryshon prezenca e dikujt (realtime)
+function onPresenceUpdate(userId){
+  const c=state.chat; if(!c) return;
+  const contact=c.contacts.find(x=>x.user_id===userId);
+  if(contact){
+    const av=document.querySelector(`.conv[data-conv="${contact.id}"] .av`);
+    if(av){ let d=av.querySelector('.presence'); if(!d){d=document.createElement('span');d.className='presence';av.appendChild(d);} d.classList.toggle('online',!!presenceState[userId]?.is_online); }
+  }
+  updateActivePresence();
+}
+// Abonohu te Realtime për user_presence dhe chat_messages
+async function subscribeRealtime(){
+  if(!authClient||!currentUser) return;
+  try{ if(sessionToken) await authClient.realtime.setAuth(sessionToken); }catch(e){}
+  if(!presenceChannel){
+    presenceChannel=authClient.channel('user-presence-live')
+      .on('postgres_changes',{event:'*',schema:'public',table:'user_presence'},payload=>{
+        const row=(payload.new&&payload.new.user_id)?payload.new:(payload.old||null);
+        if(row&&row.user_id){ presenceState[row.user_id]={...(presenceState[row.user_id]||{}),...(payload.new||{})}; onPresenceUpdate(row.user_id); }
+      }).subscribe();
+  }
+  if(!chatChannel){
+    chatChannel=authClient.channel('chat-messages-live')
+      .on('postgres_changes',{event:'*',schema:'public',table:'chat_messages'},()=>{ secureRefreshChat(); }).subscribe();
+  }
+}
+// Vendos offline-in në mbyllje të faqes (fetch me keepalive që të kompletohet)
+function presenceBeaconOffline(){
+  if(!currentUser) return;
+  try{
+    const body=JSON.stringify([{user_id:currentUser.id,is_online:false,last_seen:new Date().toISOString(),is_typing_to:null,typing_updated_at:null}]);
+    fetch(CLOUD_DEFAULT.url+'/rest/v1/user_presence?on_conflict=user_id',{method:'POST',keepalive:true,headers:{apikey:CLOUD_DEFAULT.key,Authorization:'Bearer '+(sessionToken||CLOUD_DEFAULT.key),'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body});
+  }catch(e){}
+}
+// Rrahje zemre: mban online dhe rifreskon tekstet e statusit
+function startPresenceHeartbeat(){
+  clearInterval(heartbeatTimer);
+  heartbeatTimer=setInterval(()=>{ if(!document.hidden) presenceSetOnline(true); },25000);
+  clearInterval(presenceTickTimer);
+  presenceTickTimer=setInterval(updateActivePresence,3000);
+}
+// Inicializo prezencën pas login-it
+async function initPresence(){
+  if(!authClient||!currentUser) return;
+  await presenceSetOnline(true);
+  await subscribeRealtime();
+  startPresenceHeartbeat();
+  window.addEventListener('beforeunload',presenceBeaconOffline);
+  window.addEventListener('pagehide',presenceBeaconOffline);
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ presenceSetOnline(true); subscribeRealtime(); } });
+}
+
 /* AUTHENTICATION */
 let authClient=null, currentUser=null, secureRefreshing=false;
 async function secureRefreshChat(){
   if(!authClient||!currentUser||secureRefreshing)return;
   secureRefreshing=true;
-  const beforeSig=JSON.stringify({active:state.chat?.active,contacts:(state.chat?.contacts||[]).map(c=>c.id),msgs:Object.values(state.chat?.msgs||{}).flat().map(m=>m.id)});
+  const beforeSig=JSON.stringify({active:state.chat?.active,contacts:(state.chat?.contacts||[]).map(c=>c.id),msgs:Object.values(state.chat?.msgs||{}).flat().map(m=>m.id),reads:Object.values(state.chat?.msgs||{}).flat().map(m=>m.is_read?1:0).join('')});
   try{
     const {data:rows,error}=await authClient.from('chat_messages').select('*').order('created_at',{ascending:true});
     if(error) throw error;
     const {data:profiles}=await authClient.from('profiles').select('id,display_name,role,phone');
+    // Ngarko prezencën (online/offline + typing) për të gjithë kontaktet
+    try{ const {data:pres}=await authClient.from('user_presence').select('*'); (pres||[]).forEach(p=>{presenceState[p.user_id]=p;}); }catch(e){/* tabela user_presence mund të mos ekzistojë ende */}
     const profileMap=new Map((profiles||[]).map(p=>[p.id,p]));
     const names=new Map((profiles||[]).map(p=>[p.id,p.display_name]));
     const msgs={group:[]};
@@ -1417,7 +1601,7 @@ async function secureRefreshChat(){
         }
       }
       const incoming=r.sender_id!==currentUser.id && !seen.has(r.id);
-      (msgs[key]||(msgs[key]=[])).push({id:r.id,from:names.get(r.sender_id)||'Përdorues',text:r.message,at:new Date(r.created_at).getTime(),file:r.file_path?{path:r.file_path,name:r.file_name||'Skedar',type:r.file_type||'',size:r.file_size||0}:null});
+      (msgs[key]||(msgs[key]=[])).push({id:r.id,from:names.get(r.sender_id)||'Përdorues',sid:r.sender_id,rid:r.recipient_id,is_read:r.is_read===true,text:r.message,at:new Date(r.created_at).getTime(),file:r.file_path?{path:r.file_path,name:r.file_name||'Skedar',type:r.file_type||'',size:r.file_size||0}:null});
       if(incoming && hadSeen && key!==state.chat.active){
         unread[key]=(unread[key]||0)+1;
         notifyIncoming(names.get(r.sender_id)||'Përdorues',r.message);
@@ -1440,10 +1624,13 @@ async function secureRefreshChat(){
         if(!state.chat.active || (state.chat.active!=='group' && !state.chat.contacts.some(c=>c.id===state.chat.active))) state.chat.active=oid;
       }
     }
-    const afterSig=JSON.stringify({active:state.chat?.active,contacts:(state.chat?.contacts||[]).map(c=>c.id),msgs:Object.values(state.chat?.msgs||{}).flat().map(m=>m.id)});
+    const afterSig=JSON.stringify({active:state.chat?.active,contacts:(state.chat?.contacts||[]).map(c=>c.id),msgs:Object.values(state.chat?.msgs||{}).flat().map(m=>m.id),reads:Object.values(state.chat?.msgs||{}).flat().map(m=>m.is_read?1:0).join('')});
     if(afterSig!==beforeSig) renderChat();
+    updateActivePresence();
   }catch(e){console.warn('secure chat',e)}
   secureRefreshing=false;
+  // Shëno si të lexuara mesazhet e marra në bisedën e hapur (pas rifreskimit)
+  markReadForActive();
 }
 async function initAuth(){
   try{
@@ -1456,6 +1643,7 @@ async function initAuth(){
 }
 async function unlockApp(user){
   currentUser=user;
+  try{ const {data:sd}=await authClient.auth.getSession(); sessionToken=sd?.session?.access_token||null; }catch(e){}
   if('Notification' in window && Notification.permission==='default') Notification.requestPermission().catch(()=>{});
   document.body.classList.remove('auth-lock');
   $('#authScreen').style.display='none';
@@ -1477,6 +1665,7 @@ async function unlockApp(user){
   if(cloud.cfg.url&&cloud.cfg.key&&cloud.cfg.room) await connectCloud();
   renderChat();
   await secureRefreshChat();
+  await initPresence();   // online status + typing + realtime për read receipts
 }
 async function loginUser(){
   const email=$('#loginEmail').value.trim(), password=$('#loginPassword').value;
@@ -1489,6 +1678,7 @@ async function loginUser(){
 }
 initAuth();
 $('#logoutBtn').addEventListener('click',async()=>{
+  try{ await presenceSetOnline(false); }catch(e){}
   try{ if(authClient) await authClient.auth.signOut({scope:'global'}); }catch(e){}
   Object.keys(localStorage).filter(k=>k.startsWith('sb-')&&k.toLowerCase().includes('auth')).forEach(k=>localStorage.removeItem(k));
   location.reload();
