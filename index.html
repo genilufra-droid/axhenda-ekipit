@@ -868,6 +868,8 @@ function snapshot(){ return {tasks:state.tasks,deleted:state.deleted,audit:state
 function logAudit(action,detail){state.audit.unshift({id:uid(),action,detail,at:Date.now(),by:state.chat?.me||'Përdorues'});state.audit=state.audit.slice(0,500);}
 
 async function connectCloud(){
+  // Lidhu vetëm pas login-it — ndryshe kërkesat ndaj Supabase kthejnë 400/401.
+  if(!currentUser){ setCloudStatus('Offline (pa hyrje)'); return; }
   // Lidhje online direkte me konfigurimin zyrtar; injoron konfigurime te vjetra lokale.
   cloud.cfg={...CLOUD_DEFAULT};
   cloud.rest=CLOUD_DEFAULT.url+'/rest/v1/axhenda';
@@ -884,8 +886,14 @@ async function connectCloud(){
     if(rows[0].data){ cloud.lastUpdated=rows[0].updated_at; applyRemote(rows[0].data); }
     // Realtime: njofton çdo PC/telefon menjëherë kur ndryshon rreshti
     try{
-      const mod=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
-      cloud.rt=mod.createClient(CLOUD_DEFAULT.url,CLOUD_DEFAULT.key,{global:{headers:authHeaders}});
+      // GoTrueClient i vetëm: ripërdor authClient-in global (krijuar te initAuth)
+      // në vend që të krijojmë një instancë të dytë Supabase (shmang warning-un
+      // "Multiple GoTrueClient instances").
+      cloud.rt=authClient;
+      if(!cloud.rt){
+        const mod=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+        cloud.rt=mod.createClient(CLOUD_DEFAULT.url,CLOUD_DEFAULT.key,{global:{headers:authHeaders}});
+      }
       if(sessionData.data.session) await cloud.rt.realtime.setAuth(sessionData.data.session.access_token);
       cloud.rtChannel=cloud.rt.channel('axhenda-live-'+CLOUD_DEFAULT.room)
         .on('postgres_changes',{event:'*',schema:'public',table:'axhenda',filter:'id=eq.'+CLOUD_DEFAULT.room},payload=>{
@@ -925,7 +933,8 @@ async function pushNow(){
 function startPolling(){
   clearInterval(cloud.poll);
   cloud.poll=setInterval(async()=>{
-    if(!cloud.connected) return;
+    // Mos bëj asnjë kërkesë Supabase pa login aktiv (shmang 400/401 para hyrjes)
+    if(!cloud.connected || !currentUser) return;
     try{
       const sessionData=authClient?await authClient.auth.getSession():{data:{session:null}};
       const authHeaders=sessionData.data.session?{apikey:CLOUD_DEFAULT.key,Authorization:'Bearer '+sessionData.data.session.access_token}:{};
@@ -1761,9 +1770,9 @@ function presenceBeaconOffline(){
 // Rrahje zemre: mban online dhe rifreskon tekstet e statusit
 function startPresenceHeartbeat(){
   clearInterval(heartbeatTimer);
-  heartbeatTimer=setInterval(()=>{ if(!document.hidden) presenceSetOnline(true); },25000);
+  heartbeatTimer=setInterval(()=>{ if(!currentUser) return; if(!document.hidden) presenceSetOnline(true); },25000);
   clearInterval(presenceTickTimer);
-  presenceTickTimer=setInterval(updateActivePresence,3000);
+  presenceTickTimer=setInterval(()=>{ if(!currentUser) return; updateActivePresence(); },3000);
 }
 // Inicializo prezencën pas login-it
 async function initPresence(){
@@ -1911,21 +1920,64 @@ function closeOverlay(id){ $('#'+id).classList.remove('show'); }
 const empInitials=(a,b)=>(((a||' ')[0])+((b||' ')[0])).toUpperCase();
 const empRoleLabel=(r)=>({pronar:'Pronar',menaxher:'Menaxher',manager:'Menaxher',punonjes:'Punonjës'}[(r||'').toLowerCase()]||'Punonjës');
 
+// Kthen rreshtat e tabelës `profiles` në formën e një punonjësi, që të shfaqen
+// te tab-i "Punonjësit" edhe kur tabela `punonjesit` është bosh ose mungon.
+function profileToEmployee(p){
+  const name=(p.display_name||p.username||'').trim();
+  const parts=name.split(/\s+/);
+  const emri=parts.shift()||name||'Përdorues';
+  const mbiemri=parts.join(' ');
+  const rl=(p.role||'').toLowerCase();
+  const roli=rl==='owner'||rl==='pronar'?'pronar':(rl==='menaxher'||rl==='manager'?'menaxher':'punonjes');
+  return {
+    id:'profile:'+p.id, _fromProfile:true,
+    emri, mbiemri, roli,
+    telefon:p.phone||'', email:'',
+    departamenti:'', aktiv:true, foto_url:'',
+    team_id:teamId(), krijuar_me:null
+  };
+}
+
+// Fallback: ndërto listën e punonjësve nga `profiles` (dhe nga vetë përdoruesi aktual).
+async function loadEmployeesFromProfiles(){
+  const map=new Map();
+  try{
+    const {data:profiles}=await authClient.from('profiles').select('id,display_name,username,role,phone');
+    (profiles||[]).forEach(p=>{ if(p&&p.id) map.set(p.id, profileToEmployee(p)); });
+  }catch(e){ console.warn('profiles fallback',e); }
+  // Sigurohu që edhe përdoruesi aktual të jetë në listë
+  if(currentUser && !map.has(currentUser.id)){
+    map.set(currentUser.id, profileToEmployee({id:currentUser.id,display_name:cloud.userName||(currentUser.email||'').split('@')[0],role:cloud.profileRole||cloud.role,phone:''}));
+  }
+  return [...map.values()].sort((a,b)=>((a.emri||'')+a.mbiemri).localeCompare((b.emri||'')+b.mbiemri,'sq'));
+}
+
 async function loadEmployees(){
   const grid=$('#empGrid');
   if(!authClient){ grid.innerHTML='<div class="emp-empty">Duhet të jesh i loguar për të parë punonjësit.</div>'; return; }
   grid.innerHTML='<div class="emp-empty">Duke ngarkuar...</div>';
   try{
-    const {data,error}=await authClient.from('punonjesit').select('*').eq('team_id',teamId()).order('krijuar_me',{ascending:true});
-    if(error) throw error;
-    employees=data||[];
+    let rows=[];
+    try{
+      const {data,error}=await authClient.from('punonjesit').select('*').eq('team_id',teamId()).order('krijuar_me',{ascending:true});
+      if(error) throw error;
+      rows=data||[];
+    }catch(tblErr){
+      // Tabela `punonjesit` mund të mos ekzistojë ende — vazhdo me fallback.
+      console.warn('tabela punonjesit mungon, kalohet te profiles',tblErr);
+    }
+    // Nëse s'ka asnjë punonjës të regjistruar, merri nga `profiles` (Mariglen, Ana, etj.)
+    if(!rows.length){
+      rows=await loadEmployeesFromProfiles();
+    }
+    employees=rows;
     populateDeptFilter();
     renderEmployees();
     subscribeEmployees();
     loadSmsSettings();
   }catch(e){
     console.warn('loadEmployees',e);
-    grid.innerHTML='<div class="emp-empty">Nuk u ngarkuan punonjësit.<br><small>'+esc(e.message||'')+'</small><br><br><small>Sigurohu që tabela <b>punonjesit</b> dhe bucket-i <b>employee-photos</b> janë krijuar në Supabase (shih <b>supabase-setup.sql</b>).</small></div>';
+    grid.innerHTML='<div class="emp-empty">Nuk u ngarkuan punonjësit.<br><small>'+esc(e.message||'')+'</small></div>';
   }
 }
 
@@ -1959,7 +2011,7 @@ function renderEmployees(){
       <div class="rl">${esc(empRoleLabel(e.roli))}</div>
       ${e.departamenti?`<div class="dp">🏢 ${esc(e.departamenti)}</div>`:''}
       <div class="meta">${e.telefon?('📞 '+esc(e.telefon)+'<br>'):''}${e.email?('✉️ '+esc(e.email)):''}</div>
-      ${owner?`<div class="card-actions">
+      ${(owner && !e._fromProfile)?`<div class="card-actions">
         <button class="act ghost sm" data-emp-edit="${e.id}">✏️ Ndrysho</button>
         <button class="act ghost sm" data-emp-del="${e.id}">🗑️ Fshi</button>
       </div>`:''}
@@ -2100,7 +2152,7 @@ function openEmpProfile(id){
   // Butoni "Ndrysho" vetëm për pronarin
   const foot=$('#empProfileOverlay .modal-foot');
   let editBtn=$('#empProfileEditBtn');
-  if(document.body.classList.contains('owner')){
+  if(document.body.classList.contains('owner') && !e._fromProfile){
     if(!editBtn){ editBtn=document.createElement('button'); editBtn.id='empProfileEditBtn'; editBtn.className='act ghost'; editBtn.textContent='✏️ Ndrysho'; foot.appendChild(editBtn); }
     editBtn.style.display='block';
     editBtn.onclick=()=>{ closeOverlay('empProfileOverlay'); openEmpForm(e.id); };
@@ -2348,5 +2400,5 @@ render();renderSms();renderPending();
 applyView();
 // Cloud lidhet pasi përdoruesi të bëjë login.
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a4453cfbab01ee6d',t:'MTc5MDk2MDE2Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
