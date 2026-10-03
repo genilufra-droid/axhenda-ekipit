@@ -226,3 +226,29 @@ create policy "photos_public_delete"
 -- SHËNIM: Pas ekzekutimit të seksionit 11, seksioni "👥 Punonjësit" në aplikacion
 -- (i dukshëm vetëm për pronarin/menaxherin) do të funksionojë plotësisht:
 -- shtim/ndryshim/fshirje punonjësish me foto (ngarkohen në bucket-in employee-photos).
+
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- === SEKSIONI 12: Team Settings (Cilësimet e ekipit: SMS / WhatsApp) ===
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Ruaj çelësa konfigurimi për çdo ekip (team_id), p.sh.:
+--   key = 'sms_api_url'  -> URL e Edge Function send-sms
+--   key = 'owner_phone'  -> numri i WhatsApp/telefonit të pronarit
+create table if not exists public.settings (
+  id        uuid default gen_random_uuid() primary key,
+  team_id   text not null,
+  key       text not null,
+  value     text,
+  krijuar_me timestamptz default now(),
+  unique (team_id, key)
+);
+alter table public.settings enable row level security;
+drop policy if exists "settings_public_rw" on public.settings;
+create policy "settings_public_rw"
+  on public.settings for all
+  using (true) with check (true);
+
+-- SHËNIM: Pas ekzekutimit të seksionit 12, pronari mund të konfigurojë
+-- numrin e WhatsApp dhe URL-në e SMS API nga "👥 Punonjësit → ⚙️ Cilësimet SMS".
+-- Për Edge Function-in e SMS-it shih: supabase/functions/send-sms/README.md

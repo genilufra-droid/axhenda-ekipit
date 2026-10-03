@@ -404,8 +404,32 @@
   .act-item small{display:block;color:var(--muted);font-weight:500;font-size:12px}
   .act-item.danger:hover{border-color:var(--dang);background:#ffecec}
   .act-item.danger .ai{background:#ffe0e0;color:#c62828}
-  .modal-foot{display:flex;gap:10px;padding:14px 20px 20px;border-top:1px solid var(--line)}
+  .modal-foot{display:flex;gap:10px;padding:14px 20px 20px;border-top:1px solid var(--line);flex-wrap:wrap}
   .modal-foot button{flex:1}
+  /* ===== WhatsApp / SMS integrim ===== */
+  .btn-whatsapp{cursor:pointer;border:none;border-radius:10px;padding:10px 14px;font-weight:700;
+    color:#fff;background:#25D366}
+  .btn-sms{cursor:pointer;border:none;border-radius:10px;padding:10px 14px;font-weight:700;
+    color:#fff;background:#4f46e5}
+  .btn-whatsapp:hover,.btn-sms:hover{filter:brightness(1.07)}
+  .btn-whatsapp:active,.btn-sms:active{transform:translateY(1px)}
+  .btn-icon{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--txt);
+    border-radius:10px;padding:7px 11px;font-size:16px;line-height:1}
+  .btn-icon:hover{border-color:var(--wa)}
+  .modal-actions{display:flex;gap:10px;padding:4px 20px 18px;flex-wrap:wrap}
+  .modal-actions button{flex:1;min-width:120px}
+  .btn-primary{cursor:pointer;border:none;border-radius:10px;padding:10px 14px;font-weight:700;color:#fff;
+    background:linear-gradient(135deg,var(--brand),var(--brand2))}
+  .btn-secondary{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--txt);
+    border-radius:10px;padding:10px 14px;font-weight:700}
+  .btn-primary:hover,.btn-secondary:hover{filter:brightness(1.07)}
+  .wa-compose-modal h3,.sms-compose-modal h3,.sms-settings-modal h3{margin:0;padding:18px 20px 6px;font-size:16px}
+  .wa-compose-modal p,.sms-compose-modal p{padding:0 20px;margin:4px 0;font-size:13px;color:var(--muted)}
+  .wa-compose-modal textarea,.sms-compose-modal textarea{width:calc(100% - 40px);margin:8px 20px 0}
+  .sms-settings-modal label{display:block;padding:0 20px;margin-top:10px;font-size:12px;color:var(--muted);font-weight:600}
+  .sms-settings-modal input{width:calc(100% - 40px);margin:6px 20px 0}
+  #smsStatusMsg{padding:0 20px}
+  .sms-compose-modal>p:last-child,.sms-settings-modal>div:last-of-type{padding:0 20px 14px}
   .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
     background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:12px 18px;border-radius:12px;
     box-shadow:var(--shadow);opacity:0;transition:.25s;z-index:100;font-size:14px;max-width:90vw}
@@ -609,6 +633,7 @@
         <input class="search" type="text" id="empSearch" placeholder="🔎 Kërko punonjës (emër, rol, email...)" />
         <select id="empDeptFilter"><option value="all">🏢 Të gjitha departamentet</option></select>
         <button class="act sm" id="empAddBtn">➕ Shto Punonjës</button>
+        <button class="btn-icon owner-only" id="empSmsSettBtn" title="Cilësimet SMS">⚙️</button>
       </div>
       <div class="emp-grid" id="empGrid"></div>
     </div>
@@ -755,6 +780,56 @@
     <div class="modal-foot">
       <button class="act ghost" data-close-empprofile>Mbyll</button>
       <button class="act" id="empProfileMsgBtn">💬 Dërgo Mesazh</button>
+      <button class="btn-whatsapp" id="empWaBtn" style="display:none">📱 WhatsApp</button>
+      <button class="btn-sms" id="empSmsBtn" style="display:none">📬 SMS</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== WHATSAPP COMPOSE MODAL ===== -->
+<div id="waComposeOverlay" class="overlay">
+  <div class="modal wa-compose-modal">
+    <h3>📱 Dërgo WhatsApp</h3>
+    <p id="waRecipientLabel"></p>
+    <textarea id="waMessageText" rows="4" placeholder="Shkruaj mesazhin…"></textarea>
+    <div class="modal-actions">
+      <button id="waSendBtn" class="btn-primary">Hap WhatsApp ↗</button>
+      <button id="waCloseBtn" class="btn-secondary">Anulo</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SMS COMPOSE MODAL ===== -->
+<div id="smsComposeOverlay" class="overlay">
+  <div class="modal sms-compose-modal">
+    <h3>📬 Dërgo SMS</h3>
+    <p id="smsRecipientLabel"></p>
+    <textarea id="smsMessageText" rows="4" placeholder="Shkruaj SMS-in…"></textarea>
+    <div id="smsStatusMsg" style="display:none;color:green;margin:6px 0"></div>
+    <div class="modal-actions">
+      <button id="smsSendBtn" class="btn-primary">Dërgo SMS</button>
+      <button id="smsCloseBtn" class="btn-secondary">Anulo</button>
+    </div>
+    <p style="font-size:11px;color:#888;margin-top:8px">
+      Nëse SMS API nuk është konfiguruar, do të hapet aplikacioni SMS i telefonit.
+    </p>
+  </div>
+</div>
+
+<!-- ===== SMS SETTINGS MODAL (owner-only) ===== -->
+<div id="smsSettingsOverlay" class="overlay">
+  <div class="modal sms-settings-modal">
+    <h3>⚙️ Cilësimet SMS / WhatsApp</h3>
+    <label>Numri i WhatsApp / Telefonit (pronar)</label>
+    <input id="settOwnerPhone" type="tel" placeholder="+355 6X XXXXXXX">
+    <label>URL e SMS API (Supabase Edge Function - opcionale)</label>
+    <input id="settSmsApiUrl" type="url" placeholder="https://xxx.supabase.co/functions/v1/send-sms">
+    <div class="modal-actions">
+      <button id="settSaveBtn" class="btn-primary">Ruaj</button>
+      <button id="settCloseBtn" class="btn-secondary">Mbyll</button>
+    </div>
+    <div style="font-size:11px;color:#666;margin-top:10px">
+      <strong>Si të konfigurosh SMS API:</strong> Shih skedarin <code>supabase/functions/send-sms/README.md</code>
     </div>
   </div>
 </div>
@@ -1847,6 +1922,7 @@ async function loadEmployees(){
     populateDeptFilter();
     renderEmployees();
     subscribeEmployees();
+    loadSmsSettings();
   }catch(e){
     console.warn('loadEmployees',e);
     grid.innerHTML='<div class="emp-empty">Nuk u ngarkuan punonjësit.<br><small>'+esc(e.message||'')+'</small><br><br><small>Sigurohu që tabela <b>punonjesit</b> dhe bucket-i <b>employee-photos</b> janë krijuar në Supabase (shih <b>supabase-setup.sql</b>).</small></div>';
@@ -2029,6 +2105,16 @@ function openEmpProfile(id){
     editBtn.style.display='block';
     editBtn.onclick=()=>{ closeOverlay('empProfileOverlay'); openEmpForm(e.id); };
   }else if(editBtn){ editBtn.style.display='none'; }
+  // Butonat WhatsApp / SMS vetëm nëse punonjësi ka telefon
+  const fullRaw=((e.emri||'')+' '+(e.mbiemri||'')).trim();
+  const waBtn=$('#empWaBtn'), smsBtn=$('#empSmsBtn');
+  if(e.telefon){
+    waBtn.style.display=''; smsBtn.style.display='';
+    waBtn.onclick=()=>openWhatsApp(e.telefon, fullRaw);
+    smsBtn.onclick=()=>openSmsCompose(e.telefon, fullRaw);
+  }else{
+    waBtn.style.display='none'; smsBtn.style.display='none';
+  }
   openOverlay('empProfileOverlay');
 }
 
@@ -2043,6 +2129,106 @@ function empSendMessage(){
   else { state.chat.active='group'; toast('Hapet chat-i. Ky punonjës mund të mos jetë ende përdorues i platformës.',''); }
   save(); applyView();
   setTimeout(()=>{ const inp=$('#msgInput'); if(inp) inp.focus(); try{markReadForActive();}catch(_){} },150);
+}
+
+/* ===== WhatsApp / SMS integrim ===== */
+let smsSettings={owner_phone:'',sms_api_url:''};
+let waPhoneCurrent=null, smsPhoneCurrent=null;
+
+/* Konverton numra shqiptarë në format ndërkombëtar (+355...) */
+function cleanPhone(raw){
+  if(!raw) return '';
+  let s=String(raw).trim().replace(/[\s\-().]/g,'');
+  if(s.startsWith('00')) s='+'+s.slice(2);
+  if(s.startsWith('+')) return '+'+s.slice(1).replace(/\D/g,'');
+  s=s.replace(/\D/g,'');
+  if(s.startsWith('355')) return '+'+s;                 // 355XXXXXXXXX
+  if(s.startsWith('0')) return '+355'+s.slice(1);       // 06X/07X -> fshi 0 fillues
+  if(/^[67]\d{7,8}$/.test(s)) return '+355'+s;          // numër mobil pa 0 fillues
+  return s?('+'+s):'';
+}
+
+/* Për wa.me: vetëm shifra, pa + dhe pa hapësira -> 355XXXXXXXXX */
+function formatForWa(raw){ return cleanPhone(raw).replace(/\D/g,''); }
+
+function openWhatsApp(phone, recipientName){
+  waPhoneCurrent=phone;
+  $('#waRecipientLabel').textContent='Dërgim tek: '+(recipientName||'').trim();
+  $('#waMessageText').value='';
+  openOverlay('waComposeOverlay');
+}
+
+function openSmsCompose(phone, recipientName){
+  smsPhoneCurrent=phone;
+  $('#smsRecipientLabel').textContent=(recipientName||'').trim()+' · '+cleanPhone(phone);
+  $('#smsMessageText').value='';
+  const st=$('#smsStatusMsg'); st.style.display='none'; st.textContent='';
+  openOverlay('smsComposeOverlay');
+}
+
+async function sendSMS(toPhone, message){
+  const st=$('#smsStatusMsg');
+  const show=(txt,color)=>{ st.style.display='block'; st.style.color=color; st.textContent=txt; };
+  if(!message){ show('Shkruaj mesazhin para dërgimit.','#c62828'); return; }
+  const apiUrl=(smsSettings&&smsSettings.sms_api_url)||'';
+  if(apiUrl){
+    show('Duke dërguar...','#888');
+    try{
+      const headers={'Content-Type':'application/json'};
+      try{
+        const sd=authClient?await authClient.auth.getSession():null;
+        const tok=sd?.data?.session?.access_token||CLOUD_DEFAULT.key;
+        headers['Authorization']='Bearer '+tok;
+        headers['apikey']=CLOUD_DEFAULT.key;
+      }catch(_){}
+      const r=await fetch(apiUrl,{method:'POST',headers,body:JSON.stringify({to:toPhone,message})});
+      const data=await r.json().catch(()=>({}));
+      if(r.ok && data.success){ show('SMS u dërgua ✓','green'); }
+      else { show('Gabim: '+(data.error||('status '+r.status)),'#c62828'); }
+    }catch(e){ show('Gabim rrjeti: '+(e.message||''),'#c62828'); }
+  }else{
+    const isMobile=/Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent||'');
+    if(isMobile){
+      window.location.href='sms:'+toPhone+'?body='+encodeURIComponent(message);
+      closeOverlay('smsComposeOverlay');
+    }else{
+      show('Hap nga telefoni ose konfiguro SMS API në Cilësimet.','#c62828');
+    }
+  }
+}
+
+async function loadSmsSettings(){
+  if(!authClient) return;
+  try{
+    const {data,error}=await authClient.from('settings').select('key,value')
+      .eq('team_id',teamId()).in('key',['sms_api_url','owner_phone']);
+    if(error) throw error;
+    smsSettings={owner_phone:'',sms_api_url:''};
+    (data||[]).forEach(r=>{ smsSettings[r.key]=r.value||''; });
+  }catch(e){ console.warn('loadSmsSettings',e); }
+}
+
+async function saveSmsSettings(){
+  if(!authClient){ toast('Duhet të jesh i loguar','err'); return; }
+  const owner_phone=($('#settOwnerPhone').value||'').trim();
+  const sms_api_url=($('#settSmsApiUrl').value||'').trim();
+  try{
+    const rows=[
+      {team_id:teamId(),key:'owner_phone',value:owner_phone},
+      {team_id:teamId(),key:'sms_api_url',value:sms_api_url}
+    ];
+    const {error}=await authClient.from('settings').upsert(rows,{onConflict:'team_id,key'});
+    if(error) throw error;
+    smsSettings.owner_phone=owner_phone; smsSettings.sms_api_url=sms_api_url;
+    toast('Cilësimet u ruajtën ✓','ok');
+    closeOverlay('smsSettingsOverlay');
+  }catch(e){ toast('Ruajtja dështoi: '+(e.message||''),'err'); }
+}
+
+function openSmsSettings(){
+  $('#settOwnerPhone').value=smsSettings.owner_phone||'';
+  $('#settSmsApiUrl').value=smsSettings.sms_api_url||'';
+  openOverlay('smsSettingsOverlay');
 }
 
 function subscribeEmployees(){
@@ -2083,6 +2269,28 @@ $$('[data-close-empform]').forEach(b=>b.onclick=()=>closeOverlay('empFormOverlay
 $$('[data-close-empprofile]').forEach(b=>b.onclick=()=>closeOverlay('empProfileOverlay'));
 $('#empFormOverlay').addEventListener('click',e=>{if(e.target.id==='empFormOverlay')closeOverlay('empFormOverlay');});
 $('#empProfileOverlay').addEventListener('click',e=>{if(e.target.id==='empProfileOverlay')closeOverlay('empProfileOverlay');});
+
+/* Lidhjet WhatsApp / SMS / Cilësimet SMS */
+$('#empSmsSettBtn').addEventListener('click',openSmsSettings);
+$('#waCloseBtn').addEventListener('click',()=>closeOverlay('waComposeOverlay'));
+$('#waSendBtn').addEventListener('click',()=>{
+  const text=($('#waMessageText').value||'').trim();
+  const waNum=formatForWa(waPhoneCurrent);
+  if(!waNum){ toast('Numër telefoni i pavlefshëm','err'); return; }
+  const url='https://wa.me/'+waNum+(text?('?text='+encodeURIComponent(text)):'');
+  window.open(url,'_blank');
+  closeOverlay('waComposeOverlay');
+});
+$('#smsCloseBtn').addEventListener('click',()=>closeOverlay('smsComposeOverlay'));
+$('#smsSendBtn').addEventListener('click',()=>{
+  const text=($('#smsMessageText').value||'').trim();
+  sendSMS(cleanPhone(smsPhoneCurrent), text);
+});
+$('#settSaveBtn').addEventListener('click',saveSmsSettings);
+$('#settCloseBtn').addEventListener('click',()=>closeOverlay('smsSettingsOverlay'));
+$('#waComposeOverlay').addEventListener('click',e=>{if(e.target.id==='waComposeOverlay')closeOverlay('waComposeOverlay');});
+$('#smsComposeOverlay').addEventListener('click',e=>{if(e.target.id==='smsComposeOverlay')closeOverlay('smsComposeOverlay');});
+$('#smsSettingsOverlay').addEventListener('click',e=>{if(e.target.id==='smsSettingsOverlay')closeOverlay('smsSettingsOverlay');});
 
 /* INIT */
 $('#search').addEventListener('input',render);
