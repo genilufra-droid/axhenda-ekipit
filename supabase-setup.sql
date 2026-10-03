@@ -145,7 +145,84 @@ begin
   end if;
 end $$;
 
+-- ============================================================
+-- 11) MENAXHIMI I PUNONJËSVE (tabela + foto në Storage)
+-- ============================================================
+
+-- 11a) Tabela e punonjësve me të dhëna të plota
+create table if not exists public.punonjesit (
+  id            uuid default gen_random_uuid() primary key,
+  team_id       text not null,            -- Kodi i ekipit (i njëjti si "dhoma")
+  emri          text not null,
+  mbiemri       text not null,
+  email         text,
+  telefon       text,
+  roli          text default 'punonjes',  -- 'pronar' | 'menaxher' | 'punonjes'
+  foto_url      text,                     -- URL publike e fotos nga Supabase Storage
+  departamenti  text,
+  data_fillimit date,
+  shenim        text,
+  aktiv         boolean default true,
+  krijuar_me    timestamptz default now(),
+  perdorues_id  text                      -- (opsionale) lidhja me chat user id
+);
+
+create index if not exists punonjesit_team_idx on public.punonjesit(team_id);
+
+alter table public.punonjesit enable row level security;
+
+-- Policy e hapur (si tabelat e tjera të këtij projekti). Mund ta ngushtosh më vonë.
+drop policy if exists "punonjesit_public_rw" on public.punonjesit;
+create policy "punonjesit_public_rw"
+  on public.punonjesit for all
+  using (true) with check (true);
+
+-- 11b) Aktivizo Realtime për punonjesit
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public' and tablename = 'punonjesit'
+  ) then
+    alter publication supabase_realtime add table public.punonjesit;
+  end if;
+end $$;
+
+-- 11c) Storage bucket publik për fotot e punonjësve
+insert into storage.buckets (id, name, public)
+values ('employee-photos', 'employee-photos', true)
+on conflict (id) do nothing;
+
+-- Lexim publik i fotove
+drop policy if exists "photos_public_read" on storage.objects;
+create policy "photos_public_read"
+  on storage.objects for select
+  using (bucket_id = 'employee-photos');
+
+-- Ngarkim fotosh
+drop policy if exists "photos_public_upload" on storage.objects;
+create policy "photos_public_upload"
+  on storage.objects for insert
+  with check (bucket_id = 'employee-photos');
+
+-- Përditësim fotosh
+drop policy if exists "photos_public_update" on storage.objects;
+create policy "photos_public_update"
+  on storage.objects for update
+  using (bucket_id = 'employee-photos');
+
+-- Fshirje fotosh
+drop policy if exists "photos_public_delete" on storage.objects;
+create policy "photos_public_delete"
+  on storage.objects for delete
+  using (bucket_id = 'employee-photos');
+
 -- Gati! Kthehu te aplikacioni → butoni "☁️" → vendos:
 --   Supabase URL   = Settings → API → Project URL
 --   anon key       = Settings → API → Project API keys → anon public
 --   Kodi i ekipit  = çfarëdo teksti (i njëjti për të gjithë punonjësit)
+--
+-- SHËNIM: Pas ekzekutimit të seksionit 11, seksioni "👥 Punonjësit" në aplikacion
+-- (i dukshëm vetëm për pronarin/menaxherin) do të funksionojë plotësisht:
+-- shtim/ndryshim/fshirje punonjësish me foto (ngarkohen në bucket-in employee-photos).
