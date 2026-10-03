@@ -731,7 +731,7 @@ function startPolling(){
     try{
       const sessionData=authClient?await authClient.auth.getSession():{data:{session:null}};
       const authHeaders=sessionData.data.session?{apikey:CLOUD_DEFAULT.key,Authorization:'Bearer '+sessionData.data.session.access_token}:{};
-      const r=await fetch(cloud.rest+'?id=eq.ekipi-im-2026&select=data,by,updated_at&'+cloud.qkey+'&_='+Date.now(),{mode:'cors',cache:'no-store',headers:authHeaders});
+      const r=await fetch(cloud.rest+'?id=eq.ekipi-im-2026&select=data,by,updated_at&'+cloud.qkey,{mode:'cors',cache:'no-store',headers:authHeaders});
       if(!r.ok) return;
       const rows=await r.json();
       if(rows.length && rows[0].data && rows[0].updated_at!==cloud.lastUpdated){
