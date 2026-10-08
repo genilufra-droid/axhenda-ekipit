@@ -1923,13 +1923,17 @@ async function forgotPasswordFlow(){
   toast('Password-i u rikthye ✓','ok');
 }
 async function resetEmployeePassword(id){
-  const e=employees.find(x=>x.id===id);if(!e)return;
-  const userId=String(id).startsWith('profile:')?String(id).slice(8):e.user_id;
+  const e=employees.find(x=>x.id===id);
+  if(!e){toast('Punonjësi nuk u gjet','err');return;}
+  const userId=String(e.id||'').startsWith('profile:')?String(e.id).slice(8):String(e.user_id||'');
+  if(!userId||userId.length<20){toast('Gabim: ky punonjës nuk ka Auth User ID real','err');return;}
   const p=prompt('Password i ri për '+((e.emri||'')+' '+(e.mbiemri||'')).trim()+' (minimum 8 karaktere):')||'';
   if(!p||p.length<8){toast('Password-i duhet të ketë të paktën 8 karaktere','err');return;}
+  toast('Po kryhet resetimi...', 'ok');
   const r=await authClient.functions.invoke('owner-reset-employee',{body:{user_id:userId,new_password:p}});
-  if(r.error||r.data?.error){toast('Reset-i dështoi: '+(r.data?.error||r.error?.message),'err');return;}
-  toast('Password-i u rivendos. Punonjësi duhet ta ndryshojë në hyrje ✓','ok');
+  if(r.error){console.error('OWNER_RESET_FUNCTION_ERROR',r.error);toast('Reset-i dështoi: '+(r.error.message||'gabim i panjohur'),'err');return;}
+  if(r.data?.error){toast('Reset-i dështoi: '+r.data.error,'err');return;}
+  toast('Reset-i u krye me sukses. Password-i i vjetër nuk funksionon më ✓','ok');
 }
 async function initAuth(){
   try{
