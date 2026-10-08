@@ -2021,7 +2021,7 @@ function renderEmployees(){
       <div class="rl">${esc(empRoleLabel(e.roli))}</div>
       ${e.departamenti?`<div class="dp">🏢 ${esc(e.departamenti)}</div>`:''}
       <div class="meta">${e.telefon?('📞 '+esc(e.telefon)+'<br>'):''}${e.email?('✉️ '+esc(e.email)):''}</div>
-      ${(owner && !e._fromProfile)?`<div class="card-actions">
+      ${(owner && e.roli!=='pronar')?`<div class="card-actions">
         <button class="act ghost sm" data-emp-edit="${e.id}">✏️ Ndrysho</button>
         <button class="act ghost sm" data-emp-del="${e.id}">🗑️ Fshi</button>
       </div>`:''}
