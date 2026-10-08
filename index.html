@@ -605,6 +605,7 @@
             <div class="field"><label>Mesazhi</label><textarea id="smsBody" placeholder="Shkruaj mesazhin..."></textarea></div>
             <div class="row">
               <button class="act" id="smsSend" style="flex:1">Dërgo SMS</button>
+              <button class="act ghost" id="smsSendAll" title="Dërgo te të gjithë punonjësit">📢 Të gjithë</button>
               <button class="act ghost" id="smsFromTask" title="Njofto për detyrën e fundit">Njofto detyrën</button>
             </div>
             <details class="cfg" open>
@@ -1603,6 +1604,29 @@ $('#smsFromTask').addEventListener('click',()=>{
   toast('Mesazhi u përgatit nga detyra');
 });
 $('#smsSend').addEventListener('click',sendSms);
+$('#smsSendAll').addEventListener('click',sendSmsAll);
+async function sendSmsAll(){
+  if(cloud.role!=='owner'){toast('Vetëm pronari mund të dërgojë SMS te të gjithë','err');return;}
+  const body=$('#smsBody').value.trim();
+  if(!body){toast('Shkruaj mesazhin','err');return;}
+  if(!authClient){toast('Duhet të jesh i loguar','err');return;}
+  const {data:profiles,error}=await authClient.from('profiles').select('phone,display_name').eq('role','employee').not('phone','is',null);
+  if(error){toast('Nuk u lexuan numrat: '+error.message,'err');return;}
+  const recipients=[...new Set((profiles||[]).map(p=>String(p.phone||'').trim()).filter(p=>/^\+3556\d{8}$/.test(p)))];
+  if(!recipients.length){toast('Asnjë punonjës nuk ka numër telefoni të vlefshëm','err');return;}
+  if(!confirm('Dërgo këtë SMS te '+recipients.length+' punonjës?'))return;
+  const proxy=state.cfg.tbProxy||'https://ruwxxypntyhxdwegkmkl.supabase.co/functions/v1/sms';
+  try{
+    const session=(await authClient.auth.getSession()).data.session;
+    const headers={ 'Content-Type':'application/json', apikey:CLOUD_DEFAULT.key, Authorization:'Bearer '+(session?.access_token||CLOUD_DEFAULT.key) };
+    const r=await fetch(proxy,{method:'POST',headers,body:JSON.stringify({recipients,message:body})});
+    const result=await r.json().catch(()=>({}));
+    const entry={id:uid(),to:recipients.join(', '),body,at:Date.now(),status:r.ok?'sent':'fail'};
+    state.sms.unshift(entry);save();renderSms();
+    if(!r.ok) throw new Error(result.error||result.message||'SMS API ktheu gabim');
+    $('#smsBody').value='';toast('SMS u fut në queue për '+recipients.length+' punonjës ✓','ok');
+  }catch(e){toast('Dërgimi masiv dështoi: '+e.message,'err');}
+}
 async function sendSms(){
   let to=$('#smsTo').value.trim();const body=$('#smsBody').value.trim();
   if(!to||!body){toast('Plotëso numrin dhe mesazhin','err');return;}
