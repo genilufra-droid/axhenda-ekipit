@@ -1203,8 +1203,25 @@ function renderVault(){
 
 /* ===== DETAIL POPUP ===== */
 let detailId=null;
+function taskIsMine(t){
+  if(!t||cloud.role!=='employee'||!t.assignee)return false;
+  const a=String(t.assignee).trim().toLowerCase();
+  return a===String(cloud.userName||'').trim().toLowerCase() || a===String(currentUser?.email||'').split('@')[0].toLowerCase();
+}
+function markTaskSeen(t){
+  if(!taskIsMine(t)||!currentUser)return;
+  t.seenBy=t.seenBy||{};
+  if(!t.seenBy[currentUser.id]){t.seenBy[currentUser.id]=Date.now();save();}
+}
+function acknowledgeTask(t){
+  if(!taskIsMine(t)||!currentUser)return;
+  t.ackBy=t.ackBy||{};
+  if(!t.ackBy[currentUser.id]){t.ackBy[currentUser.id]=Date.now();save();}
+  openDetail(t.id); toast('Detyra u pranua ✓','ok');
+}
 function openDetail(id){
   const t=state.tasks.find(x=>x.id===id); if(!t)return;
+  markTaskSeen(t);
   detailId=id;
   $('#dIc').innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>';
   $('#dTitle').textContent=t.title;
@@ -1217,7 +1234,10 @@ function openDetail(id){
   rows.push(['Ngarkuar',dt(t.createdAt)]);
   if(t.editedAt)rows.push(['Redaktuar',dt(t.editedAt)]);
   if(t.done&&t.doneAt)rows.push(['Kryer',`<span style="color:#1a8a4f;font-weight:700">${dt(t.doneAt)}</span>`]);
+  if(t.seenBy){const vals=Object.values(t.seenBy);if(vals.length)rows.push(['Parë',`<span style="color:#2b5bd0;font-weight:700">${dt(Math.min(...vals))}</span>`]);}
+  if(t.ackBy){const vals=Object.values(t.ackBy);if(vals.length)rows.push(['Pranuar',`<span style="color:#1a8a4f;font-weight:700">${dt(Math.min(...vals))}</span>`]);}
   let html=rows.map(r=>`<div class="detail-row"><span class="k">${r[0]}</span><span class="v">${r[1]}</span></div>`).join('');
+  if(taskIsMine(t)&&!t.ackBy?.[currentUser?.id]) html+=`<div style="margin-top:14px"><button class="act" id="ackTaskBtn" style="width:100%">✅ E mora detyrën</button></div>`;
   if(t.desc)html+=`<div style="margin-top:12px"><div class="detail-row" style="border:none;padding-bottom:6px"><span class="k">Përshkrimi</span></div><div class="detail-desc">${esc(t.desc)}</div></div>`;
   if((t.files||[]).length){
     html+=`<div style="margin-top:14px"><div class="k" style="margin-bottom:8px">📎 Skedarët (${t.files.length})</div>`;
@@ -1225,6 +1245,7 @@ function openDetail(id){
     html+='</div>';
   }
   $('#dBody').innerHTML=html;
+  if($('#ackTaskBtn')) $('#ackTaskBtn').onclick=()=>acknowledgeTask(t);
   $$('#dBody [data-ddl]').forEach(b=>b.onclick=()=>{const[ti,fi]=b.dataset.ddl.split('|');downloadFile(ti,fi);});
   $('#detailOverlay').classList.add('show');
 }
