@@ -560,7 +560,6 @@
           <aside class="convlist">
             <div class="convlist-head">
               <span>Bisedat</span>
-              <button class="addc owner-only" id="addContact" title="Shto kontakt">＋</button>
             </div>
             <div id="convList"></div>
             <div class="ident">
@@ -1471,22 +1470,6 @@ $('#msgFileInput').addEventListener('change',async e=>{
   e.target.value='';renderMsgPending();
 });
 $('#identSel').addEventListener('change',e=>{state.chat.me=e.target.value;save();renderChat();});
-$('#addContact').addEventListener('click',async()=>{
-  const n=prompt('Emri i punonjësit:'); if(!n||!n.trim())return;
-  const username=prompt('Username i punonjësit, p.sh. mariglen:'); if(!username||!username.trim())return;
-  const password=prompt('Fjalëkalimi fillestar (minimum 8 karaktere):'); if(!password||password.length<8){toast('Fjalëkalimi duhet të ketë të paktën 8 karaktere','err');return;}
-  const phone=prompt('Numri i telefonit (+3556XXXXXXXX):');
-  if(!phone||!/^\+3556\d{8}$/.test(phone.trim())){toast('Numri duhet të jetë në formatin +3556XXXXXXXX','err');return;}
-  const name=n.trim(), id=stableContactId(name);
-  if(state.chat.contacts.some(x=>x.id===id)){toast('Ky punonjës ekziston','err');return;}
-  if(!authClient){toast('Duhet të jesh i loguar','err');return;}
-  const {data,error}=await authClient.functions.invoke('create-employee',{body:{name,username:username.trim(),password,phone:phone.trim()}});
-  if(error||data?.error){toast('Punonjësi nuk u krijua: '+(data?.error||error.message),'err');return;}
-  state.chat.contacts.push({id,name,user_id:data.id});
-  logAudit('Punonjës i ri',name+' · '+username.trim());
-  save(); renderChat(); toast('Punonjësi u krijua dhe iu dërgua ftesa ✓','ok');
-});
-
 /* ===== DRAG & DROP RIRENDITJE ===== */
 let dragId=null;
 function setupDrag(){
@@ -2159,10 +2142,12 @@ async function deleteEmployee(id){
   if(!confirm('Fshi përgjithmonë punonjësin "'+((e.emri||'')+' '+(e.mbiemri||'')).trim()+'"?')) return;
   if(!authClient){ toast('Duhet të jesh i loguar','err'); return; }
   try{
-    const {error}=await authClient.from('punonjesit').delete().eq('id',id);
-    if(error) throw error;
+    const userId=String(e.id||'').startsWith('profile:')?String(e.id).slice(8):e.user_id;
+    if(!userId) throw new Error('Përdoruesi nuk ka ID reale Auth');
+    const {data,error}=await authClient.functions.invoke('delete-employee',{body:{user_id:userId}});
+    if(error||data?.error) throw new Error(data?.error||error?.message||'Fshirja nga Auth dështoi');
     if(e.foto_url){ try{ const m=e.foto_url.split('/'+EMP_BUCKET+'/')[1]; if(m) await authClient.storage.from(EMP_BUCKET).remove([decodeURIComponent(m)]); }catch(_){} }
-    toast('Punonjësi u fshi ✓','ok');
+    toast('Punonjësi u fshi nga Auth, profiles dhe Chat ✓','ok');
     await loadEmployees();
   }catch(err){ toast('Fshirja dështoi: '+(err.message||''),'err'); }
 }
