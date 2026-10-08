@@ -346,6 +346,8 @@
     cursor:pointer;display:grid;place-items:center;box-shadow:0 4px 12px rgba(0,168,132,.4)}
   .send-btn:hover{background:var(--wa2)} .send-btn:active{transform:scale(.94)}
   .send-btn svg{width:22px;height:22px}
+  .notify-all-label{display:flex;align-items:center;gap:4px;white-space:nowrap;font-size:11px;font-weight:700;color:var(--brand);cursor:pointer}
+  .notify-all-label input{width:auto}
   .pending-files{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
   .locked-note{padding:12px 16px;color:var(--muted);font-size:13px;text-align:center;border-top:1px solid var(--line);background:var(--panel2)}
 
@@ -546,7 +548,10 @@
             <input type="text" id="tTitle" placeholder="Shkruaj një detyrë..." autocomplete="off" />
             <textarea id="tDesc" placeholder="Shto detaje (opsionale)..." rows="1"></textarea>
           </div>
-          <button class="send-btn" id="addTaskBtn" title="Dërgo detyrën">
+          <label class="notify-all-label" title="Njofto në Chat, SMS dhe Email">
+            <input type="checkbox" id="notifyAllChannels" /> 📢 Të gjitha
+          </label>
+          <button class="send-btn" id="addTaskBtn" title="Ruaj dhe njofto detyrën">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5v-6l8-2.5-8-2.5v-6l19 8.5z"/></svg>
           </button>
         </div>
@@ -1060,21 +1065,33 @@ function renderPending(){
 
 /* ADD TASK */
 $('#addTaskBtn').addEventListener('click',addTask);
+async function notifyTaskChannels(task){
+  if(!authClient||cloud.role!=='owner'){toast('Vetëm pronari mund të njoftojë kanalet','err');return;}
+  if(!task.assignee){toast('Detyra nuk ka punonjës të caktuar','err');return;}
+  const {data,error}=await authClient.functions.invoke('notify-task',{body:{task}});
+  if(error||data?.error){toast('Njoftimi dështoi: '+(data?.error||error?.message||'gabim'),'err');return;}
+  const r=data.result||{};
+  toast('Njoftimet: Chat '+r.chat+', SMS '+r.sms+', Email '+r.email,'ok');
+}
 function addTask(){
   const title=$('#tTitle').value.trim();
   if(!title){toast('Shkruaj një detyrë','err');return;}
-  state.tasks.push({
+  const task={
     id:uid(), title, desc:$('#tDesc').value.trim(),
     assignee:$('#tAssignee').value.trim(), category:$('#tCategory').value.trim(),
     priority:state.priority, due:$('#tDue').value, files:state.pending.slice(),
     done:false, createdAt:Date.now(), doneAt:null
-  });
+  };
+  state.tasks.push(task);
+  const notifyAll=$('#notifyAllChannels')?.checked;
+  if($('#notifyAllChannels')) $('#notifyAllChannels').checked=false;
   state.pending=[]; renderPending();
   $('#tTitle').value=''; $('#tDesc').value=''; $('#tCategory').value=''; $('#tDesc').style.height='auto';
   $('#compInput').classList.remove('expanded');
   logAudit('Detyrë e re',title);
   save(); render();
   toast('Detyra u shtua ✓','ok');
+  if(notifyAll) notifyTaskChannels(task);
   const c=$('#taskList'); c.scrollTop=c.scrollHeight;
 }
 
@@ -2131,7 +2148,8 @@ async function saveEmployee(){
       const phone=$('#empTelefon').value.trim();
       if(!username||!password||password.length<8){throw new Error('Username dhe password-i me të paktën 8 karaktere janë të detyrueshëm');}
       if(phone&&!/^\+3556\d{8}$/.test(phone)) throw new Error('Numri duhet të jetë në formatin +3556XXXXXXXX');
-      const created=await authClient.functions.invoke('create-employee',{body:{name:(emri+' '+mbiemri).trim(),username,password,phone}});
+      const email=$('#empEmail').value.trim();
+      const created=await authClient.functions.invoke('create-employee',{body:{name:(emri+' '+mbiemri).trim(),username,password,phone,email}});
       if(created.error||created.data?.error) throw new Error(created.data?.error||created.error?.message||'Krijimi i llogarisë dështoi');
       authId=created.data.id;
     }
