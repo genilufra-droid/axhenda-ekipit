@@ -753,7 +753,11 @@
         <div class="field"><label>Telefon</label><input type="tel" id="empTelefon" placeholder="+3556..." /></div>
       </div>
       <div class="row">
-        <div class="field"><label>Roli</label><select id="empRoli"><option value="punonjes">Punonjës</option><option value="menaxher">Menaxher</option><option value="pronar">Pronar</option></select></div>
+        <div class="field"><label>Username *</label><input type="text" id="empUsername" placeholder="p.sh. ana" autocomplete="off" /></div>
+        <div class="field"><label>Password fillestar *</label><input type="password" id="empPassword" placeholder="Minimum 8 karaktere" autocomplete="new-password" /></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Roli</label><select id="empRoli"><option value="punonjes">Punonjës</option><option value="menaxher">Menaxher</option></select></div>
         <div class="field"><label>Departamenti</label><input type="text" id="empDept" placeholder="p.sh. Shitje" /></div>
       </div>
       <div class="row">
@@ -2085,6 +2089,10 @@ function openEmpForm(id){
   $('#empMbiemri').value=e?.mbiemri||'';
   $('#empEmail').value=e?.email||'';
   $('#empTelefon').value=e?.telefon||'';
+  $('#empUsername').value=e?.username||'';
+  $('#empPassword').value='';
+  $('#empUsername').disabled=!!e;
+  $('#empPassword').disabled=!!e;
   $('#empRoli').value=(e?.roli||'punonjes');
   $('#empDept').value=e?.departamenti||'';
   $('#empDataFillimit').value=e?.data_fillimit||'';
@@ -2113,8 +2121,19 @@ async function saveEmployee(){
         foto_url=pub.publicUrl;
       }else{ foto_url=null; }
     }
+    let authId=empEditingId||null;
+    if(!empEditingId){
+      const username=$('#empUsername').value.trim().toLowerCase();
+      const password=$('#empPassword').value;
+      const phone=$('#empTelefon').value.trim();
+      if(!username||!password||password.length<8){throw new Error('Username dhe password-i me të paktën 8 karaktere janë të detyrueshëm');}
+      if(phone&&!/^\+3556\d{8}$/.test(phone)) throw new Error('Numri duhet të jetë në formatin +3556XXXXXXXX');
+      const created=await authClient.functions.invoke('create-employee',{body:{name:(emri+' '+mbiemri).trim(),username,password,phone}});
+      if(created.error||created.data?.error) throw new Error(created.data?.error||created.error?.message||'Krijimi i llogarisë dështoi');
+      authId=created.data.id;
+    }
     const row={
-      team_id:teamId(), emri, mbiemri,
+      id:authId||undefined, team_id:teamId(), emri, mbiemri,
       email:$('#empEmail').value.trim()||null,
       telefon:$('#empTelefon').value.trim()||null,
       roli:$('#empRoli').value,
@@ -2318,7 +2337,7 @@ function subscribeEmployees(){
 }
 
 /* Lidhjet e ngjarjeve për punonjësit */
-$('#empAddBtn').addEventListener('click',()=>{ if(!document.body.classList.contains('owner')){toast('Vetëm pronari mund të shtojë punonjës','err');return;} $('#addContact').click(); });
+$('#empAddBtn').addEventListener('click',()=>openEmpForm(null));
 $('#empSearch').addEventListener('input',renderEmployees);
 $('#empDeptFilter').addEventListener('change',renderEmployees);
 $('#empPhotoBtn').addEventListener('click',()=>$('#empPhotoInput').click());
