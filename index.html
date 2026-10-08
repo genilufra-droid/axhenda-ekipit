@@ -2262,7 +2262,7 @@ async function sendSMS(toPhone, message){
       }catch(_){}
       const r=await fetch(apiUrl,{method:'POST',headers,body:JSON.stringify({recipients:[cleanPhone(toPhone)],message})});
       const data=await r.json().catch(()=>({}));
-      if(r.ok && data.success){ show('SMS u dërgua ✓','green'); }
+      if(r.ok && (data.success || data.data?.success)){ show('SMS u dërgua ✓','green'); }
       else { show('Gabim: '+(data.error||('status '+r.status)),'#c62828'); }
     }catch(e){ show('Gabim rrjeti: '+(e.message||''),'#c62828'); }
   }else{
