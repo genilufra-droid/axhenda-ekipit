@@ -2155,12 +2155,13 @@ async function saveEmployee(){
     }
     if(empEditingId && String(empEditingId).startsWith('profile:')){
       const profileId=String(empEditingId).slice(8);
-      const {error:profileError}=await authClient.from('profiles').update({
+      const updated=await authClient.functions.invoke('update-employee',{body:{
+        user_id:profileId,
         display_name:(emri+' '+mbiemri).trim(),
-        phone:$('#empTelefon').value.trim()||null,
-        notification_email:$('#empEmail').value.trim()||null
-      }).eq('id',profileId);
-      if(profileError) throw profileError;
+        phone:$('#empTelefon').value.trim(),
+        notification_email:$('#empEmail').value.trim()
+      }});
+      if(updated.error||updated.data?.error) throw new Error(updated.data?.error||updated.error?.message||'Përditësimi dështoi');
       closeOverlay('empFormOverlay');
       toast('Profili dhe email-i u përditësuan ✓','ok');
       await loadEmployees();
