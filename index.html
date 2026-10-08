@@ -2153,6 +2153,19 @@ async function saveEmployee(){
       if(created.error||created.data?.error) throw new Error(created.data?.error||created.error?.message||'Krijimi i llogarisë dështoi');
       authId=created.data.id;
     }
+    if(empEditingId && String(empEditingId).startsWith('profile:')){
+      const profileId=String(empEditingId).slice(8);
+      const {error:profileError}=await authClient.from('profiles').update({
+        display_name:(emri+' '+mbiemri).trim(),
+        phone:$('#empTelefon').value.trim()||null,
+        notification_email:$('#empEmail').value.trim()||null
+      }).eq('id',profileId);
+      if(profileError) throw profileError;
+      closeOverlay('empFormOverlay');
+      toast('Profili dhe email-i u përditësuan ✓','ok');
+      await loadEmployees();
+      return;
+    }
     const row={
       id:authId||undefined, team_id:teamId(), emri, mbiemri,
       email:$('#empEmail').value.trim()||null,
