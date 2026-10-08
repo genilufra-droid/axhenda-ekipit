@@ -1994,11 +1994,10 @@ async function loadEmployees(){
       // Tabela `punonjesit` mund të mos ekzistojë ende — vazhdo me fallback.
       console.warn('tabela punonjesit mungon, kalohet te profiles',tblErr);
     }
-    // Bashko tabelën e vjetër me profilet reale Auth/profiles.
-    const profileRows=await loadEmployeesFromProfiles();
-    const merged=new Map(profileRows.map(e=>[e.id,e]));
-    rows.forEach(e=>merged.set(e.id,e));
-    employees=[...merged.values()].filter(e=>e.roli!=='pronar');
+    // Lista zyrtare e punonjësve merret vetëm nga profiles/Auth.
+    // Rreshtat e vjetër të tabelës punonjesit nuk shfaqen pa profil real.
+    employees=(await loadEmployeesFromProfiles())
+      .filter(e=>e.roli!=='pronar');
     populateDeptFilter();
     renderEmployees();
     subscribeEmployees();
