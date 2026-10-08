@@ -452,6 +452,7 @@
     <input type="email" id="loginEmail" placeholder="Email" autocomplete="username">
     <input type="password" id="loginPassword" placeholder="Fjalëkalimi" autocomplete="current-password">
     <button class="act" id="loginBtn">Hyr</button>
+    <button class="act ghost sm" id="forgotPasswordBtn" type="button">Kam harruar password-in</button>
     <div class="auth-error" id="loginError"></div>
   </div>
 </div>
@@ -464,6 +465,7 @@
   <button class="cloud-pill" id="cloudPill" title="Cilësimet e Cloud">
     <span class="cdot" id="cloudDot"></span><span id="cloudTxt">Offline (demo)</span>
   </button>
+  <button class="act ghost sm" id="changePasswordBtn" style="margin-left:10px">🔑 Password</button>
   <button class="act ghost sm" id="logoutBtn" style="margin-left:10px">Dil</button>
   <div class="role-switch">
     <label id="lblEmp" class="on">Punonjës</label>
@@ -1900,6 +1902,35 @@ async function secureRefreshChat(){
   // Shëno si të lexuara mesazhet e marra në bisedën e hapur (pas rifreskimit)
   markReadForActive();
 }
+async function changeMyPassword(){
+  const p=prompt('Vendos password-in e ri (minimum 8 karaktere):')||'';
+  if(!p||p.length<8){toast('Password-i duhet të ketë të paktën 8 karaktere','err');return;}
+  const {data,error}=await authClient.functions.invoke('update-my-password',{body:{new_password:p}});
+  if(error||data?.error){toast('Ndryshimi dështoi: '+(data?.error||error.message),'err');return;}
+  toast('Password-i u ndryshua ✓','ok');
+}
+async function forgotPasswordFlow(){
+  const identifier=prompt('Vendos username ose email:')||''; if(!identifier)return;
+  const channel=(prompt('Shkruaj SMS ose EMAIL:')||'').trim().toLowerCase();
+  if(channel!=='sms'&&channel!=='email'){toast('Zgjidh SMS ose EMAIL','err');return;}
+  const req=await authClient.functions.invoke('request-password-reset',{body:{identifier,channel}});
+  if(req.error||req.data?.error){toast('Kërkesa dështoi: '+(req.data?.error||req.error?.message),'err');return;}
+  const code=prompt('Vendos kodin 6-shifror që të erdhi:')||''; if(!code)return;
+  const p=prompt('Vendos password-in e ri (minimum 8 karaktere):')||'';
+  if(!p||p.length<8){toast('Password-i duhet të ketë të paktën 8 karaktere','err');return;}
+  const done=await authClient.functions.invoke('confirm-password-reset',{body:{identifier,code,new_password:p}});
+  if(done.error||done.data?.error){toast('Rikthimi dështoi: '+(done.data?.error||done.error?.message),'err');return;}
+  toast('Password-i u rikthye ✓','ok');
+}
+async function resetEmployeePassword(id){
+  const e=employees.find(x=>x.id===id);if(!e)return;
+  const userId=String(id).startsWith('profile:')?String(id).slice(8):e.user_id;
+  const p=prompt('Password i ri për '+((e.emri||'')+' '+(e.mbiemri||'')).trim()+' (minimum 8 karaktere):')||'';
+  if(!p||p.length<8){toast('Password-i duhet të ketë të paktën 8 karaktere','err');return;}
+  const r=await authClient.functions.invoke('owner-reset-employee',{body:{user_id:userId,new_password:p}});
+  if(r.error||r.data?.error){toast('Reset-i dështoi: '+(r.data?.error||r.error?.message),'err');return;}
+  toast('Password-i u rivendos. Punonjësi duhet ta ndryshojë në hyrje ✓','ok');
+}
 async function initAuth(){
   try{
     const mod=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
@@ -1945,6 +1976,9 @@ async function loginUser(){
   if(error){$('#loginError').textContent='Email ose fjalëkalim i gabuar.';return;}
   unlockApp(data.user);
 }
+$('#forgotPasswordBtn').onclick=forgotPasswordFlow;
+$('#changePasswordBtn').onclick=changeMyPassword;
+$$('#empGrid [data-emp-reset]').forEach(b=>b.onclick=e=>{e.stopPropagation();resetEmployeePassword(b.dataset.empReset);});
 initAuth();
 $('#logoutBtn').addEventListener('click',async()=>{
   try{ await presenceSetOnline(false); }catch(e){}
@@ -2061,7 +2095,7 @@ function renderEmployees(){
       <div class="meta">${e.telefon?('📞 '+esc(e.telefon)+'<br>'):''}${e.email?('✉️ '+esc(e.email)):''}</div>
       ${(owner && e.roli!=='pronar')?`<div class="card-actions">
         <button class="act ghost sm" data-emp-edit="${e.id}">✏️ Ndrysho</button>
-        <button class="act ghost sm" data-emp-del="${e.id}">🗑️ Fshi</button>
+        <button class="act ghost sm" data-emp-del="${e.id}">🗑️ Fshi</button> <button class="act ghost sm" data-emp-reset="${e.id}">🔑 Reset</button>
       </div>`:''}
     </div>`;
   }).join('');
@@ -2071,6 +2105,7 @@ function renderEmployees(){
   });
   $$('#empGrid [data-emp-edit]').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();openEmpForm(b.dataset.empEdit);});
   $$('#empGrid [data-emp-del]').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();deleteEmployee(b.dataset.empDel);});
+  $$('#empGrid [data-emp-reset]').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();resetEmployeePassword(b.dataset.empReset);});
 }
 
 /* Resize foto në browser para ngarkimit (max 400x400, JPEG) */
