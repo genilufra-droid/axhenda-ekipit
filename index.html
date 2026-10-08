@@ -1966,11 +1966,11 @@ async function loadEmployees(){
       // Tabela `punonjesit` mund të mos ekzistojë ende — vazhdo me fallback.
       console.warn('tabela punonjesit mungon, kalohet te profiles',tblErr);
     }
-    // Nëse s'ka asnjë punonjës të regjistruar, merri nga `profiles` (Mariglen, Ana, etj.)
-    if(!rows.length){
-      rows=await loadEmployeesFromProfiles();
-    }
-    employees=rows;
+    // Bashko tabelën e vjetër me profilet reale Auth/profiles.
+    const profileRows=await loadEmployeesFromProfiles();
+    const merged=new Map(profileRows.map(e=>[e.id,e]));
+    rows.forEach(e=>merged.set(e.id,e));
+    employees=[...merged.values()].filter(e=>e.roli!=='pronar');
     populateDeptFilter();
     renderEmployees();
     subscribeEmployees();
@@ -2294,7 +2294,7 @@ function subscribeEmployees(){
 }
 
 /* Lidhjet e ngjarjeve për punonjësit */
-$('#empAddBtn').addEventListener('click',()=>openEmpForm(null));
+$('#empAddBtn').addEventListener('click',()=>{ if(!document.body.classList.contains('owner')){toast('Vetëm pronari mund të shtojë punonjës','err');return;} $('#addContact').click(); });
 $('#empSearch').addEventListener('input',renderEmployees);
 $('#empDeptFilter').addEventListener('change',renderEmployees);
 $('#empPhotoBtn').addEventListener('click',()=>$('#empPhotoInput').click());
