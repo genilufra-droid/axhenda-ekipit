@@ -2260,7 +2260,7 @@ async function sendSMS(toPhone, message){
         headers['Authorization']='Bearer '+tok;
         headers['apikey']=CLOUD_DEFAULT.key;
       }catch(_){}
-      const r=await fetch(apiUrl,{method:'POST',headers,body:JSON.stringify({to:toPhone,message})});
+      const r=await fetch(apiUrl,{method:'POST',headers,body:JSON.stringify({recipients:[cleanPhone(toPhone)],message})});
       const data=await r.json().catch(()=>({}));
       if(r.ok && data.success){ show('SMS u dërgua ✓','green'); }
       else { show('Gabim: '+(data.error||('status '+r.status)),'#c62828'); }
