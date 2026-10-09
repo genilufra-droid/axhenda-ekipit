@@ -470,7 +470,7 @@
   <div class="role-switch">
     <label id="lblEmp" class="on">Punonjës</label>
     <div class="switch"><input type="checkbox" id="roleToggle"><span class="slider"></span></div>
-    <label id="lblOwn">Pronar</label>
+    <label id="lblOwn">Besnik Koci</label>
   </div>
 </header>
 
@@ -1031,9 +1031,9 @@ function applyRole(){
   $('#lblEmp').classList.toggle('on',!on);
   $('#lblOwn').classList.toggle('on',on);
   $('#lockedNote').style.display=on?'none':'block';
-  if(state.chat){ state.chat.me = on?'Pronari':(state.chat.contacts[0]?.name||'Pronari'); save(); }
+  if(state.chat){ state.chat.me = on?'Besnik Koci':(state.chat.contacts[0]?.name||'Besnik Koci'); save(); }
   applyView();
-  toast(on?'Modaliteti: Pronar 👑':'Modaliteti: Punonjës');
+  toast(on?'Modaliteti: Besnik Koci 👑':'Modaliteti: Punonjës');
 }
 $('#roleToggle').addEventListener('change',applyRole);
 $('#lblEmp').addEventListener('click',()=>{$('#roleToggle').checked=false;applyRole();});
@@ -1301,7 +1301,7 @@ function applyView(){
 function initChat(){
   if(state.chat) return;
   state.chat={
-    me:'Pronari',
+    me:'Besnik Koci',
     active:'group',
     contacts:[],
     msgs:{group:[]}
