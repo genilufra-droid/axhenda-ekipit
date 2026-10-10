@@ -1186,13 +1186,14 @@ function buildTable(list,owner,filtering){
   </table>`;
 }
 function renderTicker(){
-  const urgent=state.tasks.filter(t=>!t.done && (t.priority==='Lart' || isOverdue(t) || (t.due && (new Date(t.due)-Date.now())<3*864e5)));
+  const urgent=state.tasks.filter(t=>!t.done);
   const wrap=$('#tickerWrap');
   if(!urgent.length){ wrap.style.display='none'; return; }
   wrap.style.display='block';
   const items=urgent.map(t=>{
     const over=isOverdue(t);
-    return `<span class="ticker-task" data-open="${t.id}" title="Hap detajet e detyrës">${over?'<b>⏰ VONUAR:</b>':'<i>📅 Së shpejti:</i>'} ${esc(t.title)}${t.assignee?' — '+esc(t.assignee):''}${t.due?' ('+dueFmt(t.due)+')':''}</span>`;
+    const label=over?'<b>⏰ VONUAR:</b>':(t.due?'<i>📅 Së shpejti:</i>':'<i>📌 DETYRË:</i>');
+    return `<span class="ticker-task" data-open="${t.id}" title="Hap detajet e detyrës">${label} ${esc(t.title)}${t.assignee?' — '+esc(t.assignee):''}${t.due?' ('+dueFmt(t.due)+')':''}</span>`;
   }).join('');
   const ticker=$('#ticker');
   if(ticker.dataset.content===items) return;
