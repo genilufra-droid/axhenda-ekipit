@@ -1911,8 +1911,10 @@ async function changeMyPassword(){
 }
 async function forgotPasswordFlow(){
   const identifier=prompt('Vendos username ose email:')||''; if(!identifier)return;
-  const channel=(prompt('Shkruaj SMS ose EMAIL:')||'').trim().toLowerCase();
-  if(channel!=='sms'&&channel!=='email'){toast('Zgjidh SMS ose EMAIL','err');return;}
+  let channel=(prompt('Shkruaj SMS ose EMAIL. Mund ta shkruash me germa të mëdha ose të vogla: sms, Sms, email, Email:')||'').trim().toLowerCase();
+  channel=channel.replace(/[\s-]/g,'');
+  if(channel==='e-mail') channel='email';
+  if(channel!=='sms'&&channel!=='email'){toast('Shkruaj vetëm SMS ose EMAIL','err');return;}
   const req=await authClient.functions.invoke('request-password-reset',{body:{identifier,channel}});
   if(req.error||req.data?.error){toast('Kërkesa dështoi: '+(req.data?.error||req.error?.message),'err');return;}
   const code=prompt('Vendos kodin 6-shifror që të erdhi:')||''; if(!code)return;
