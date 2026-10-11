@@ -856,7 +856,11 @@
       <button class="x" id="msgActionClose">&times;</button>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:8px">
+      <button class="act" id="replyMsgBtn" style="width:100%">↩️ Përgjigju</button>
+      <button class="act" id="copyMsgBtn" style="width:100%">📋 Kopjo</button>
+      <button class="act" id="downloadMsgBtn" style="width:100%;display:none">⬇️ Shkarko skedarin</button>
       <button class="act danger" id="deleteMsgBtn" style="width:100%">🗑️ Fshi për të gjithë</button>
+      <button class="act ghost" id="deleteForMeBtn" style="width:100%">🗑️ Fshi për mua</button>
       <button class="act ghost" id="cancelMsgBtn" style="width:100%">Anulo</button>
     </div>
   </div>
@@ -865,7 +869,8 @@
 <script>
 const $=(s)=>document.querySelector(s), $$=(s)=>document.querySelectorAll(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-const LS={tasks:'axh_tasks',sms:'axh_sms',cfg:'axh_cfg',chat:'axh_chat',deleted:'axh_deleted',audit:'axh_audit'};
+const LS={tasks:'axh_tasks',sms:'axh_sms',cfg:'axh_cfg',chat:'axh_chat',deleted:'axh_deleted',audit:'axh_audit',hiddenMsgs:'axh_hidden_msgs'};
+let hiddenMessages=JSON.parse(localStorage.getItem(LS.hiddenMsgs)||'[]');
 let state={
   tasks:JSON.parse(localStorage.getItem(LS.tasks)||'[]'),
   deleted:JSON.parse(localStorage.getItem(LS.deleted)||'[]'),
@@ -1329,7 +1334,7 @@ const colorFor=(name)=>palette[[...name].reduce((a,c)=>a+c.charCodeAt(0),0)%pale
 const initials=(name)=>name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
 const stableContactId=name=>'user-'+String(name||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 function convName(id){ return id==='group'?'👥 Grupi (të gjithë)':(state.chat.contacts.find(c=>c.id===id)?.name||'Bisedë'); }
-function convMsgs(id){ return state.chat.msgs[id]||(state.chat.msgs[id]=[]); }
+function convMsgs(id){ return (state.chat.msgs[id]||(state.chat.msgs[id]=[])).filter(m=>!hiddenMessages.includes(m.id)); }
 function lastMsg(id){ const m=convMsgs(id); return m.length?m[m.length-1]:null; }
 
 function exportActiveChat(){
@@ -1479,6 +1484,7 @@ function openMessageActions(message){
   if(!message||!currentUser)return;
   selectedMessageForDelete=message;
   $('#msgActionName').textContent=message.file?.name||message.text||'Mesazh';
+  $('#downloadMsgBtn').style.display=message.file?'block':'none';
   $('#msgActionOverlay').classList.add('show');
 }
 function closeMessageActions(){
@@ -1492,16 +1498,40 @@ async function deleteSelectedMessage(){
   if(!authClient){toast('Duhet të jesh i loguar','err');return;}
   const {error}=await authClient.from('chat_messages').delete().eq('id',m.id).eq('sender_id',currentUser.id);
   if(error){toast('Fshirja dështoi: '+error.message,'err');return;}
-  if(m.file?.path){
-    try{await authClient.storage.from('chat-files').remove([m.file.path]);}catch(e){console.warn('Storage delete',e);}
-  }
+  if(m.file?.path){try{await authClient.storage.from('chat-files').remove([m.file.path]);}catch(e){console.warn('Storage delete',e);}}
+  closeMessageActions(); await secureRefreshChat(); toast('Mesazhi/skedari u fshi për të gjithë ✓','ok');
+}
+function deleteMessageForMe(){
+  const m=selectedMessageForDelete; if(!m)return;
+  hiddenMessages=[...new Set([...hiddenMessages,m.id])];
+  localStorage.setItem(LS.hiddenMsgs,JSON.stringify(hiddenMessages));
+  closeMessageActions(); renderChat(); toast('Mesazhi u fshi vetëm për ty ✓','ok');
+}
+function replyToMessage(){
+  const m=selectedMessageForDelete; if(!m)return;
+  const quote=m.text||('📎 '+(m.file?.name||'Skedar'));
+  $('#msgInput').value='↩️ '+quote+'\n'; $('#msgInput').focus(); closeMessageActions();
+}
+async function copySelectedMessage(){
+  const m=selectedMessageForDelete; if(!m)return;
+  const text=m.text||m.file?.name||'';
+  try{await navigator.clipboard.writeText(text);toast('U kopjua ✓','ok');}catch(e){prompt('Kopjo tekstin:',text);}
   closeMessageActions();
-  await secureRefreshChat();
-  toast('Mesazhi/skedari u fshi për të gjithë ✓','ok');
+}
+async function downloadSelectedMessage(){
+  const m=selectedMessageForDelete;
+  if(!m?.file?.path||!authClient)return;
+  const {data,error}=await authClient.storage.from('chat-files').createSignedUrl(m.file.path,300);
+  if(error){toast('Shkarkimi dështoi: '+error.message,'err');return;}
+  const a=document.createElement('a'); a.href=data.signedUrl; a.download=m.file.name; a.target='_blank'; a.click(); closeMessageActions();
 }
 $('#msgActionClose').onclick=closeMessageActions;
 $('#cancelMsgBtn').onclick=closeMessageActions;
 $('#deleteMsgBtn').onclick=deleteSelectedMessage;
+$('#deleteForMeBtn').onclick=deleteMessageForMe;
+$('#replyMsgBtn').onclick=replyToMessage;
+$('#copyMsgBtn').onclick=copySelectedMessage;
+$('#downloadMsgBtn').onclick=downloadSelectedMessage;
 function renderMsgPending(){
   $('#msgPending').innerHTML=state.msgPending.map(f=>`<span class="chip file" data-mrm="${f.id}">📎 ${esc(f.name)} ✕</span>`).join('');
   $$('#msgPending .chip').forEach(c=>c.onclick=()=>{state.msgPending=state.msgPending.filter(f=>f.id!==c.dataset.mrm);renderMsgPending();});
