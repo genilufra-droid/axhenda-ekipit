@@ -847,6 +847,21 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- ===== CHAT MESSAGE ACTION MODAL ===== -->
+<div class="overlay" id="msgActionOverlay">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-head">
+      <span class="ic">💬</span>
+      <div style="flex:1"><p class="mt">Veprime për mesazhin</p><p class="ms" id="msgActionName">Mesazh</p></div>
+      <button class="x" id="msgActionClose">&times;</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:8px">
+      <button class="act danger" id="deleteMsgBtn" style="width:100%">🗑️ Fshi për të gjithë</button>
+      <button class="act ghost" id="cancelMsgBtn" style="width:100%">Anulo</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const $=(s)=>document.querySelector(s), $$=(s)=>document.querySelectorAll(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -1442,12 +1457,16 @@ function renderChat(){
       ${(!out&&c.active==='group')?`<div class="sn" style="color:${colorFor(m.from)}">${esc(m.from)}</div>`:''}
       ${m.text?`<div class="mtxt">${esc(m.text)}</div>`:''}
       ${file}
-      <div class="mt">${new Date(m.at).toLocaleTimeString('sq-AL',{hour:'2-digit',minute:'2-digit'})}${ticks}</div>
+      <div class="mt">${new Date(m.at).toLocaleTimeString('sq-AL',{hour:'2-digit',minute:'2-digit'})}${ticks}${(out&&currentUser)?` <button data-msg-action="${m.id}" title="Veprime" style="border:0;background:transparent;color:#667781;cursor:pointer;padding:0 2px;font-size:13px">⋮</button>`:''}</div>
     </div>`;
   }).join('');
   $$('#msgs [data-mdl]').forEach(b=>b.onclick=async()=>{
     const m=ms.find(x=>x.id===b.dataset.mdl); if(!m?.file)return;
     if(m.file.path&&authClient){const {data,error}=await authClient.storage.from('chat-files').createSignedUrl(m.file.path,300);if(error){toast('Skedari nuk u hap: '+error.message,'err');return;}const a=document.createElement('a');a.href=data.signedUrl;a.download=m.file.name;a.target='_blank';a.click();}
+  });
+  $$('#msgs [data-msg-action]').forEach(b=>b.onclick=(ev)=>{
+    ev.stopPropagation();
+    openMessageActions(ms.find(x=>x.id===b.dataset.msgAction));
   });
   renderMsgPending();
   ensureTypingRow();
@@ -1455,6 +1474,34 @@ function renderChat(){
   box.scrollTop=box.scrollHeight;
   if(currentUser&&!secureRefreshing) secureRefreshChat();
 }
+let selectedMessageForDelete=null;
+function openMessageActions(message){
+  if(!message||!currentUser)return;
+  selectedMessageForDelete=message;
+  $('#msgActionName').textContent=message.file?.name||message.text||'Mesazh';
+  $('#msgActionOverlay').classList.add('show');
+}
+function closeMessageActions(){
+  selectedMessageForDelete=null;
+  $('#msgActionOverlay').classList.remove('show');
+}
+async function deleteSelectedMessage(){
+  const m=selectedMessageForDelete;
+  if(!m||!currentUser){closeMessageActions();return;}
+  if(!confirm('Fshi këtë mesazh/skedar për të gjithë?'))return;
+  if(!authClient){toast('Duhet të jesh i loguar','err');return;}
+  const {error}=await authClient.from('chat_messages').delete().eq('id',m.id).eq('sender_id',currentUser.id);
+  if(error){toast('Fshirja dështoi: '+error.message,'err');return;}
+  if(m.file?.path){
+    try{await authClient.storage.from('chat-files').remove([m.file.path]);}catch(e){console.warn('Storage delete',e);}
+  }
+  closeMessageActions();
+  await secureRefreshChat();
+  toast('Mesazhi/skedari u fshi për të gjithë ✓','ok');
+}
+$('#msgActionClose').onclick=closeMessageActions;
+$('#cancelMsgBtn').onclick=closeMessageActions;
+$('#deleteMsgBtn').onclick=deleteSelectedMessage;
 function renderMsgPending(){
   $('#msgPending').innerHTML=state.msgPending.map(f=>`<span class="chip file" data-mrm="${f.id}">📎 ${esc(f.name)} ✕</span>`).join('');
   $$('#msgPending .chip').forEach(c=>c.onclick=()=>{state.msgPending=state.msgPending.filter(f=>f.id!==c.dataset.mrm);renderMsgPending();});
