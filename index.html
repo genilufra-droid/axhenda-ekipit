@@ -1462,7 +1462,7 @@ function renderChat(){
   else { const pst=headContact?.user_id?presenceText(headContact.user_id):{dot:'',txt:'bisedë private'}; headStatus=`<span class="status-dot ${pst.dot}"></span>${esc(pst.txt)}`; }
   $('#threadHead').innerHTML=`<span class="av" style="background:${abg}">${c.active==='group'?'👥':initials(anm)}</span>
     <div style="flex:1;min-width:0"><div class="tn">${esc(anm)}</div><div class="ts" id="threadStatus">${headStatus}</div></div>
-    ${headContact?`<button class="act ghost sm" id="chatVoiceBtn" title="Telefonatë zanore">📞</button><button class="act ghost sm" id="chatVideoBtn" title="Video-telefonatë">🎥</button>`:''}<button class="chat-export" id="exportChatBtn" title="Shkarko bisedën dhe skedarët">⬇ Eksporto</button><button class="chat-print" id="printChatBtn" title="Printo A4">🖨 A4</button>`;
+    ${headContact?`<button class="act ghost sm" id="chatVoiceBtn" title="Telefonatë zanore">📞 Thirrje</button><button class="act ghost sm" id="chatVideoBtn" title="Video-telefonatë">🎥 Video</button>`:''}<button class="chat-export" id="exportChatBtn" title="Shkarko bisedën dhe skedarët">⬇ Eksporto</button><button class="chat-print" id="printChatBtn" title="Printo A4">🖨 A4</button>`;
   $('#exportChatBtn').onclick=()=>exportCompleteChat();
   $('#printChatBtn').onclick=()=>printActiveChatA4();
   if(headContact){
@@ -1936,9 +1936,36 @@ async function initPresence(){
 }
 
 /* ===== VOIP AUDIO CALLS (WebRTC) ===== */
-let voipChannel=null, voipPc=null, voipStream=null, voipCallId=null, voipTarget=null, voipPendingOffer=null;
+let voipChannel=null, voipPc=null, voipStream=null, voipCallId=null, voipTarget=null, voipPendingOffer=null, ringtoneTimer=null, ringtoneCtx=null, voipIceQueue=[];
 const voipConfig={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
+function stopRingtone(){
+  if(ringtoneTimer){clearInterval(ringtoneTimer);ringtoneTimer=null;}
+  if(ringtoneCtx){try{ringtoneCtx.close();}catch(e){} ringtoneCtx=null;}
+}
+function ringOnce(){
+  try{
+    ringtoneCtx=ringtoneCtx||new (window.AudioContext||window.webkitAudioContext)();
+    const now=ringtoneCtx.currentTime;
+    [0,0.22].forEach(offset=>{
+      const osc=ringtoneCtx.createOscillator();
+      const gain=ringtoneCtx.createGain();
+      osc.type='sine'; osc.frequency.value=880;
+      gain.gain.setValueAtTime(0.0001,now+offset);
+      gain.gain.exponentialRampToValueAtTime(0.16,now+offset+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001,now+offset+0.18);
+      osc.connect(gain); gain.connect(ringtoneCtx.destination);
+      osc.start(now+offset); osc.stop(now+offset+0.2);
+    });
+  }catch(e){console.warn('Ringtone unavailable',e);}
+}
+function startRingtone(){
+  stopRingtone();
+  ringOnce();
+  ringtoneTimer=setInterval(ringOnce,1800);
+  setTimeout(()=>{if(ringtoneTimer){stopRingtone();$('#callStatus').textContent='Telefonata nuk u përgjigj';}},15000);
+}
 function callUi(title,status,mode){
+  if(mode==='incoming') startRingtone(); else stopRingtone();
   $('#callTitle').textContent=title; $('#callStatus').textContent=status;
   const isVideo=window.voipMediaType==='video';
   $('#localCallVideo').style.display=isVideo?'block':'none';
@@ -1948,7 +1975,7 @@ function callUi(title,status,mode){
   $('#endCallBtn').style.display=mode!=='incoming'?'inline-block':'none';
   $('#callOverlay').classList.add('show');
 }
-function closeCallUi(){$('#callOverlay').classList.remove('show');}
+function closeCallUi(){stopRingtone();$('#callOverlay').classList.remove('show');}
 async function initVoip(){
   if(!authClient||!currentUser||voipChannel)return;
   voipChannel=authClient.channel('axhenda-voip-'+teamId());
@@ -1959,10 +1986,12 @@ async function initVoip(){
   }).on('broadcast',{event:'call-answer'},async({payload})=>{
     if(payload.target!==currentUser.id||!voipPc)return;
     await voipPc.setRemoteDescription(payload.answer);
+    for(const candidate of voipIceQueue.splice(0))try{await voipPc.addIceCandidate(candidate);}catch(e){}
     $('#callStatus').textContent='Në telefonatë';
   }).on('broadcast',{event:'ice'},async({payload})=>{
-    if(payload.target!==currentUser.id||!voipPc||!payload.candidate)return;
-    try{await voipPc.addIceCandidate(payload.candidate);}catch(e){}
+    if(payload.target!==currentUser.id||!payload.candidate)return;
+    if(!voipPc||!voipPc.remoteDescription){voipIceQueue.push(payload.candidate);return;}
+    try{await voipPc.addIceCandidate(payload.candidate);}catch(e){console.warn('ICE candidate',e);}
   }).on('broadcast',{event:'hangup'},({payload})=>{
     if(payload.target===currentUser.id){closeVoip();}
   }).subscribe();
@@ -1987,12 +2016,12 @@ async function startVoipCall(target,name,mediaType='audio'){
 }
 async function acceptVoip(){
   if(!voipPendingOffer)return;
-  const p=voipPendingOffer;window.voipMediaType=p.mediaType||'audio';await makePeer(p.sender,window.voipMediaType);await voipPc.setRemoteDescription(p.offer);const answer=await voipPc.createAnswer();await voipPc.setLocalDescription(answer);
+  const p=voipPendingOffer;window.voipMediaType=p.mediaType||'audio';await makePeer(p.sender,window.voipMediaType);await voipPc.setRemoteDescription(p.offer);for(const candidate of voipIceQueue.splice(0))try{await voipPc.addIceCandidate(candidate);}catch(e){}const answer=await voipPc.createAnswer();await voipPc.setLocalDescription(answer);
   await voipChannel.send({type:'broadcast',event:'call-answer',payload:{target:p.sender,sender:currentUser.id,callId:p.callId,answer}});
   voipPendingOffer=null;callUi('📞 Telefonatë','Në telefonatë','active');
 }
 async function rejectVoip(){const p=voipPendingOffer;if(p&&voipChannel)await voipChannel.send({type:'broadcast',event:'hangup',payload:{target:p.sender,callId:p.callId}});closeVoip();}
-async function closeVoip(){if(voipTarget&&voipChannel)try{await voipChannel.send({type:'broadcast',event:'hangup',payload:{target:voipTarget,callId:voipCallId}});}catch(e){};if(voipStream)voipStream.getTracks().forEach(t=>t.stop());if(voipPc)voipPc.close();voipPc=null;voipStream=null;voipTarget=null;voipPendingOffer=null;$('#localCallVideo').srcObject=null;$('#remoteCallVideo').srcObject=null;closeCallUi();}
+async function closeVoip(){if(voipTarget&&voipChannel)try{await voipChannel.send({type:'broadcast',event:'hangup',payload:{target:voipTarget,callId:voipCallId}});}catch(e){};if(voipStream)voipStream.getTracks().forEach(t=>t.stop());if(voipPc)voipPc.close();voipPc=null;voipStream=null;voipTarget=null;voipPendingOffer=null;voipIceQueue=[];$('#localCallVideo').srcObject=null;$('#remoteCallVideo').srcObject=null;closeCallUi();}
 $('#acceptCallBtn').onclick=acceptVoip;$('#rejectCallBtn').onclick=rejectVoip;$('#endCallBtn').onclick=closeVoip;
 
 /* AUTHENTICATION */
@@ -2262,9 +2291,10 @@ function renderEmployees(){
       <div class="rl">${esc(empRoleLabel(e.roli))}</div>
       ${e.departamenti?`<div class="dp">🏢 ${esc(e.departamenti)}</div>`:''}
       <div class="meta">${e.telefon?('📞 '+esc(e.telefon)+'<br>'):''}${e.email?('✉️ '+esc(e.email)):''}</div>
-      ${(owner && e.roli!=='pronar')?`<div class="card-actions">
-        <button class="act ghost sm" data-emp-edit="${e.id}">✏️ Ndrysho</button>
-        <button class="act ghost sm" data-emp-del="${e.id}">🗑️ Fshi</button> <button class="act ghost sm" data-emp-reset="${e.id}">🔑 Reset</button>
+      ${e.roli!=='pronar'?`<div class="card-actions">
+        ${owner?`<button class="act ghost sm" data-emp-edit="${e.id}">✏️ Ndrysho</button>
+        <button class="act ghost sm" data-emp-del="${e.id}">🗑️ Fshi</button>
+        <button class="act ghost sm" data-emp-reset="${e.id}">🔑 Reset</button>`:''}
         <button class="act ghost sm" data-emp-call="${e.id}">📞 Thirr</button>
       </div>`:''}
     </div>`;
