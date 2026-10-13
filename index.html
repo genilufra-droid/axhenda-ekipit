@@ -1174,7 +1174,8 @@ function render(){
 }
 function buildTable(list,owner,filtering){
   const drag=owner&&!filtering;
-  const rows=list.map(t=>`
+  const ordered=[...list].sort((a,b)=>(Number(b.createdAt||0)-Number(a.createdAt||0)));
+  const rows=ordered.map(t=>`
     <tr class="trow ${t.done?'done':''}" data-id="${t.id}" ${drag?'draggable="true"':''}>
       <td>
         <div class="tcell-first">
