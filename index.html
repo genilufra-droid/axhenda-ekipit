@@ -858,6 +858,7 @@
     <div style="display:flex;gap:8px;justify-content:center;margin-top:16px">
       <button class="act" id="acceptCallBtn" style="display:none">✅ Prano</button>
       <button class="act danger" id="rejectCallBtn">❌ Refuzo</button>
+      <button class="act" id="enableCallSoundBtn" style="display:none">🔊 Aktivizo zërin</button>
       <button class="act danger" id="endCallBtn" style="display:none">📴 Mbyll</button>
     </div>
   </div>
@@ -1975,7 +1976,10 @@ function callUi(title,status,mode){
   $('#endCallBtn').style.display=mode!=='incoming'?'inline-block':'none';
   $('#callOverlay').classList.add('show');
 }
-function closeCallUi(){stopRingtone();$('#callOverlay').classList.remove('show');}
+function closeCallUi(){stopRingtone();$('#enableCallSoundBtn').style.display='none';$('#callOverlay').classList.remove('show');}
+async function enableCallSound(){
+  try{const a=document.getElementById('voipAudio');if(a){a.muted=false;a.volume=1;await a.play();}const v=$('#remoteCallVideo');if(v&&v.srcObject){v.muted=false;v.volume=1;await v.play();}$('#enableCallSoundBtn').style.display='none';}catch(e){toast('Aktivizo zërin e telefonit dhe rrit volumin','err');}
+}
 async function initVoip(){
   if(!authClient||!currentUser||voipChannel)return;
   try{
@@ -2005,8 +2009,14 @@ async function makePeer(target,mediaType='audio'){
   voipPc=new RTCPeerConnection(voipConfig);
   voipPc.onicecandidate=e=>{if(e.candidate)voipChannel.send({type:'broadcast',event:'ice',payload:{target,candidate:e.candidate,callId:voipCallId}});};
   voipPc.ontrack=e=>{
-    if(mediaType==='video') $('#remoteCallVideo').srcObject=e.streams[0];
-    else {let audio=document.getElementById('voipAudio');if(!audio){audio=document.createElement('audio');audio.id='voipAudio';audio.autoplay=true;document.body.appendChild(audio);}audio.srcObject=e.streams[0];}
+    if(mediaType==='video'){
+      const video=$('#remoteCallVideo'); video.srcObject=e.streams[0]; video.autoplay=true; video.playsInline=true; video.muted=false; video.volume=1; video.play().catch(()=>$('#enableCallSoundBtn').style.display='inline-block');
+    }else{
+      let audio=document.getElementById('voipAudio');
+      if(!audio){audio=document.createElement('audio');audio.id='voipAudio';audio.autoplay=true;audio.playsInline=true;audio.controls=false;audio.volume=1;document.body.appendChild(audio);}
+      audio.srcObject=e.streams[0]; audio.muted=false; audio.volume=1;
+      audio.play().then(()=>$('#enableCallSoundBtn').style.display='none').catch(()=>$('#enableCallSoundBtn').style.display='inline-block');
+    }
   };
   voipStream=await navigator.mediaDevices.getUserMedia({audio:true,video:mediaType==='video'});
   if(mediaType==='video') $('#localCallVideo').srcObject=voipStream;
@@ -2026,7 +2036,7 @@ async function acceptVoip(){
 }
 async function rejectVoip(){const p=voipPendingOffer;if(p&&voipChannel)await voipChannel.send({type:'broadcast',event:'hangup',payload:{target:p.sender,callId:p.callId}});closeVoip();}
 async function closeVoip(){if(voipTarget&&voipChannel)try{await voipChannel.send({type:'broadcast',event:'hangup',payload:{target:voipTarget,callId:voipCallId}});}catch(e){};if(voipStream)voipStream.getTracks().forEach(t=>t.stop());if(voipPc)voipPc.close();voipPc=null;voipStream=null;voipTarget=null;voipPendingOffer=null;voipIceQueue=[];$('#localCallVideo').srcObject=null;$('#remoteCallVideo').srcObject=null;closeCallUi();}
-$('#acceptCallBtn').onclick=acceptVoip;$('#rejectCallBtn').onclick=rejectVoip;$('#endCallBtn').onclick=closeVoip;
+$('#acceptCallBtn').onclick=acceptVoip;$('#rejectCallBtn').onclick=rejectVoip;$('#endCallBtn').onclick=closeVoip;$('#enableCallSoundBtn').onclick=enableCallSound;
 
 /* AUTHENTICATION */
 let authClient=null, currentUser=null, secureRefreshing=false;
