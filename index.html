@@ -1937,7 +1937,9 @@ async function secureRefreshChat(){
     (rows||[]).forEach(r=>{
       let key='group';
       if(r.recipient_id!==null){
-        if(cloud.role==='owner' && r.sender_id!==currentUser.id && r.recipient_id!==currentUser.id){
+        if(cloud.role==='owner' && r.sender_id===currentUser.id && r.recipient_id===currentUser.id && r.file_path){
+          key='owner-reports';
+        }else if(cloud.role==='owner' && r.sender_id!==currentUser.id && r.recipient_id!==currentUser.id){
           const a=profileMap.get(r.sender_id), b=profileMap.get(r.recipient_id);
           const ids=[r.sender_id,r.recipient_id].sort();
           key='pair-'+ids.join('-');
@@ -1962,6 +1964,7 @@ async function secureRefreshChat(){
     const visibleContacts=(profiles||[])
       .filter(p=>p.id!==currentUser.id && p.display_name)
       .map(p=>({id:stableContactId(p.display_name),name:p.display_name,user_id:p.id}));
+    if(cloud.role==='owner' && msgs['owner-reports']) visibleContacts.unshift({id:'owner-reports',name:'📊 Raportet e Pronarit',readonly:true});
     oversightContacts.forEach(c=>{if(!visibleContacts.some(x=>x.id===c.id)) visibleContacts.push(c);});
     state.chat.contacts=visibleContacts;
     if(cloud.role==='employee'){
