@@ -2065,6 +2065,7 @@ async function secureRefreshChat(){
     const {data:rows,error}=await authClient.from('chat_messages').select('*').order('created_at',{ascending:true});
     if(error) throw error;
     const {data:profiles}=await authClient.from('profiles').select('id,display_name,role,phone');
+    const {data:callRows}=await authClient.from('call_history').select('*').or('caller_id.eq.'+currentUser.id+',receiver_id.eq.'+currentUser.id).order('started_at',{ascending:true});
     // Ngarko prezencën (online/offline + typing) për të gjithë kontaktet
     try{ const {data:pres}=await authClient.from('user_presence').select('*'); (pres||[]).forEach(p=>{presenceState[p.user_id]=p;}); }catch(e){/* tabela user_presence mund të mos ekzistojë ende */}
     const profileMap=new Map((profiles||[]).map(p=>[p.id,p]));
@@ -2098,6 +2099,17 @@ async function secureRefreshChat(){
         notifyIncoming(names.get(r.sender_id)||'Përdorues',r.message);
       }
     });
+    (callRows||[]).forEach(c=>{
+      const otherId=c.caller_id===currentUser.id?c.receiver_id:c.caller_id;
+      const otherName=names.get(otherId)||'Përdorues';
+      const key=stableContactId(otherName);
+      const type=c.call_type==='video'?'🎥 Video-thirrje':'📞 Thirrje zanore';
+      const statusLabels={ringing:'Në pritje',answered:'Në telefonatë',completed:'Përfunduar',declined:'Refuzuar',missed:'Pa përgjigje',failed:'Dështoi'};
+      const status=statusLabels[c.status]||c.status||'—';
+      const duration=c.duration_seconds?` · ${Math.floor(c.duration_seconds/60).toString().padStart(2,'0')}:${(c.duration_seconds%60).toString().padStart(2,'0')}`:'';
+      (msgs[key]||(msgs[key]=[])).push({id:'call-'+c.id,from:names.get(c.caller_id)||'Përdorues',sid:c.caller_id,rid:c.receiver_id,is_read:true,text:`${type} · ${status}${duration}`,at:new Date(c.started_at).getTime(),callMeta:c});
+    });
+    Object.keys(msgs).forEach(k=>msgs[k].sort((a,b)=>a.at-b.at));
     localStorage.setItem(seenKey,JSON.stringify((rows||[]).map(r=>r.id).slice(-2000)));
     localStorage.setItem(unreadKey(),JSON.stringify(unread));
     updateChatBadge();
