@@ -847,6 +847,20 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- ===== VOIP CALL MODAL ===== -->
+<div class="overlay" id="callOverlay">
+  <div class="modal" style="max-width:360px;text-align:center">
+    <div style="font-size:42px">📞</div>
+    <h3 id="callTitle">Telefonatë</h3>
+    <p id="callStatus">Po lidhet...</p>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:16px">
+      <button class="act" id="acceptCallBtn" style="display:none">✅ Prano</button>
+      <button class="act danger" id="rejectCallBtn">❌ Refuzo</button>
+      <button class="act danger" id="endCallBtn" style="display:none">📴 Mbyll</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== CHAT MESSAGE ACTION MODAL ===== -->
 <div class="overlay" id="msgActionOverlay">
   <div class="modal" style="max-width:360px">
@@ -1915,6 +1929,58 @@ async function initPresence(){
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden){ presenceSetOnline(true); subscribeRealtime(); } });
 }
 
+/* ===== VOIP AUDIO CALLS (WebRTC) ===== */
+let voipChannel=null, voipPc=null, voipStream=null, voipCallId=null, voipTarget=null, voipPendingOffer=null;
+const voipConfig={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
+function callUi(title,status,mode){
+  $('#callTitle').textContent=title; $('#callStatus').textContent=status;
+  $('#acceptCallBtn').style.display=mode==='incoming'?'inline-block':'none';
+  $('#rejectCallBtn').style.display=mode==='incoming'?'inline-block':'none';
+  $('#endCallBtn').style.display=mode!=='incoming'?'inline-block':'none';
+  $('#callOverlay').classList.add('show');
+}
+function closeCallUi(){$('#callOverlay').classList.remove('show');}
+async function initVoip(){
+  if(!authClient||!currentUser||voipChannel)return;
+  voipChannel=authClient.channel('axhenda-voip-'+teamId());
+  voipChannel.on('broadcast',{event:'call-offer'},async({payload})=>{
+    if(payload.target!==currentUser.id)return;
+    voipPendingOffer=payload; voipCallId=payload.callId; voipTarget=payload.sender;
+    callUi('📞 '+(payload.name||'Përdoruesi')+' po të telefonon','Telefonatë hyrëse','incoming');
+  }).on('broadcast',{event:'call-answer'},async({payload})=>{
+    if(payload.target!==currentUser.id||!voipPc)return;
+    await voipPc.setRemoteDescription(payload.answer);
+    $('#callStatus').textContent='Në telefonatë';
+  }).on('broadcast',{event:'ice'},async({payload})=>{
+    if(payload.target!==currentUser.id||!voipPc||!payload.candidate)return;
+    try{await voipPc.addIceCandidate(payload.candidate);}catch(e){}
+  }).on('broadcast',{event:'hangup'},({payload})=>{
+    if(payload.target===currentUser.id){closeVoip();}
+  }).subscribe();
+}
+async function makePeer(target){
+  voipPc=new RTCPeerConnection(voipConfig);
+  voipPc.onicecandidate=e=>{if(e.candidate)voipChannel.send({type:'broadcast',event:'ice',payload:{target,candidate:e.candidate,callId:voipCallId}});};
+  voipPc.ontrack=e=>{let audio=document.getElementById('voipAudio');if(!audio){audio=document.createElement('audio');audio.id='voipAudio';audio.autoplay=true;document.body.appendChild(audio);}audio.srcObject=e.streams[0];};
+  voipStream=await navigator.mediaDevices.getUserMedia({audio:true});
+  voipStream.getTracks().forEach(t=>voipPc.addTrack(t,voipStream));
+}
+async function startVoipCall(target,name){
+  if(!currentUser||!voipChannel){toast('Telefonata nuk është gati','err');return;}
+  voipCallId=uid();voipTarget=target;await makePeer(target);const offer=await voipPc.createOffer();await voipPc.setLocalDescription(offer);
+  await voipChannel.send({type:'broadcast',event:'call-offer',payload:{target,sender:currentUser.id,callId:voipCallId,name,offer}});
+  callUi('📞 '+name,'Po telefonon...','outgoing');
+}
+async function acceptVoip(){
+  if(!voipPendingOffer)return;
+  const p=voipPendingOffer;await makePeer(p.sender);await voipPc.setRemoteDescription(p.offer);const answer=await voipPc.createAnswer();await voipPc.setLocalDescription(answer);
+  await voipChannel.send({type:'broadcast',event:'call-answer',payload:{target:p.sender,sender:currentUser.id,callId:p.callId,answer}});
+  voipPendingOffer=null;callUi('📞 Telefonatë','Në telefonatë','active');
+}
+async function rejectVoip(){const p=voipPendingOffer;if(p&&voipChannel)await voipChannel.send({type:'broadcast',event:'hangup',payload:{target:p.sender,callId:p.callId}});closeVoip();}
+async function closeVoip(){if(voipTarget&&voipChannel)try{await voipChannel.send({type:'broadcast',event:'hangup',payload:{target:voipTarget,callId:voipCallId}});}catch(e){};if(voipStream)voipStream.getTracks().forEach(t=>t.stop());if(voipPc)voipPc.close();voipPc=null;voipStream=null;voipTarget=null;voipPendingOffer=null;closeCallUi();}
+$('#acceptCallBtn').onclick=acceptVoip;$('#rejectCallBtn').onclick=rejectVoip;$('#endCallBtn').onclick=closeVoip;
+
 /* AUTHENTICATION */
 let authClient=null, currentUser=null, secureRefreshing=false;
 async function secureRefreshChat(){
@@ -2054,6 +2120,7 @@ async function unlockApp(user){
   renderChat();
   await secureRefreshChat();
   await initPresence();   // online status + typing + realtime për read receipts
+  await initVoip();       // telefonata audio brenda platformës
 }
 async function loginUser(){
   const email=$('#loginEmail').value.trim(), password=$('#loginPassword').value;
@@ -2184,16 +2251,18 @@ function renderEmployees(){
       ${(owner && e.roli!=='pronar')?`<div class="card-actions">
         <button class="act ghost sm" data-emp-edit="${e.id}">✏️ Ndrysho</button>
         <button class="act ghost sm" data-emp-del="${e.id}">🗑️ Fshi</button> <button class="act ghost sm" data-emp-reset="${e.id}">🔑 Reset</button>
+        <button class="act ghost sm" data-emp-call="${e.id}">📞 Thirr</button>
       </div>`:''}
     </div>`;
   }).join('');
   $$('#empGrid .emp-card').forEach(c=>c.onclick=(ev)=>{
-    if(ev.target.closest('[data-emp-edit]')||ev.target.closest('[data-emp-del]')) return;
+    if(ev.target.closest('[data-emp-edit]')||ev.target.closest('[data-emp-del]')||ev.target.closest('[data-emp-reset]')||ev.target.closest('[data-emp-call]')) return;
     openEmpProfile(c.dataset.emp);
   });
   $$('#empGrid [data-emp-edit]').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();openEmpForm(b.dataset.empEdit);});
   $$('#empGrid [data-emp-del]').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();deleteEmployee(b.dataset.empDel);});
   $$('#empGrid [data-emp-reset]').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();resetEmployeePassword(b.dataset.empReset);});
+  $$('#empGrid [data-emp-call]').forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();const e=employees.find(x=>x.id===b.dataset.empCall);if(e)startVoipCall(String(e.id).replace(/^profile:/,''),((e.emri||'')+' '+(e.mbiemri||'')).trim());});
 }
 
 /* Resize foto në browser para ngarkimit (max 400x400, JPEG) */
