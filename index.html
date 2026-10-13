@@ -1937,7 +1937,7 @@ async function initPresence(){
 }
 
 /* ===== VOIP AUDIO CALLS (WebRTC) ===== */
-let voipChannel=null, voipPc=null, voipStream=null, voipCallId=null, voipTarget=null, voipPendingOffer=null, ringtoneTimer=null, ringtoneCtx=null, voipIceQueue=[];
+let voipChannel=null, voipPc=null, voipStream=null, voipCallId=null, voipTarget=null, voipPendingOffer=null, ringtoneTimer=null, ringtoneCtx=null, voipIceQueue=[], voipHistoryId=null, voipStartedAt=null, voipAnsweredAt=null, voipMediaType='audio';
 let voipConfig={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
 function stopRingtone(){
   if(ringtoneTimer){clearInterval(ringtoneTimer);ringtoneTimer=null;}
@@ -1980,6 +1980,22 @@ function closeCallUi(){stopRingtone();$('#enableCallSoundBtn').style.display='no
 async function enableCallSound(){
   try{const a=document.getElementById('voipAudio');if(a){a.muted=false;a.volume=1;await a.play();}const v=$('#remoteCallVideo');if(v&&v.srcObject){v.muted=false;v.volume=1;await v.play();}$('#enableCallSoundBtn').style.display='none';}catch(e){toast('Aktivizo zërin e telefonit dhe rrit volumin','err');}
 }
+async function callHistoryCreate(receiverId, type){
+  if(!authClient||!currentUser)return;
+  voipStartedAt=new Date().toISOString(); voipAnsweredAt=null;
+  const {data,error}=await authClient.from('call_history').insert({caller_id:currentUser.id,receiver_id:receiverId,call_type:type,status:'ringing',started_at:voipStartedAt}).select('id').single();
+  if(!error) voipHistoryId=data.id;
+}
+async function callHistoryUpdate(status){
+  if(!authClient||!voipHistoryId)return;
+  const patch={status};
+  if(status==='answered') patch.answered_at=new Date().toISOString();
+  if(['completed','declined','missed','failed'].includes(status)){
+    patch.ended_at=new Date().toISOString();
+    patch.duration_seconds=voipAnsweredAt?Math.max(0,Math.round((Date.now()-new Date(voipAnsweredAt).getTime())/1000)):0;
+  }
+  await authClient.from('call_history').update(patch).eq('id',voipHistoryId);
+}
 async function initVoip(){
   if(!authClient||!currentUser||voipChannel)return;
   try{
@@ -1989,12 +2005,13 @@ async function initVoip(){
   voipChannel=authClient.channel('axhenda-voip-'+teamId());
   voipChannel.on('broadcast',{event:'call-offer'},async({payload})=>{
     if(payload.target!==currentUser.id)return;
-    voipPendingOffer=payload; voipCallId=payload.callId; voipTarget=payload.sender; window.voipMediaType=payload.mediaType||'audio';
+    voipPendingOffer=payload; voipCallId=payload.callId; voipTarget=payload.sender; voipHistoryId=payload.historyId||null; window.voipMediaType=payload.mediaType||'audio';
     callUi((window.voipMediaType==='video'?'🎥 ':'📞 ')+(payload.name||'Përdoruesi')+' po të telefonon','Telefonatë hyrëse','incoming');
   }).on('broadcast',{event:'call-answer'},async({payload})=>{
     if(payload.target!==currentUser.id||!voipPc)return;
     await voipPc.setRemoteDescription(payload.answer);
     for(const candidate of voipIceQueue.splice(0))try{await voipPc.addIceCandidate(candidate);}catch(e){}
+    voipAnsweredAt=new Date().toISOString(); await callHistoryUpdate('answered');
     $('#callStatus').textContent='Në telefonatë';
   }).on('broadcast',{event:'ice'},async({payload})=>{
     if(payload.target!==currentUser.id||!payload.candidate)return;
@@ -2024,18 +2041,18 @@ async function makePeer(target,mediaType='audio'){
 }
 async function startVoipCall(target,name,mediaType='audio'){
   if(!currentUser||!voipChannel){toast('Telefonata nuk është gati','err');return;}
-  voipCallId=uid();voipTarget=target;window.voipMediaType=mediaType;await makePeer(target,mediaType);const offer=await voipPc.createOffer();await voipPc.setLocalDescription(offer);
-  await voipChannel.send({type:'broadcast',event:'call-offer',payload:{target,sender:currentUser.id,callId:voipCallId,name,mediaType,offer}});
+  voipCallId=uid();voipTarget=target;window.voipMediaType=mediaType;voipMediaType=mediaType;await callHistoryCreate(target,mediaType);await makePeer(target,mediaType);const offer=await voipPc.createOffer();await voipPc.setLocalDescription(offer);
+  await voipChannel.send({type:'broadcast',event:'call-offer',payload:{target,sender:currentUser.id,callId:voipCallId,name,mediaType,historyId:voipHistoryId,offer}});
   callUi((mediaType==='video'?'🎥 ':'📞 ')+name,'Po telefonon...','outgoing');
 }
 async function acceptVoip(){
   if(!voipPendingOffer)return;
   const p=voipPendingOffer;window.voipMediaType=p.mediaType||'audio';await makePeer(p.sender,window.voipMediaType);await voipPc.setRemoteDescription(p.offer);for(const candidate of voipIceQueue.splice(0))try{await voipPc.addIceCandidate(candidate);}catch(e){}const answer=await voipPc.createAnswer();await voipPc.setLocalDescription(answer);
   await voipChannel.send({type:'broadcast',event:'call-answer',payload:{target:p.sender,sender:currentUser.id,callId:p.callId,answer}});
-  voipPendingOffer=null;callUi('📞 Telefonatë','Në telefonatë','active');
+  voipPendingOffer=null;voipAnsweredAt=new Date().toISOString();await callHistoryUpdate('answered');callUi((window.voipMediaType==='video'?'🎥 ':'📞 ')+'Telefonatë','Në telefonatë','active');
 }
-async function rejectVoip(){const p=voipPendingOffer;if(p&&voipChannel)await voipChannel.send({type:'broadcast',event:'hangup',payload:{target:p.sender,callId:p.callId}});closeVoip();}
-async function closeVoip(){if(voipTarget&&voipChannel)try{await voipChannel.send({type:'broadcast',event:'hangup',payload:{target:voipTarget,callId:voipCallId}});}catch(e){};if(voipStream)voipStream.getTracks().forEach(t=>t.stop());if(voipPc)voipPc.close();voipPc=null;voipStream=null;voipTarget=null;voipPendingOffer=null;voipIceQueue=[];$('#localCallVideo').srcObject=null;$('#remoteCallVideo').srcObject=null;closeCallUi();}
+async function rejectVoip(){const p=voipPendingOffer;if(p&&voipChannel)await voipChannel.send({type:'broadcast',event:'hangup',payload:{target:p.sender,callId:p.callId}});await callHistoryUpdate('declined');voipHistoryId=null;closeVoip();}
+async function closeVoip(){if(voipHistoryId)await callHistoryUpdate(voipAnsweredAt?'completed':'missed');if(voipTarget&&voipChannel)try{await voipChannel.send({type:'broadcast',event:'hangup',payload:{target:voipTarget,callId:voipCallId}});}catch(e){};if(voipStream)voipStream.getTracks().forEach(t=>t.stop());if(voipPc)voipPc.close();voipPc=null;voipStream=null;voipTarget=null;voipPendingOffer=null;voipIceQueue=[];$('#localCallVideo').srcObject=null;$('#remoteCallVideo').srcObject=null;closeCallUi();}
 $('#acceptCallBtn').onclick=acceptVoip;$('#rejectCallBtn').onclick=rejectVoip;$('#endCallBtn').onclick=closeVoip;$('#enableCallSoundBtn').onclick=enableCallSound;
 
 /* AUTHENTICATION */
