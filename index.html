@@ -1937,7 +1937,7 @@ async function initPresence(){
 
 /* ===== VOIP AUDIO CALLS (WebRTC) ===== */
 let voipChannel=null, voipPc=null, voipStream=null, voipCallId=null, voipTarget=null, voipPendingOffer=null, ringtoneTimer=null, ringtoneCtx=null, voipIceQueue=[];
-const voipConfig={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
+let voipConfig={iceServers:[{urls:'stun:stun.l.google.com:19302'}]};
 function stopRingtone(){
   if(ringtoneTimer){clearInterval(ringtoneTimer);ringtoneTimer=null;}
   if(ringtoneCtx){try{ringtoneCtx.close();}catch(e){} ringtoneCtx=null;}
@@ -1978,6 +1978,10 @@ function callUi(title,status,mode){
 function closeCallUi(){stopRingtone();$('#callOverlay').classList.remove('show');}
 async function initVoip(){
   if(!authClient||!currentUser||voipChannel)return;
+  try{
+    const turn=await authClient.functions.invoke('get-turn-config',{body:{}});
+    if(!turn.error&&turn.data?.iceServers) voipConfig={iceServers:turn.data.iceServers};
+  }catch(e){console.warn('TURN config unavailable; using STUN',e);}
   voipChannel=authClient.channel('axhenda-voip-'+teamId());
   voipChannel.on('broadcast',{event:'call-offer'},async({payload})=>{
     if(payload.target!==currentUser.id)return;
