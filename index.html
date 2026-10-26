@@ -1261,10 +1261,18 @@ function renderVault(){
 
 /* ===== DETAIL POPUP ===== */
 let detailId=null;
+function taskAssignees(t){
+  return String(t?.assignee||'')
+    .split(/[,;\n]+/)
+    .map(x=>x.trim().toLowerCase())
+    .filter(Boolean);
+}
 function taskIsMine(t){
   if(!t||cloud.role!=='employee'||!t.assignee)return false;
-  const a=String(t.assignee).trim().toLowerCase();
-  return a===String(cloud.userName||'').trim().toLowerCase() || a===String(currentUser?.email||'').split('@')[0].toLowerCase();
+  const names=taskAssignees(t);
+  const user=String(cloud.userName||'').trim().toLowerCase();
+  const emailUser=String(currentUser?.email||'').split('@')[0].toLowerCase();
+  return names.includes(user)||names.includes(emailUser);
 }
 function markTaskSeen(t){
   if(!taskIsMine(t)||!currentUser)return;
