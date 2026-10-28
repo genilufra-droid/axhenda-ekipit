@@ -357,6 +357,9 @@
   .voice-count{font-variant-numeric:tabular-nums}
   .voice-live-text{margin:8px 0 0;font-size:14px;line-height:1.35;color:var(--txt);min-height:20px;max-height:120px;overflow:auto;white-space:pre-wrap}
   .voice-live-hint{margin:6px 0 0;font-size:11px;color:var(--muted)}
+  .assistant-diag{display:none;margin:2px 14px 8px;padding:8px 10px;border:1px dashed var(--line);border-radius:10px;background:var(--panel)}
+  .assistant-diag.show{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
+  .assistant-diag-text{margin:0;flex:1;min-width:180px;font-size:11px;line-height:1.45;color:var(--muted);word-break:break-word;user-select:all}
   @keyframes voicePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
   #tDesc{background:transparent;border:none;color:var(--txt);outline:none;font-size:13px;resize:none;
     width:100%;max-height:90px;font-family:inherit;border-top:1px solid var(--line);padding:6px 0 2px;display:none}
@@ -594,6 +597,10 @@
         </div>
         <p class="voice-live-text" id="voiceLiveText"></p>
         <p class="voice-live-hint" id="voiceLiveHint">Fli lirshëm — regjistrimi ndalon vetë pas 3 sekondash heshtjeje.</p>
+      </div>
+      <div class="assistant-diag" id="assistantDiagBox">
+        <p class="assistant-diag-text" id="assistantDiag"></p>
+        <button type="button" class="act ghost sm" id="assistantDiagCopy">Kopjo detajet</button>
       </div>
       <div class="locked-note" id="lockedNote">🔒 Vetëm <b>pronari</b> mund të shtojë detyra. Kalo te modaliteti Pronar për të shkruar.</div>
       </div><!-- /tableView -->
@@ -1175,6 +1182,30 @@ let voiceDraft=null, assistantCancel=()=>{}, assistantBusy=false, assistantRetur
 const assistantPeople=()=>[...new Set((state.chat?.contacts||[]).filter(c=>!c.readonly).map(c=>c.name).filter(Boolean))];
 function parseVoiceTask(raw){return TaskAssistant.parse(raw,assistantPeople());}
 function assistantStatus(text){$('#assistantStatus').textContent=text;}
+function assistantDiag(text){
+  const box=$('#assistantDiagBox'), line=$('#assistantDiag');
+  line.textContent=text||'';
+  box.classList[text?'add':'remove']('show');
+}
+$('#assistantDiagCopy').onclick=async()=>{
+  const text=$('#assistantDiag').textContent||'';
+  try{await navigator.clipboard.writeText(text);toast('Detajet u kopjuan','ok');}
+  catch(e){toast('Kopjo me dorë tekstin e detajeve','err');}
+};
+/* Everything the owner needs to report a failure without developer tools. */
+function diagContext(){
+  const parts=[];
+  try{
+    parts.push('faqja: '+(window.isSecureContext?'https':'jo-https'));
+    parts.push('hyrja: '+(typeof currentUser!=='undefined'&&currentUser?'po':'jo'));
+    parts.push('mikrofon: '+(navigator.mediaDevices?.getUserMedia?'po':'jo'));
+    parts.push('MediaRecorder: '+(window.MediaRecorder?'po':'jo'));
+    parts.push('AudioContext: '+((window.AudioContext||window.webkitAudioContext)?'po':'jo'));
+    parts.push('transkriptim live: '+((window.SpeechRecognition||window.webkitSpeechRecognition)?'po':'jo'));
+    parts.push('ora: '+new Date().toISOString());
+  }catch(e){}
+  return parts.join(' · ');
+}
 function showVoiceDraft(raw,data=null,source='Përpunim lokal — pa AI në server'){
   const transcript=String(data?.transcript||raw||'').trim();
   voiceSaving=false;
@@ -1299,11 +1330,19 @@ $('#voiceConfirm').onclick=()=>{
   }
 
   /* ---------- recording + speech recognition ---------- */
+  function pickMime(){
+    try{
+      if(typeof MediaRecorder.isTypeSupported!=='function')return '';
+      return ['audio/webm;codecs=opus','audio/webm','audio/mp4'].find(type=>{
+        try{return MediaRecorder.isTypeSupported(type);}catch(e){return false;}
+      })||'';
+    }catch(e){return '';}
+  }
   function startRecorder(session,stream){
     if(!window.MediaRecorder)return;
     try{
-      const mime=['audio/webm;codecs=opus','audio/webm','audio/mp4'].find(type=>MediaRecorder.isTypeSupported(type));
-      const recorder=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);
+      const mime=pickMime();
+      const recorder=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
       session.recorder=recorder;
       recorder.ondataavailable=e=>{if(e.data&&e.data.size)session.chunks.push(e.data);};
       recorder.onstop=()=>{
@@ -1320,7 +1359,14 @@ $('#voiceConfirm').onclick=()=>{
   function finishAudio(session){
     if(session.audioDone)return;
     session.audioDone=true;
-    const blob=session.chunks.length?new Blob(session.chunks,{type:session.recorder?.mimeType||'audio/webm'}):null;
+    let blob=null;
+    if(session.chunks&&session.chunks.length){
+      const type=session.recorder?.mimeType||'';
+      blob=new Blob(session.chunks,type?{type}:undefined);
+      // Some Android browsers (Samsung Internet) report an empty type; the server
+      // rejects unknown MIME types, so give the recording a usable container type.
+      if(!blob.type)blob=new Blob(session.chunks,{type:'audio/webm'});
+    }
     session.blob=blob;
     session.resolveBlob?.(blob);
   }
@@ -1404,12 +1450,36 @@ $('#voiceConfirm').onclick=()=>{
   }
 
   /* ---------- AI proposal ---------- */
+  /* Turn whatever the platform gave us into a short, honest Albanian reason. */
+  async function explainFailure(error){
+    if(error&&typeof error.assistantMessage==='string'&&error.assistantMessage)return error.assistantMessage;
+    const context=error&&error.context;
+    if(context&&typeof context==='object'){
+      try{
+        const response=typeof context.clone==='function'?context.clone():context;
+        let body=null;
+        try{body=await response.json();}catch(e){}
+        const text=body&&typeof body.error==='string'?body.error.trim():'';
+        if(text)return text.slice(0,160);
+        if(body&&typeof body.message==='string'&&body.message.trim())return body.message.trim().slice(0,160);
+        if(typeof context.status==='number'&&context.status){
+          return context.status===404?'funksioni transcribe-task nuk është publikuar (404)':'HTTP '+context.status;
+        }
+      }catch(e){}
+    }
+    const message=String(error&&error.message||'').trim();
+    if(!message)return 'gabim i panjohur';
+    if(/non-2xx/i.test(message))return 'funksioni ktheu gabim';
+    if(/Failed to fetch|NetworkError|Load failed/i.test(message))return 'rrjeti dështoi';
+    return message.slice(0,160);
+  }
   function process(raw,blob=null){
     const id=++requestId;
     assistantBusy=true;ai.disabled=true;button.disabled=true;
     const session={controller:new AbortController()};active=session;
     liveState('Po përgatis detyrën…');
-    assistantStatus('Po përgatis detyrën… Escape për anulim.');
+    assistantStatus('Po përgatis detyrën… (deri në 90 s) Escape për anulim.');
+    assistantDiag('');
     let timer;
     return (async()=>{
       try{
@@ -1421,19 +1491,28 @@ $('#voiceConfirm').onclick=()=>{
         }
         const result=await Promise.race([
           authClient.functions.invoke('transcribe-task',{body,signal:session.controller.signal}),
-          new Promise((_,reject)=>{timer=setTimeout(()=>{session.controller.abort();reject(new Error('timeout'));},45000);})
+          new Promise((_,reject)=>{timer=setTimeout(()=>{session.controller.abort();const error=new Error('timeout');error.assistantMessage='serveri nuk u përgjigj brenda 90 sekondash';reject(error);},90000);})
         ]);
         if(id!==requestId)return;
-        if(result.error||result.data?.error||!result.data?.draft)throw new Error('unavailable');
+        if(result.error)throw result.error;
+        if(result.data?.error){const error=new Error(String(result.data.error));error.assistantMessage=String(result.data.error);throw error;}
+        if(!result.data?.draft){const error=new Error('përgjigjja nuk përmbante propozim');error.assistantMessage='përgjigjja nuk përmbante propozim';throw error;}
         stopUi();
         const opened=showVoiceDraft(raw,result.data,'Propozim nga AI — kontrolloje para ruajtjes');
         assistantStatus(opened?'Konfirmo dërgimin: kontrollo fushat dhe shtyp “Konfirmo dhe dërgo”.':'Nuk u kap tekst. Provo përsëri.');
       }catch(e){
         if(id!==requestId)return;
         stopUi();
+        const reason=await explainFailure(e);
+        const audio=blob?' · audio: '+Math.max(1,Math.round(blob.size/1024))+' KB '+blob.type:'';
         if(raw.trim()){
-          showVoiceDraft(raw);assistantStatus('AI në server nuk është i disponueshëm. U përdor përpunimi lokal — kontrollo fushat.');
-        }else assistantStatus('Audioja nuk u transkriptua. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
+          showVoiceDraft(raw);
+          assistantStatus('AI në server nuk u përdor ('+reason+'). U përdor përpunimi lokal — kontrollo fushat.');
+          if(reason!=='offline')assistantDiag('arsyeja: '+reason+audio+' · '+diagContext());
+        }else{
+          assistantStatus('Audioja nuk u transkriptua: '+reason+'. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
+          assistantDiag('arsyeja: '+reason+audio+' · '+diagContext());
+        }
       }finally{
         clearTimeout(timer);
         if(id===requestId){active=null;idle();}
@@ -1453,8 +1532,14 @@ $('#voiceConfirm').onclick=()=>{
       return Promise.resolve();
     }
     return session.blobPromise.catch(()=>null).then(blob=>{
+      if(!live&&!(blob&&blob.size)){
+        idle();
+        assistantStatus('Mikrofoni nuk dha audio ose ky browser nuk transkripton. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
+        assistantDiag('nuk u regjistrua audio · '+diagContext());
+        return;
+      }
       // A live transcript is what the owner already saw: use it, do not re-buy transcription.
-      return process(live,live?null:(blob&&blob.size?blob:null));
+      return process(live,live?null:blob);
     });
   }
 
@@ -1504,7 +1589,13 @@ $('#voiceConfirm').onclick=()=>{
     engine.start();
     let stream;
     try{
-      stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+      try{
+        stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+      }catch(first){
+        // Some Android browsers reject the constraint object but accept plain audio.
+        if(!/Overconstrained|Type|NotSupported|Constraint/i.test(String(first&&first.name)))throw first;
+        stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      }
     }catch(e){
       const message=(e&&/NotAllowed|Security/i.test(String(e.name||e.message)))
         ?'Leja e mikrofonit u refuzua. Aktivizoje te cilësimet e browserit ose shkruaj kërkesën.'

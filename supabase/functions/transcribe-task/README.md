@@ -30,6 +30,23 @@ Funksioni `transcribe-task` transkripton audio në shqip dhe kthen një **propoz
 - Punonjësit e propozuar nga AI kontrollohen kundrejt kontakteve. Datat e pamundura refuzohen. Emrat e panjohur/afatet e paqarta kërkojnë kontroll manual.
 - Njoftimet në Chat/SMS/Email janë zgjedhje më vete, jo të aktivizuara detyrimisht. Funksioni ekzistues `notify-task` duhet të jetë aktiv për dërgimin e tyre; ai nuk përfshihet në këtë ndryshim.
 
+## Kur shfaqet “Audioja nuk u transkriptua: …”
+
+Që nga ky version, arsyeja e vërtetë shfaqet në ekran dhe detajet teknike shfaqen nën të me butonin **“Kopjo detajet”**. Përputhja e shkurtër:
+
+| Arsyeja në ekran | Shkaku | Zgjidhja |
+|---|---|---|
+| `funksioni transcribe-task nuk është publikuar (404)` | Funksioni nuk është deployuar në projekt | `supabase functions deploy transcribe-task --project-ref <REF>` |
+| `Sesioni ka skaduar. Hyr përsëri.` | Token i skaduar | Hyr sërish në aplikacion |
+| `Vetëm pronari mund të përdorë asistentin e detyrave.` | `profiles.role` nuk është `owner` | Kontrollo rreshtin e profilit tënd |
+| `AI nuk është konfiguruar…` | Mungon `OPENAI_API_KEY` te Secrets | Vendose sekretin dhe riprovo |
+| `AI është i ngarkuar…` | Kuota/limiti i ofruesit | Prit dhe provo përsëri |
+| `koha mbaroi (90 s)` / `rrjeti dështoi` | Lidhje e dobët mobile | Provo përsëri me Wi‑Fi |
+| `Nuk u identifikua një kërkesë e vlefshme në audio.` | Audio shumë e qetë ose bosh | Fol më afër mikrofonit |
+| `Dërgo një skedar audio të vlefshëm.` | Regjistrimi s’u krijua si audio | Provo një browser tjetër |
+
+Nëse browser-i nuk ofron transkriptim të drejtpërdrejtë, transkriptimi varet **vetëm** nga ky funksion; prandaj deploy-i i tij është i detyrueshëm për telefonat që nuk kanë SpeechRecognition.
+
 ## Privatësia dhe kufijtë
 
 Teksti, audioja (nëse regjistrohet), data dhe emrat e kontakteve të dukshme për pronarin dërgohen te ofruesi AI për përpunim. Njohja zanore e browser-it mund të përdorë shërbimin e tij të jashtëm. Audioja nuk ruhet nga kodi ynë; zbatohen veçmas politikat e ruajtjes së ofruesve. Për përpunim vetëm lokal, mos aktivizo funksionin cloud (njohja zanore e browser-it mund të mbetet shërbim i jashtëm).
