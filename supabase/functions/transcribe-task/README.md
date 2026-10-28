@@ -5,7 +5,14 @@ Funksioni `transcribe-task` transkripton audio në shqip dhe kthen një **propoz
 ## Aktivizimi
 
 1. Projekti duhet të ketë Supabase Auth dhe tabelën ekzistuese `public.profiles` me `id`, `role`, `display_name`. Pronari duhet të ketë `role = 'owner'`. Mbaj RLS aktive; funksioni lexon profilet me token-in e përdoruesit dhe nuk përdor service-role key.
-2. Vendos `OPENAI_API_KEY` te **Edge Functions → Secrets**. Mos e vendos në HTML, Git ose localStorage. Sigurohu që llogaria e ofruesit ka kuotë/faturim aktiv. Opsionale: `OPENAI_TASK_MODEL` (parazgjedhje `gpt-4o-mini`, duhet të mbështesë JSON Schema).
+2. Vendos të paktën një çelës te **Edge Functions → Secrets** (kurrë në HTML, Git ose localStorage). Zgjedhja e ofruesit bëhet vetëm në server, sipas sekreteve që ekzistojnë:
+
+   | Sekreti | Transkriptim audio | Propozimi i detyrës |
+   |---|---|---|
+   | `GROQ_API_KEY` (falas, **i preferuar**) | `whisper-large-v3-turbo`, `language=sq` | `llama-3.3-70b-versatile` (JSON) |
+   | `OPENAI_API_KEY` | `whisper-1` | `gpt-4o-mini` (JSON Schema) |
+
+   Nëse ekzistojnë të dy, përdoret Groq dhe OpenAI vetëm si rezervë: kur Groq dështon (kredi/kuotë, çelës i refuzuar, ndërprerje) provohet OpenAI. Ofruesi që transkriptoi audion provohet i pari edhe për propozimin. Opsionale: `GROQ_TASK_MODEL`, `GROQ_TRANSCRIBE_MODEL`, `OPENAI_TASK_MODEL`. Çelës Groq falas: https://console.groq.com/keys
 3. Publiko funksionin nga kjo dosje/repository:
 
    ```sh
@@ -17,6 +24,12 @@ Funksioni `transcribe-task` transkripton audio në shqip dhe kthen një **propoz
 
 `SUPABASE_URL` dhe `SUPABASE_ANON_KEY` ofrohen nga mjedisi i funksioneve. Nuk kërkohet migrim i ri i databazës. Ky ndryshim në repository nuk e publikon vetë funksionin dhe nuk vendos secrets.
 
+## Kontrata e përgjigjes dhe gabimet
+
+Sukses: `{"transcript": "...", "draft": {"title", "assignee", "due", "priority"}}`. Gabim: `{"error": "mesazh i shkurtër shqip", "code": "kod"}` me status të saktë: 401 sesioni ka skaduar, 403 vetëm pronari, 413/400/415/422 kërkesë e pavlefshme ose pa zë, 429 kredia ka mbaruar, 502 problem te ofruesi, 503 asnjë ofrues i konfiguruar. Teksti i papërpunuar i ofruesit dhe çelësat nuk kthehen kurrë te browser-i.
+
+Rast i veçantë: nëse audioja u transkriptua por propozimi dështoi te të gjithë ofruesit, përgjigjja është 200 me `{"transcript": "...", "draft": null, "code", "warning"}`. Browser-i e analizon tekstin lokalisht dhe transkriptimi nuk paguhet dy herë.
+
 ## Sjellja
 
 - Tekst: shkruaj p.sh. “Cakto Arben Kola të përgatisë raportin nesër, urgjent” dhe shtyp **✨ AI**.
@@ -25,7 +38,8 @@ Funksioni `transcribe-task` transkripton audio në shqip dhe kthen një **propoz
 - Pa zë ose me transkriptim bosh dritarja e konfirmimit **nuk hapet**.
 - Nëse browser-i nuk ofron transkriptim të drejtpërdrejtë (p.sh. disa versione iOS/Safari ose Chrome me shërbim të bllokuar), paneli e thotë qartë dhe audioja transkriptohet në server pas ndalimit — nuk pretendohet transkriptim live.
 - **Escape** (ose butoni “Anulo” në panel) anulon regjistrimin/kërkesën ose mbyll propozimin. Mikrofoni dhe `AudioContext` lirohen gjithmonë: pas ndalimit, gabimit, anulimit dhe largimit nga faqja.
-- Nëse shërbimi nuk është konfiguruar ose dështon, teksti/transkriptimi i browser-it analizohet lokalisht. Kjo shënohet qartë; nuk pretendohet se është përgjigje nga AI. Në browser pa transkriptim lokal, dështimi i serverit kërkon shkrim manual.
+- Kur transkriptimi live ka dhënë tekst, te serveri dërgohet **vetëm teksti**, kurrë audio (transkriptimi nuk paguhet dy herë). Audio dërgohet vetëm kur browser-i nuk ka tekst live (p.sh. Samsung Internet).
+- Nëse shërbimi nuk është konfiguruar ose dështon, teksti/transkriptimi analizohet lokalisht dhe “Konfirmo dërgimin” hapet me shënimin “Përpunim lokal — AI nuk u përdor”. Nuk pretendohet se është përgjigje nga AI. Në browser pa transkriptim lokal, dështimi i serverit kërkon shkrim manual.
 - Njohja lokale mbulon sot/nesër/pasnesër, pas N ditësh/javësh, ditët e javës, YYYY-MM-DD dhe DD.MM.YYYY / DD/MM/YYYY. Përdor data kalendarike lokale; një ditë jave e njëjtë me sot do të thotë java tjetër.
 - Punonjësit e propozuar nga AI kontrollohen kundrejt kontakteve. Datat e pamundura refuzohen. Emrat e panjohur/afatet e paqarta kërkojnë kontroll manual.
 - Njoftimet në Chat/SMS/Email janë zgjedhje më vete, jo të aktivizuara detyrimisht. Funksioni ekzistues `notify-task` duhet të jetë aktiv për dërgimin e tyre; ai nuk përfshihet në këtë ndryshim.
@@ -39,8 +53,10 @@ Që nga ky version, arsyeja e vërtetë shfaqet në ekran dhe detajet teknike sh
 | `funksioni transcribe-task nuk është publikuar (404)` | Funksioni nuk është deployuar në projekt | `supabase functions deploy transcribe-task --project-ref <REF>` |
 | `Sesioni ka skaduar. Hyr përsëri.` | Token i skaduar | Hyr sërish në aplikacion |
 | `Vetëm pronari mund të përdorë asistentin e detyrave.` | `profiles.role` nuk është `owner` | Kontrollo rreshtin e profilit tënd |
-| `AI nuk është konfiguruar…` | Mungon `OPENAI_API_KEY` te Secrets | Vendose sekretin dhe riprovo |
-| `AI është i ngarkuar…` | Kuota/limiti i ofruesit | Prit dhe provo përsëri |
+| `Asnjë ofrues AI nuk është konfiguruar…` (503, `no_provider`) | Mungon si `GROQ_API_KEY` ashtu edhe `OPENAI_API_KEY` | Vendos çelësin Groq te Secrets dhe riprovo |
+| `Kredia e ofruesit AI ka mbaruar…` (429, `quota`) | Kredi/kuotë e mbaruar te ofruesi | Përdor çelës falas Groq ose shto kredi |
+| `Çelësi i ofruesit AI nuk pranohet…` (502, `provider_auth`) | Çelës i gabuar/i anuluar | Zëvendëso sekretin |
+| `Shërbimi AI nuk është i disponueshëm…` (502, `provider_failed`) | Ndërprerje te ofruesi | Provo përsëri; ndërkohë punon përpunimi lokal |
 | `koha mbaroi (90 s)` / `rrjeti dështoi` | Lidhje e dobët mobile | Provo përsëri me Wi‑Fi |
 | `Nuk u identifikua një kërkesë e vlefshme në audio.` | Audio shumë e qetë ose bosh | Fol më afër mikrofonit |
 | `Dërgo një skedar audio të vlefshëm.` | Regjistrimi s’u krijua si audio | Provo një browser tjetër |
@@ -49,7 +65,7 @@ Nëse browser-i nuk ofron transkriptim të drejtpërdrejtë, transkriptimi varet
 
 ## Privatësia dhe kufijtë
 
-Teksti, audioja (nëse regjistrohet), data dhe emrat e kontakteve të dukshme për pronarin dërgohen te ofruesi AI për përpunim. Njohja zanore e browser-it mund të përdorë shërbimin e tij të jashtëm. Audioja nuk ruhet nga kodi ynë; zbatohen veçmas politikat e ruajtjes së ofruesve. Për përpunim vetëm lokal, mos aktivizo funksionin cloud (njohja zanore e browser-it mund të mbetet shërbim i jashtëm).
+Teksti, audioja (vetëm kur s’ka tekst live), data dhe emrat e kontakteve të dukshme për pronarin dërgohen te ofruesi AI (Groq ose OpenAI, sipas sekreteve) për përpunim. Njohja zanore e browser-it mund të përdorë shërbimin e tij të jashtëm. Audioja nuk ruhet nga kodi ynë; zbatohen veçmas politikat e ruajtjes së ofruesve. Për përpunim vetëm lokal, mos aktivizo funksionin cloud (njohja zanore e browser-it mund të mbetet shërbim i jashtëm).
 
 Maksimumi 10 MB kërkesë dhe 6000 karaktere tekst; kufij kohorë në browser dhe në thirrjet e jashtme. Mesazhet teknike/çelësat e ofruesit nuk dërgohen në browser. Për përdorim me volum, vendos kuotë shpenzimi në ofrues dhe rate limiting në gateway; ky funksion kontrollon rolin por nuk implementon kuotë të qëndrueshme për përdorues.
 

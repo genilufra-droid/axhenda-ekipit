@@ -387,3 +387,107 @@ test('no recorded audio and no transcript never calls the AI',async()=>{
   assert.match(app.$('#assistantStatus').textContent,/Mikrofoni nuk dha audio/);
   assert.equal(app.saved,0);
 });
+
+/* ---------- free providers: live text is never re-transcribed, failures fall back locally ---------- */
+const LOCAL_NOTE='Përpunim lokal — AI nuk u përdor';
+const QUOTA='Kredia e ofruesit AI ka mbaruar. Përdor një çelës falas (Groq) ose shto kredi.';
+async function dictate(app,words='Arben Kola përgatit raportin nesër'){
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(500);
+  if(app.recognizer)app.recognizer.result([{text:words,final:true}]);
+  app.quiet(3100);
+  await tick();await tick();
+}
+test('live text is sent as text only: no audio is uploaded, so transcription is never paid twice',async()=>{
+  const requests=[];
+  const app=setup({SpeechRecognition:true,MediaRecorder:recorderClass(),invoke:async(name,options)=>{requests.push(options.body);return {data:draft};}});
+  await dictate(app);
+  assert.equal(requests.length,1);
+  assert.ok(!(requests[0] instanceof FormData),'the body is not multipart audio');
+  assert.equal(requests[0].text,'Arben Kola përgatit raportin nesër');
+  assert.equal(requests[0].audio,undefined);
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+});
+test('server down: live text becomes a local proposal and the confirmation opens with a clear note',async()=>{
+  const app=setup({SpeechRecognition:true,MediaRecorder:recorderClass(),invoke:async()=>{throw new Error('Failed to fetch');}});
+  await dictate(app);
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'),'confirmation is still opened');
+  assert.equal(app.$('#voiceDraftSource').textContent,LOCAL_NOTE);
+  assert.equal(app.$('#voiceDraftDesc').value,'Arben Kola përgatit raportin nesër');
+  assert.equal(app.$('#voiceDraftAssignee').value,'Arben Kola','the local parser filled the fields');
+  assert.match(app.$('#assistantStatus').textContent,/AI në server nuk u përdor/);
+  assert.equal(app.saved,0);assert.equal(app.notified,0);
+  assert.equal(app.stopped,1,'microphone released');
+});
+test('no AI provider configured (503): local proposal, confirmation open, code in the details',async()=>{
+  const app=setup({SpeechRecognition:true,MediaRecorder:recorderClass(),
+    invoke:async()=>({error:httpError(503,{error:'Asnjë ofrues AI nuk është konfiguruar. Përdor përpunimin lokal.',code:'no_provider'})})});
+  await dictate(app);
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+  assert.equal(app.$('#voiceDraftSource').textContent,LOCAL_NOTE);
+  assert.match(app.$('#assistantStatus').textContent,/Asnjë ofrues AI nuk është konfiguruar/);
+  assert.match(app.$('#assistantDiag').textContent,/kodi: no_provider/);
+});
+test('provider out of credits: the readable Albanian message is shown and the local proposal opens',async()=>{
+  const app=setup({SpeechRecognition:true,MediaRecorder:recorderClass(),
+    invoke:async()=>({error:httpError(429,{error:QUOTA,code:'quota'})})});
+  await dictate(app);
+  assert.ok(app.$('#assistantStatus').textContent.includes(QUOTA));
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+  assert.equal(app.$('#voiceDraftSource').textContent,LOCAL_NOTE);
+  assert.match(app.$('#assistantDiag').textContent,/kodi: quota/);
+  assert.equal(app.saved,0);
+});
+test('text typed in the composer falls back locally too',async()=>{
+  const app=setup({invoke:async()=>({error:httpError(429,{error:QUOTA,code:'quota'})})});
+  app.$('#tTitle').value='Arben Kola përgatit raportin nesër';app.$('#aiTaskBtn').onclick();await tick();await tick();
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+  assert.equal(app.$('#voiceDraftSource').textContent,LOCAL_NOTE);
+});
+test('no voice: no confirmation and no request, even when the server would have answered',async()=>{
+  let calls=0;
+  const app=setup({SpeechRecognition:true,MediaRecorder:recorderClass(),invoke:async()=>{calls++;return {data:draft};}});
+  await app.$('#voiceTaskBtn').onclick();
+  app.quiet(3000);app.advance(60000);await tick();await tick();
+  assert.equal(calls,0);assert.equal(app.$('#voiceConfirmOverlay').classList.contains('show'),false);
+  assert.equal(app.saved,0);
+});
+test('audio-only phones (no live text): the server transcript opens the proposal',async()=>{
+  let body=null;
+  const app=setup({MediaRecorder:recorderClass(),invoke:async(name,options)=>{body=options.body;return {data:draft};}});
+  await dictate(app);
+  assert.ok(body instanceof FormData,'only without live text is audio uploaded');
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+  assert.equal(app.$('#voiceDraftSource').textContent,'Propozim nga AI — kontrolloje para ruajtjes');
+});
+test('audio-only phone, transcript returned but proposal failed on the server: local parsing of that text',async()=>{
+  const app=setup({MediaRecorder:recorderClass(),
+    invoke:async()=>({data:{transcript:'Arben Kola përgatit raportin nesër',draft:null,code:'quota',warning:QUOTA}})});
+  await dictate(app);
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+  assert.equal(app.$('#voiceDraftSource').textContent,LOCAL_NOTE);
+  assert.equal(app.$('#voiceDraftDesc').value,'Arben Kola përgatit raportin nesër');
+  assert.equal(app.$('#voiceDraftAssignee').value,'Arben Kola');
+  assert.ok(app.$('#assistantStatus').textContent.includes(QUOTA));
+  assert.equal(app.saved,0);
+});
+test('audio-only phone with the server down: no text means no confirmation window',async()=>{
+  const app=setup({MediaRecorder:recorderClass(),
+    invoke:async()=>({error:httpError(429,{error:QUOTA,code:'quota'})})});
+  await dictate(app);
+  assert.equal(app.$('#voiceConfirmOverlay').classList.contains('show'),false);
+  assert.ok(app.$('#assistantStatus').textContent.includes(QUOTA));
+  assert.equal(app.saved,0);
+});
+test('a late AI answer after cancelling is discarded and one confirmation saves one task',async()=>{
+  let resolve;
+  const app=setup({SpeechRecognition:true,MediaRecorder:recorderClass(),invoke:()=>new Promise(r=>{resolve=r;})});
+  await dictate(app);
+  app.events.keydown({key:'Escape',preventDefault(){}});
+  resolve({data:draft});await tick();
+  assert.equal(app.$('#voiceConfirmOverlay').classList.contains('show'),false);
+  const second=setup({SpeechRecognition:true,MediaRecorder:recorderClass(),invoke:async()=>{throw new Error('Failed to fetch');}});
+  await dictate(second);
+  second.$('#voiceConfirm').onclick();second.$('#voiceConfirm').onclick();
+  assert.equal(second.saved,1);
+});

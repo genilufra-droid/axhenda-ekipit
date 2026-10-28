@@ -1206,7 +1206,8 @@ function diagContext(){
   }catch(e){}
   return parts.join(' · ');
 }
-function showVoiceDraft(raw,data=null,source='Përpunim lokal — pa AI në server'){
+const LOCAL_SOURCE='Përpunim lokal — AI nuk u përdor';
+function showVoiceDraft(raw,data=null,source=LOCAL_SOURCE){
   const transcript=String(data?.transcript||raw||'').trim();
   voiceSaving=false;
   // An empty transcript must never open the confirmation window.
@@ -1451,7 +1452,9 @@ $('#voiceConfirm').onclick=()=>{
 
   /* ---------- AI proposal ---------- */
   /* Turn whatever the platform gave us into a short, honest Albanian reason. */
+  let failureCode='';
   async function explainFailure(error){
+    failureCode=typeof error?.assistantCode==='string'?error.assistantCode:'';
     if(error&&typeof error.assistantMessage==='string'&&error.assistantMessage)return error.assistantMessage;
     const context=error&&error.context;
     if(context&&typeof context==='object'){
@@ -1459,6 +1462,7 @@ $('#voiceConfirm').onclick=()=>{
         const response=typeof context.clone==='function'?context.clone():context;
         let body=null;
         try{body=await response.json();}catch(e){}
+        if(body&&typeof body.code==='string')failureCode=body.code.slice(0,40);
         const text=body&&typeof body.error==='string'?body.error.trim():'';
         if(text)return text.slice(0,160);
         if(body&&typeof body.message==='string'&&body.message.trim())return body.message.trim().slice(0,160);
@@ -1495,8 +1499,24 @@ $('#voiceConfirm').onclick=()=>{
         ]);
         if(id!==requestId)return;
         if(result.error)throw result.error;
-        if(result.data?.error){const error=new Error(String(result.data.error));error.assistantMessage=String(result.data.error);throw error;}
-        if(!result.data?.draft){const error=new Error('përgjigjja nuk përmbante propozim');error.assistantMessage='përgjigjja nuk përmbante propozim';throw error;}
+        if(result.data?.error){
+          const error=new Error(String(result.data.error));error.assistantMessage=String(result.data.error);
+          if(typeof result.data.code==='string')error.assistantCode=result.data.code.slice(0,40);
+          throw error;
+        }
+        const serverText=typeof result.data?.transcript==='string'?result.data.transcript.trim():'';
+        if(!result.data?.draft){
+          // Audio was transcribed but the proposal step failed: keep the text, parse it locally.
+          if(serverText){
+            stopUi();
+            const why=typeof result.data.warning==='string'?result.data.warning.slice(0,160):'';
+            const opened=showVoiceDraft(serverText,{transcript:serverText},LOCAL_SOURCE);
+            assistantStatus(opened?'AI nuk dha propozim'+(why?' ('+why+')':'')+'. U përdor përpunimi lokal — kontrollo fushat.':'Nuk u kap tekst. Provo përsëri.');
+            if(why)assistantDiag('arsyeja: '+why+(typeof result.data.code==='string'?' · kodi: '+result.data.code.slice(0,40):'')+' · '+diagContext());
+            return;
+          }
+          const error=new Error('përgjigjja nuk përmbante propozim');error.assistantMessage='përgjigjja nuk përmbante propozim';throw error;
+        }
         stopUi();
         const opened=showVoiceDraft(raw,result.data,'Propozim nga AI — kontrolloje para ruajtjes');
         assistantStatus(opened?'Konfirmo dërgimin: kontrollo fushat dhe shtyp “Konfirmo dhe dërgo”.':'Nuk u kap tekst. Provo përsëri.');
@@ -1505,13 +1525,15 @@ $('#voiceConfirm').onclick=()=>{
         stopUi();
         const reason=await explainFailure(e);
         const audio=blob?' · audio: '+Math.max(1,Math.round(blob.size/1024))+' KB '+blob.type:'';
+        const code=failureCode?' · kodi: '+failureCode:'';
         if(raw.trim()){
-          showVoiceDraft(raw);
+          // Server down / no provider / no credits: the text we already have is parsed locally.
+          showVoiceDraft(raw,null,LOCAL_SOURCE);
           assistantStatus('AI në server nuk u përdor ('+reason+'). U përdor përpunimi lokal — kontrollo fushat.');
-          if(reason!=='offline')assistantDiag('arsyeja: '+reason+audio+' · '+diagContext());
+          if(reason!=='offline')assistantDiag('arsyeja: '+reason+code+audio+' · '+diagContext());
         }else{
           assistantStatus('Audioja nuk u transkriptua: '+reason+'. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
-          assistantDiag('arsyeja: '+reason+audio+' · '+diagContext());
+          assistantDiag('arsyeja: '+reason+code+audio+' · '+diagContext());
         }
       }finally{
         clearTimeout(timer);
