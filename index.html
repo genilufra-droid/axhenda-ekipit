@@ -342,6 +342,10 @@
   .ai-compose-row{display:flex;align-items:center;gap:6px}
   .voice-btn{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;display:grid;place-items:center;flex-shrink:0}
   .voice-btn:hover,.voice-btn.listening{color:#fff;background:#d94b4b;border-color:#d94b4b}
+  .assistant-btn{border:1px solid var(--line);border-radius:12px;background:var(--chip);color:var(--brand);padding:6px 9px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .assistant-btn:disabled,.voice-btn:disabled{opacity:.55;cursor:wait}
+  .assistant-status{font-size:12px;color:var(--muted);padding:5px 14px;min-height:26px}
+  .assistant-warning{white-space:pre-line;color:var(--warn);font-size:13px;margin-bottom:12px}
   .voice-btn svg{width:16px;height:16px}
   #tDesc{background:transparent;border:none;color:var(--txt);outline:none;font-size:13px;resize:none;
     width:100%;max-height:90px;font-family:inherit;border-top:1px solid var(--line);padding:6px 0 2px;display:none}
@@ -553,6 +557,7 @@
           <div class="comp-input" id="compInput">
             <div class="ai-compose-row">
               <input type="text" id="tTitle" placeholder="Shkruaj ose fol një detyrë..." autocomplete="off" />
+              <button type="button" class="assistant-btn" id="aiTaskBtn" title="Përgatit një detyrë nga teksti">✨ AI</button>
               <button type="button" class="voice-btn" id="voiceTaskBtn" title="Fol detyrën në shqip" aria-label="Fol detyrën">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg>
               </button>
@@ -567,6 +572,7 @@
           </button>
         </div>
       </div>
+      <div id="assistantStatus" class="assistant-status" role="status" aria-live="polite">✨ Shkruaj kërkesën dhe shtyp AI, ose përdor mikrofonin. Teksti/audioja përpunohet nga shërbime të jashtme kur janë aktive.</div>
       <div class="locked-note" id="lockedNote">🔒 Vetëm <b>pronari</b> mund të shtojë detyra. Kalo te modaliteti Pronar për të shkruar.</div>
       </div><!-- /tableView -->
 
@@ -657,26 +663,28 @@
 </div>
 
 <!-- ===== VOICE TASK CONFIRMATION MODAL ===== -->
-<div class="overlay" id="voiceConfirmOverlay">
+<div class="overlay" id="voiceConfirmOverlay" role="dialog" aria-modal="true" aria-labelledby="voiceDraftHeading">
   <div class="modal">
     <div class="modal-head">
       <span class="ic">🎙️</span>
-      <div style="flex:1;min-width:0"><p class="mt">Konfirmo detyrën</p><p class="ms">Asistenti e dëgjoi kërkesën. Kontrolloje para dërgimit.</p></div>
+      <div style="flex:1;min-width:0"><p class="mt" id="voiceDraftHeading">Kontrollo propozimin e asistentit</p><p class="ms" id="voiceDraftSource">Kontrollo fushat para ruajtjes.</p></div>
       <button class="x" id="voiceCancelTop">&times;</button>
     </div>
     <div class="modal-body">
-      <div class="field"><label>Titulli</label><input type="text" id="voiceDraftTitle" /></div>
-      <div class="field"><label>Përshkrimi / transkriptimi origjinal</label><textarea id="voiceDraftDesc" rows="5"></textarea></div>
+      <div class="assistant-warning" id="voiceDraftWarnings" role="status"></div>
+      <div class="field"><label for="voiceDraftTitle">Titulli *</label><input type="text" id="voiceDraftTitle" maxlength="300" required /></div>
+      <div class="field"><label for="voiceDraftDesc">Përshkrimi / transkriptimi origjinal</label><textarea id="voiceDraftDesc" rows="5"></textarea></div>
       <div class="row">
-        <div class="field"><label>Caktuar për</label><input type="text" id="voiceDraftAssignee" /></div>
-        <div class="field"><label>Afati</label><input type="date" id="voiceDraftDue" /></div>
+        <div class="field"><label for="voiceDraftAssignee">Caktuar për</label><input type="text" id="voiceDraftAssignee" list="employeeList" /></div>
+        <div class="field"><label for="voiceDraftDue">Afati</label><input type="date" id="voiceDraftDue" /></div>
       </div>
-      <div class="field"><label>Prioriteti</label><select id="voiceDraftPriority"><option value="Ulet">Ulët</option><option value="Mesme">Mesëm</option><option value="Lart">Lartë</option></select></div>
+      <div class="field"><label for="voiceDraftPriority">Prioriteti</label><select id="voiceDraftPriority"><option value="Ulet">Ulët</option><option value="Mesme">Mesëm</option><option value="Lart">Lartë</option></select></div>
+      <label class="notify-all-label"><input type="checkbox" id="voiceDraftNotify" /> Njofto në Chat, SMS dhe Email</label>
       <div class="hint">Asgjë nuk ruhet dhe nuk dërgohet pa shtypur butonin e konfirmimit.</div>
     </div>
     <div class="modal-foot">
       <button class="act ghost" id="voiceCancel">Anulo</button>
-      <button class="act" id="voiceConfirm">✅ Ruaj dhe dërgo</button>
+      <button class="act" id="voiceConfirm">✅ Ruaj detyrën</button>
     </div>
   </div>
 </div>
@@ -917,6 +925,7 @@
   </div>
 </div>
 
+<script src="task-assistant.js"></script>
 <script>
 const $=(s)=>document.querySelector(s), $$=(s)=>document.querySelectorAll(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -1136,101 +1145,188 @@ function renderPending(){
   $$('#pendingFiles .chip').forEach(c=>c.onclick=()=>{state.pending=state.pending.filter(f=>f.id!==c.dataset.rm);renderPending();});
 }
 
-/* VOICE TASK ASSISTANT */
-let voiceDraft = null;
-function parseVoiceTask(raw){
-  const original=String(raw||'').trim();
-  let text=original;
-  const people=(state.chat?.contacts||[]).map(c=>c.name).filter(Boolean);
-  const found=people.filter(name=>text.toLowerCase().includes(String(name).toLowerCase()));
-  let priority='Mesme';
-  if(/prioritet\s+i\s+lartë|prioritet\s+lart|urgjent/i.test(text)) priority='Lart';
-  else if(/prioritet\s+i\s+ulët|prioritet\s+ulet/i.test(text)) priority='Ulet';
-  let due='';
-  const d=new Date();
-  if(/nesër|neser/i.test(text)){d.setDate(d.getDate()+1);due=d.toISOString().slice(0,10);}
-  else if(/sot/i.test(text)) due=new Date().toISOString().slice(0,10);
-  let title=text;
-  found.forEach(name=>{title=title.replace(new RegExp(String(name).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'ig'),'');});
-  title=title.replace(/prioritet\s+i\s+lartë|prioritet\s+i\s+ulët|prioritet\s+lartë|prioritet\s+ulët|prioritet\s+lart|prioritet\s+ulet|urgjent/ig,'')
-    .replace(/cakto(?:ja|je)?\s+(?:për|per)?/ig,'').replace(/(?:sot|nesër|neser)(?:\s+në\s+orën?\s+\w+)?/ig,'')
-    .replace(/\s+/g,' ').replace(/^\s*[,.:;-]+|[,.:;-]+\s*$/g,'').trim();
-  if(!title) title=original;
-  return {original,title:title.charAt(0).toUpperCase()+title.slice(1),assignee:[...new Set(found)].join(', '),due,priority};
-}
-function showVoiceDraft(raw){
-  voiceDraft=parseVoiceTask(raw);
+/* TASK ASSISTANT: text, voice, safe local fallback, explicit confirmation. */
+let voiceDraft=null, assistantCancel=()=>{}, assistantBusy=false, assistantReturnFocus=null;
+const assistantPeople=()=>[...new Set((state.chat?.contacts||[]).filter(c=>!c.readonly).map(c=>c.name).filter(Boolean))];
+function parseVoiceTask(raw){return TaskAssistant.parse(raw,assistantPeople());}
+function assistantStatus(text){$('#assistantStatus').textContent=text;}
+function showVoiceDraft(raw,data=null,source='Përpunim lokal — pa AI në server'){
+  if(!String(data?.transcript||raw||'').trim()){
+    assistantStatus('Nuk u kap tekst. Provo përsëri ose shkruaj kërkesën.');return;
+  }
+  voiceDraft=TaskAssistant.normalize(data,raw,assistantPeople());
+  assistantReturnFocus=document.activeElement;
   $('#voiceDraftTitle').value=voiceDraft.title;
   $('#voiceDraftDesc').value=voiceDraft.original;
   $('#voiceDraftAssignee').value=voiceDraft.assignee;
   $('#voiceDraftDue').value=voiceDraft.due;
   $('#voiceDraftPriority').value=voiceDraft.priority;
+  $('#voiceDraftNotify').checked=$('#notifyAllChannels').checked;
+  $('#voiceDraftWarnings').textContent=voiceDraft.warnings.join('\n');
+  $('#voiceDraftSource').textContent=source;
   $('#voiceConfirmOverlay').classList.add('show');
+  $('#voiceDraftTitle').focus();
 }
-function closeVoiceDraft(){voiceDraft=null;$('#voiceConfirmOverlay').classList.remove('show');}
+function closeVoiceDraft(){
+  voiceDraft=null;$('#voiceConfirmOverlay').classList.remove('show');
+  assistantReturnFocus?.focus();
+}
 $('#voiceCancel').onclick=closeVoiceDraft;
 $('#voiceCancelTop').onclick=closeVoiceDraft;
+$('#voiceConfirmOverlay').addEventListener('click',e=>{if(e.target===$('#voiceConfirmOverlay'))closeVoiceDraft();});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    if(voiceDraft){e.preventDefault();closeVoiceDraft();}else assistantCancel();
+  }
+  if(e.key==='Tab'&&voiceDraft){
+    const items=[...$('#voiceConfirmOverlay').querySelectorAll('button,input,textarea,select')].filter(el=>!el.disabled);
+    if(e.shiftKey&&document.activeElement===items[0]){e.preventDefault();items.at(-1).focus();}
+    else if(!e.shiftKey&&document.activeElement===items.at(-1)){e.preventDefault();items[0].focus();}
+  }
+});
 $('#voiceConfirm').onclick=()=>{
   if(!voiceDraft)return;
-  $('#tTitle').value=$('#voiceDraftTitle').value.trim();
+  if(cloud.role!=='owner'){toast('Vetëm pronari mund të shtojë detyra','err');return;}
+  const title=$('#voiceDraftTitle').value.trim(), due=$('#voiceDraftDue').value;
+  if(!title){toast('Shkruaj titullin e detyrës','err');$('#voiceDraftTitle').focus();return;}
+  if(due&&!TaskAssistant.validDate(due)){toast('Kontrollo afatin e detyrës','err');return;}
+  const notify=$('#voiceDraftNotify').checked;
+  if(notify&&!$('#voiceDraftAssignee').value.trim()){toast('Cakto një punonjës përpara njoftimit','err');$('#voiceDraftAssignee').focus();return;}
+  $('#tTitle').value=title;
   $('#tDesc').value=$('#voiceDraftDesc').value.trim();
   $('#tAssignee').value=$('#voiceDraftAssignee').value.trim();
-  $('#tDue').value=$('#voiceDraftDue').value;
+  $('#tDue').value=due;
   state.priority=$('#voiceDraftPriority').value;
   $$('.pill').forEach(p=>p.classList.toggle('active',p.dataset.p===state.priority));
-  $('#notifyAllChannels').checked=true;
+  $('#notifyAllChannels').checked=notify;
   closeVoiceDraft();
   addTask();
+  assistantStatus('Detyra u ruajt pas konfirmimit tënd.');
 };
-(function setupVoiceTask(){
-  const button=$('#voiceTaskBtn');
-  if(!button)return;
-  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-  let transcript=''; let silenceTimer=null; let recorder=null; let chunks=[]; let stopping=false; let stream=null;
-  const showProfessional=(data)=>{
-    const draft=data?.draft||{};
-    voiceDraft={original:data?.transcript||transcript,title:draft.title||data?.transcript||transcript,assignee:draft.assignee||'',due:draft.due||'',priority:draft.priority||'Mesme'};
-    $('#voiceDraftTitle').value=voiceDraft.title; $('#voiceDraftDesc').value=voiceDraft.original;
-    $('#voiceDraftAssignee').value=voiceDraft.assignee; $('#voiceDraftDue').value=voiceDraft.due;
-    $('#voiceDraftPriority').value=voiceDraft.priority; $('#voiceConfirmOverlay').classList.add('show');
-  };
-  const processAudio=async(blob)=>{
-    toast('Po e transkriptoj dhe po e kuptoj detyrën...','ok');
-    if(!blob||!blob.size){showVoiceDraft(transcript);return;}
-    const form=new FormData(); form.append('audio',blob,'task.webm'); form.append('liveTranscript',transcript);
-    const {data,error}=await authClient.functions.invoke('transcribe-task',{body:form});
-    if(error||data?.error){toast('Transkriptimi profesional dështoi.','err');showVoiceDraft(transcript);return;}
-    showProfessional(data);
-  };
-  const stopRecorder=()=>{
-    if(stopping)return; stopping=true; clearTimeout(silenceTimer); button.classList.remove('listening');
-    if(recorder&&recorder.state!=='inactive') recorder.stop();
-    else processAudio(null);
-  };
-  if(!SpeechRecognition){
-    button.title='Foli dhe kliko përsëri për ta përfunduar';
-    button.onclick=async()=>{
-      if(button.classList.contains('listening')){toast('Po e përfundoj regjistrimin...','ok');setTimeout(stopRecorder,3000);return;}
-      if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){toast('Samsung Browser nuk e mbështet mikrofonin. Përdor Chrome.','err');return;}
-      try{
-        stream=await navigator.mediaDevices.getUserMedia({audio:true}); chunks=[]; stopping=false; button.classList.add('listening');
-        recorder=new MediaRecorder(stream); recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
-        recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());processAudio(new Blob(chunks,{type:recorder.mimeType||'audio/webm'}));};
-        recorder.start(); toast('Po regjistroj. Kur të mbarosh, kliko përsëri mikrofonin.','ok');
-      }catch(e){toast('Lejo përdorimin e mikrofonit në browser.','err');}
-    };
-    return;
+(function setupTaskAssistant(){
+  const button=$('#voiceTaskBtn'), ai=$('#aiTaskBtn');
+  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  let active=null, requestId=0;
+  function idle(){
+    assistantBusy=false;ai.disabled=false;button.disabled=false;
+    button.classList.remove('listening');button.setAttribute('aria-pressed','false');
+    button.title='Fol detyrën në shqip';
   }
-  const recognition=new SpeechRecognition(); recognition.lang='sq-AL'; recognition.interimResults=true; recognition.continuous=true;
-  const finish=()=>{if(stopping)return;stopping=true;clearTimeout(silenceTimer);button.classList.remove('listening');try{recognition.stop();}catch(e){}if(recorder&&recorder.state!=='inactive')recorder.stop();else processAudio(null);};
-  recognition.onstart=async()=>{
-    transcript='';chunks=[];stopping=false;button.classList.add('listening');toast('Po dëgjoj... teksti shfaqet ndërsa flet.','ok');
-    if(window.MediaRecorder&&navigator.mediaDevices?.getUserMedia){try{stream=await navigator.mediaDevices.getUserMedia({audio:true});recorder=new MediaRecorder(stream);recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());processAudio(new Blob(chunks,{type:recorder.mimeType||'audio/webm'}));};recorder.start();}catch(e){recorder=null;}}
+  function cleanup(session){
+    if(!session)return;
+    clearTimeout(session.limit);clearTimeout(session.silence);
+    try{session.recognition?.abort();}catch(e){}
+    if(session.recorder?.state==='recording')try{session.recorder.stop();}catch(e){}
+    session.stream?.getTracks().forEach(track=>track.stop());
+  }
+  assistantCancel=()=>{
+    requestId++;
+    const session=active;active=null;
+    if(session){session.cancelled=true;session.controller?.abort();cleanup(session);}
+    idle();assistantStatus('Veprimi u anulua. Asnjë detyrë nuk u ruajt.');
   };
-  recognition.onresult=event=>{transcript=[...event.results].map(r=>r[0].transcript).join(' ');$('#tTitle').value=transcript;clearTimeout(silenceTimer);silenceTimer=setTimeout(finish,3000);};
-  recognition.onend=()=>{button.classList.remove('listening');if(!recorder&&!stopping&&transcript.trim())processAudio(null);};
-  recognition.onerror=()=>{button.classList.remove('listening');clearTimeout(silenceTimer);toast('Mikrofoni nuk u dëgjua. Kontrollo lejen.','err');};
-  button.onclick=()=>{if(button.classList.contains('listening'))finish();else{try{recognition.start();}catch(e){}}};
+  async function process(raw,blob=null){
+    const id=++requestId;
+    assistantBusy=true;ai.disabled=true;button.disabled=true;
+    button.classList.remove('listening');button.setAttribute('aria-pressed','false');
+    const session={controller:new AbortController()};active=session;
+    assistantStatus('Po përgatit propozimin… Escape për anulim.');
+    let timer;
+    try{
+      if(!authClient)throw new Error('offline');
+      const body=blob?new FormData():{text:raw,today:TaskAssistant.dateKey(new Date())};
+      if(blob){
+        body.append('audio',blob,blob.type.includes('mp4')?'task.mp4':'task.webm');
+        body.append('liveTranscript',raw);body.append('today',TaskAssistant.dateKey(new Date()));
+      }
+      const result=await Promise.race([
+        authClient.functions.invoke('transcribe-task',{body,signal:session.controller.signal}),
+        new Promise((_,reject)=>{timer=setTimeout(()=>{session.controller.abort();reject(new Error('timeout'));},45000);})
+      ]);
+      if(id!==requestId)return;
+      if(result.error||result.data?.error||!result.data?.draft)throw new Error('unavailable');
+      showVoiceDraft(raw,result.data,'Propozim nga AI — kontrolloje para ruajtjes');
+      assistantStatus('Propozimi është gati. Pritet konfirmimi yt.');
+    }catch(e){
+      if(id!==requestId)return;
+      if(raw.trim()){
+        showVoiceDraft(raw);assistantStatus('AI në server nuk është i disponueshëm. U përdor përpunimi lokal.');
+      }else assistantStatus('Audioja nuk u transkriptua. Provo përsëri ose shkruaj kërkesën dhe shtyp AI.');
+    }finally{
+      clearTimeout(timer);
+      if(id===requestId){active=null;idle();}
+    }
+  }
+  ai.onclick=()=>{
+    if(assistantBusy)return;
+    if(cloud.role!=='owner'){toast('Vetëm pronari mund të përgatisë detyra','err');return;}
+    const raw=$('#tTitle').value.trim();
+    if(!raw){assistantStatus('Shkruaj p.sh. “Cakto Arben Kola të përgatisë raportin nesër, urgjent”.');$('#tTitle').focus();return;}
+    if(raw.length>6000){toast('Kërkesa duhet të jetë deri në 6000 karaktere','err');return;}
+    process(raw);
+  };
+  function finish(session){
+    if(active!==session||session.stopping||session.cancelled)return;
+    session.stopping=true;clearTimeout(session.limit);clearTimeout(session.silence);
+    try{session.recognition?.stop();}catch(e){}
+    button.disabled=true;assistantStatus('Po përfundoj regjistrimin…');
+    if(session.recorder?.state==='recording')session.recorder.stop();else deliver(session,null);
+  }
+  function deliver(session,blob){
+    if(active!==session||session.cancelled||session.delivered)return;
+    session.delivered=true;cleanup(session);active=null;
+    const raw=session.transcript.trim();
+    if(!raw&&!blob?.size){idle();assistantStatus('Nuk u kap zë. Provo përsëri ose përdor tekstin.');return;}
+    process(raw,blob?.size?blob:null);
+  }
+  button.onclick=async()=>{
+    if(active?.listening){finish(active);return;}
+    if(assistantBusy)return;
+    if(cloud.role!=='owner'){toast('Vetëm pronari mund të përgatisë detyra','err');return;}
+    if(!navigator.mediaDevices?.getUserMedia&&!Recognition){assistantStatus('Mikrofoni nuk mbështetet këtu. Shkruaj kërkesën dhe shtyp AI.');return;}
+    const session={transcript:'',chunks:[],listening:false};active=session;
+    assistantBusy=true;ai.disabled=true;button.disabled=true;
+    assistantStatus('Lejo mikrofonin për të folur. Escape për anulim.');
+    try{
+      if(navigator.mediaDevices?.getUserMedia&&window.MediaRecorder){
+        const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+        if(active!==session||session.cancelled){stream.getTracks().forEach(t=>t.stop());return;}
+        session.stream=stream;
+        const mime=['audio/webm;codecs=opus','audio/webm','audio/mp4'].find(type=>MediaRecorder.isTypeSupported(type));
+        session.recorder=new MediaRecorder(stream,mime?{mimeType:mime}:undefined);
+        session.recorder.ondataavailable=e=>{if(e.data.size)session.chunks.push(e.data);};
+        session.recorder.onstop=()=>deliver(session,new Blob(session.chunks,{type:session.recorder.mimeType||'audio/webm'}));
+        session.recorder.onerror=()=>{session.cancelled=true;cleanup(session);if(active===session){active=null;idle();assistantStatus('Regjistrimi dështoi. Provo përsëri ose përdor tekstin.');}};
+        session.recorder.start(1000);
+      }
+      if(Recognition){
+        const recognition=new Recognition();session.recognition=recognition;
+        recognition.lang='sq-AL';recognition.interimResults=true;recognition.continuous=true;
+        recognition.onresult=event=>{
+          if(active!==session||session.stopping)return;
+          session.transcript=Array.from(event.results,r=>r[0].transcript).join(' ');
+          assistantStatus('Po dëgjoj: '+session.transcript);
+          clearTimeout(session.silence);session.silence=setTimeout(()=>finish(session),5000);
+        };
+        recognition.onend=()=>{if(!session.recorder)finish(session);};
+        recognition.onerror=()=>{
+          if(active!==session||session.stopping)return;
+          if(!session.recorder)finish(session);
+          else assistantStatus('Po regjistroj audio. Kliko mikrofonin për përfundim.');
+        };
+        try{recognition.start();}catch(e){if(!session.recorder)throw e;}
+      }
+      session.listening=true;button.disabled=false;
+      button.classList.add('listening');button.setAttribute('aria-pressed','true');
+      button.title='Përfundo regjistrimin';
+      session.limit=setTimeout(()=>finish(session),60000);
+      assistantStatus('Po dëgjoj… Kliko mikrofonin për përfundim. Deri në 60 sekonda; Escape për anulim.');
+    }catch(e){
+      session.cancelled=true;cleanup(session);
+      if(active===session){active=null;idle();assistantStatus('Mikrofoni nuk u hap. Kontrollo lejen dhe lidhjen HTTPS, ose përdor tekstin.');}
+    }
+  };
+  window.addEventListener('pagehide',()=>{if(assistantBusy)assistantCancel();});
 })();
 
 /* ADD TASK */
@@ -1245,6 +1341,7 @@ async function notifyTaskChannels(task){
   toast('Njoftimet për '+results.length+' punonjës: Chat '+countStatus('chat','sent')+' të dërguara, SMS '+countStatus('sms','sent')+' të dërguara, Email '+countStatus('email','sent')+' të dërguara','ok');
 }
 function addTask(){
+  if(cloud.role!=='owner'){toast('Vetëm pronari mund të shtojë detyra','err');return;}
   const title=$('#tTitle').value.trim();
   if(!title){toast('Shkruaj një detyrë','err');return;}
   const task={
