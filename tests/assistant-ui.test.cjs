@@ -493,7 +493,7 @@ test('pagehide releases microphone and discards late AI responses',async()=>{
 /* ---------- real phones: one microphone owner, full audio, no cut words ---------- */
 const PHONE_UA='Mozilla/5.0 (Linux; Android 14; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36';
 
-test('on a phone the recorder owns the microphone and the full audio is transcribed',async()=>{
+test('on a phone the live text appears while talking and the full audio still goes to the server',async()=>{
   let sent=null,calls=0;
   const app=setup({
     userAgent:PHONE_UA,maxTouchPoints:5,
@@ -501,17 +501,25 @@ test('on a phone the recorder owns the microphone and the full audio is transcri
     invoke:async(_name,options)=>{calls++;sent=options.body;return {data:draft};},
   });
   await app.$('#voiceTaskBtn').onclick();
-  assert.equal(app.recognizer,null,'SpeechRecognition must never fight MediaRecorder for the microphone');
+  assert.equal(app.recognizer,null,'the recorder takes the microphone first; the recogniser follows');
   assert.equal(app.$('#voiceLiveState').textContent,'Po dëgjoj…');
-  assert.match(app.$('#voiceLiveHint').textContent,/Audioja regjistrohet e plotë/);
+  assert.doesNotMatch(app.$('#voiceLiveHint').textContent,/mikrofonin e mban regjistrimi/,'the old phone hint is gone');
+  app.advance(200);                                  // the recogniser joins a moment later
+  assert.ok(app.recognizer,'live text is available on the phone too');
+  assert.equal(app.recognizer.lang,'sq-AL');
   app.speak(500);
+  app.recognizer.result([{text:'Cakto Arben Kola',final:false}]);
+  assert.equal(app.$('#voiceLiveText').textContent,'Cakto Arben Kola','the words appear WHILE the owner speaks');
+  app.recognizer.result([{text:'Cakto Arben Kola të përgatisë raportin',final:false}]);
+  assert.equal(app.$('#voiceLiveText').textContent,'Cakto Arben Kola të përgatisë raportin');
   assert.equal(app.$('#voiceLiveMeterBar').style.transform.includes('scaleX'),true,'the live meter still works');
   app.quiet(2800);
   assert.equal(app.stopped,0,'the microphone is still open before 3 s of silence');
+  assert.equal(app.$('#voiceConfirmOverlay').classList.contains('show'),false,'nothing is sent while talking');
   app.quiet(400);
   await tick();await tick();
-  assert.equal(calls,1,'exactly one transcription request');
-  assert.ok(sent instanceof FormData,'the complete recording is uploaded, never a half sentence');
+  assert.equal(calls,1,'exactly one request');
+  assert.ok(sent instanceof FormData,'the complete recording is uploaded, never the live preview');
   assert.ok(sent.get('audio').size>0);
   assert.equal(app.stopped,1,'the microphone is released');
   assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
@@ -520,10 +528,35 @@ test('on a phone the recorder owns the microphone and the full audio is transcri
   assert.equal(app.saved,0);
 });
 
-test('on a phone without a signed-in server the recogniser is used alone (offline mode)',async()=>{
+test('the live words are a preview: the final text still comes from the complete audio',async()=>{
+  const heard='Cakto Arben Kola të përgatisë raportin për nesër';
+  let sent=null;
+  const app=setup({
+    userAgent:PHONE_UA,maxTouchPoints:5,
+    SpeechRecognition:true,MediaRecorder:recorderClass(),
+    invoke:async(_name,options)=>{sent=options.body;return {data:{transcript:heard,draft:draft.draft}};},
+  });
+  await app.$('#voiceTaskBtn').onclick();
+  app.advance(200);
+  app.speak(500);
+  app.recognizer.result([{text:'cakto arben kola',final:false}]);   // the imperfect preview
+  assert.equal(app.$('#voiceLiveText').textContent,'cakto arben kola','the panel shows the words immediately');
+  app.recognizer.result([{text:'cakto arben kola raportin',final:true}]);
+  app.quiet(3100);
+  await tick();await tick();
+  assert.ok(sent instanceof FormData,'the audio is what the server transcribes');
+  assert.ok(sent.get('audio').size>0);
+  assert.equal(app.$('#voiceDraftDesc').value,heard,'the saved text is the one the audio produced, not the preview');
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+  app.$('#voiceCancel').onclick();
+});
+
+test('on a phone without a signed-in server the live text still appears (offline mode)',async()=>{
   const app=setup({userAgent:PHONE_UA,maxTouchPoints:5,SpeechRecognition:true,MediaRecorder:recorderClass()});
   await app.$('#voiceTaskBtn').onclick();
-  assert.ok(app.recognizer,'offline the recogniser is the only way to get text');
+  assert.equal(app.recognizer,null,'the recogniser waits for the recorder to grab the microphone');
+  app.advance(200);
+  assert.ok(app.recognizer,'offline the recogniser still supplies the live text');
   assert.equal(app.$('#voiceLiveState').textContent,'Po dëgjoj…');
   app.speak(400);
   app.recognizer.result([{text:'Raporti',final:false}]);
@@ -554,6 +587,26 @@ test('a desktop recognition that restarts sends the complete audio, not the cut 
   assert.ok(sent.get('audio').size>0);
   assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
   app.$('#voiceCancel').onclick();
+});
+
+test('a normal restart is immediate while a storm of restarts gets a short breather',async()=>{
+  const app=setup({SpeechRecognition:true,MediaRecorder:recorderClass(),invoke:async()=>({data:draft})});
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(400);
+  for(let i=1;i<=3;i++){
+    const before=app.recognizer.started;
+    app.recognizer.onend();
+    app.advance(0);
+    assert.equal(app.recognizer.started,before+1,'restart '+(i+1)+' happens at once: no syllable is lost');
+  }
+  const started=app.recognizer.started;
+  app.recognizer.onend();                       // a fourth restart inside 2 s
+  app.advance(149);
+  assert.equal(app.recognizer.started,started,'a restart storm waits before touching the microphone again');
+  app.advance(1);
+  assert.equal(app.recognizer.started,started+1,'after the short pause the live text resumes');
+  app.events.keydown({key:'Escape'});
+  assert.equal(app.stopped,1);
 });
 
 test('a failed live recogniser also uploads the audio',async()=>{
