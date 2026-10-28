@@ -58,7 +58,7 @@
     const onRelease = options.onRelease || noop; // free the microphone and audio resources
 
     const labels = {
-      idle: '', starting: 'Po hap mikrofonin…',
+      idle: '', starting: 'Po hap mikrofonin… prit një çast',
       listening: 'Po dëgjoj…', stopping: 'Po përfundoj regjistrimin…',
     };
     let state = 'idle';
@@ -208,6 +208,20 @@
       onTranscript(transcript());
     }
 
+    /* Keep the words the recogniser never marked as final.
+     * Android Chrome closes the session on every short pause without delivering
+     * isFinal=true; without this flush the next session's interim result
+     * overwrites the half-sentence that was already spoken. */
+    function flushInterim() {
+      if (state === 'idle') return false;
+      const pending = clean(interimText);
+      if (!pending) return false;
+      interimText = '';
+      finalText = mergeTranscript(finalText, pending);
+      onTranscript(transcript());
+      return true;
+    }
+
     function remaining() {
       if (state !== 'listening' || !heard) return null;
       return Math.max(0, config.silenceMs - (now() - lastVoiceAt));
@@ -215,7 +229,7 @@
 
     return {
       start, begin, fail, finish, stop: finish, complete, cancel,
-      noteLevel, markSpeech, setInterim, addFinal, transcript, remaining,
+      noteLevel, markSpeech, setInterim, addFinal, flushInterim, transcript, remaining,
       config, get state() { return state; }, get heardSpeech() { return heard; },
     };
   }
