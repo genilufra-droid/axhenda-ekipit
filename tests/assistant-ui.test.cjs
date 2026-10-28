@@ -317,3 +317,73 @@ test('a browser without an audio meter still ends the dictation',async()=>{
   assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
 });
 
+
+/* ---------- making failures visible (mobile without devtools) ---------- */
+function httpError(status,body){
+  const response={status,json:async()=>body,clone(){return response;}};
+  return {context:response,name:'FunctionsHttpError',message:'Edge Function returned a non-2xx status code'};
+}
+test('a server failure is reported with its real reason and details',async()=>{
+  const app=setup({MediaRecorder:recorderClass(),
+    invoke:async()=>({error:httpError(404,{code:404,message:'Requested function was not found'})})});
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(500);
+  await app.$('#voiceTaskBtn').onclick();
+  await tick();await tick();
+  assert.match(app.$('#assistantStatus').textContent,/Audioja nuk u transkriptua: Requested function was not found/);
+  assert.ok(app.$('#assistantDiagBox').classList.contains('show'),'the details box is visible');
+  const details=app.$('#assistantDiag').textContent;
+  assert.match(details,/arsyeja: Requested function was not found/);
+  assert.match(details,/hyrja:/);
+  assert.match(details,/audio: /);
+  assert.equal(app.saved,0);
+});
+test('a missing key or expired session is quoted from the function body',async()=>{
+  const app=setup({invoke:async()=>({data:{error:'Sesioni ka skaduar. Hyr përsëri.'}})});
+  app.$('#tTitle').value='Raporti';app.$('#aiTaskBtn').onclick();await tick();
+  assert.match(app.$('#assistantStatus').textContent,/Sesioni ka skaduar/);
+});
+test('audio recorded without a MIME type is still sent as a valid container',async()=>{
+  let body=null;
+  class Untyped extends recorderClass(){
+    constructor(){super();this.mimeType='';}            // Samsung Internet reports an empty type
+  }
+  const app=setup({MediaRecorder:Untyped,invoke:async(name,options)=>{body=options.body;return {data:draft};}});
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(500);
+  await app.$('#voiceTaskBtn').onclick();
+  await tick();await tick();
+  const file=body.get('audio');
+  assert.equal(file.type,'audio/webm','a usable container type is supplied');
+  assert.ok(file.size>0);
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+});
+test('a recorder without isTypeSupported still records',async()=>{
+  let body=null;
+  class Simple{
+    constructor(){this.state='inactive';this.mimeType='';}
+    start(){this.state='recording';}
+    stop(){this.state='inactive';this.ondataavailable({data:new Blob(['audio'])});this.onstop();}
+  }
+  delete Simple.isTypeSupported;
+  const app=setup({MediaRecorder:Simple,invoke:async(name,options)=>{body=options.body;return {data:draft};}});
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(500);
+  await app.$('#voiceTaskBtn').onclick();
+  await tick();await tick();
+  assert.ok(body,'the audio reaches the server');
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+});
+test('no recorded audio and no transcript never calls the AI',async()=>{
+  let calls=0;
+  class Silent{constructor(){this.state='inactive';this.mimeType='audio/webm';}
+    start(){this.state='recording';}stop(){this.state='inactive';this.onstop();}}  // no data chunks
+  const app=setup({MediaRecorder:Silent,invoke:async()=>{calls++;return {data:draft};}});
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(500);
+  await app.$('#voiceTaskBtn').onclick();
+  await tick();await tick();
+  assert.equal(calls,0,'an empty request is never sent');
+  assert.match(app.$('#assistantStatus').textContent,/Mikrofoni nuk dha audio/);
+  assert.equal(app.saved,0);
+});
