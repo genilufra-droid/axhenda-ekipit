@@ -387,3 +387,80 @@ test('no recorded audio and no transcript never calls the AI',async()=>{
   assert.match(app.$('#assistantStatus').textContent,/Mikrofoni nuk dha audio/);
   assert.equal(app.saved,0);
 });
+test('live transcript sends ONLY text and never uploads recorded audio',async()=>{
+  let sentBody=null;
+  const app=setup({
+    SpeechRecognition:true,
+    MediaRecorder:recorderClass(),
+    invoke:async(_name,options)=>{sentBody=options.body;return {data:draft};},
+  });
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(500);
+  app.recognizer.result([{text:'Cakto Arben Kola të përgatisë raportin nesër urgjent',final:true}]);
+  app.quiet(3100);
+  await tick();await tick();
+  assert.equal(sentBody instanceof FormData,false,'must never upload FormData audio when live text exists');
+  assert.equal(typeof sentBody.text,'string');
+  assert.equal(sentBody.text,'Cakto Arben Kola të përgatisë raportin nesër urgjent');
+  assert.equal('audio' in sentBody,false);
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+});
+test('server down or missing provider falls back to TaskAssistant.parse and opens confirmation with clear local note',async()=>{
+  for(const failure of [
+    httpError(503,{error:'Asnjë ofrues AI nuk është konfiguruar. Përdor përpunimin lokal.',code:'no_provider'}),
+    httpError(429,{error:'Kredia e ofruesit AI ka mbaruar. Përdor një çelës falas (Groq) ose shto kredi.',code:'quota_exceeded'}),
+    new Error('Failed to fetch'),
+  ]){
+    const app=setup({
+      SpeechRecognition:true,
+      MediaRecorder:recorderClass(),
+      invoke:async()=>({error:failure}),
+    });
+    await app.$('#voiceTaskBtn').onclick();
+    app.speak(500);
+    app.recognizer.result([{text:'Cakto Arben Kola përgatit raportin nesër urgjent',final:true}]);
+    app.quiet(3100);
+    await tick();await tick();
+    assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'),'confirmation opens automatically with local draft');
+    assert.equal(app.$('#voiceDraftSource').textContent,'Përpunim lokal — AI nuk u përdor');
+    assert.equal(app.$('#voiceDraftTitle').value,'Përgatit raportin');
+    assert.equal(app.$('#voiceDraftAssignee').value,'Arben Kola');
+    assert.equal(app.$('#voiceDraftPriority').value,'Lart');
+    assert.equal(app.saved,0,'nothing saved before explicit confirmation');
+    app.$('#voiceCancel').onclick();
+  }
+});
+test('empty server transcript never opens confirmation',async()=>{
+  const app=setup({
+    MediaRecorder:recorderClass(),
+    invoke:async()=>({data:{transcript:'   ',draft:{title:'Halucinim',assignee:'',due:'',priority:'Mesme'}}}),
+  });
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(500);
+  await app.$('#voiceTaskBtn').onclick();
+  await tick();await tick();
+  assert.equal(app.$('#voiceConfirmOverlay').classList.contains('show'),false);
+  assert.equal(app.saved,0);
+});
+test('pagehide releases microphone and discards late AI responses',async()=>{
+  let calls=0,resolve;
+  const app=setup({
+    SpeechRecognition:true,
+    MediaRecorder:recorderClass(),
+    invoke:()=>{calls++;return new Promise(r=>{resolve=r;});},
+  });
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(400);
+  app.windowEvents.pagehide();
+  assert.equal(app.stopped,1,'microphone released on pagehide');
+  assert.equal(calls,0,'no AI call made when pagehide aborts dictation');
+
+  app.$('#tTitle').value='Raporti nesër';
+  app.$('#aiTaskBtn').onclick();
+  assert.equal(calls,1);
+  app.windowEvents.pagehide();
+  resolve({data:draft});
+  await tick();
+  assert.equal(app.$('#voiceConfirmOverlay').classList.contains('show'),false,'late AI response discarded after pagehide');
+});
+
