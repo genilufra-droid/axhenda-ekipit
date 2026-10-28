@@ -219,3 +219,48 @@ test('statuses are explicit for every phase',()=>{
   r.clock.advance(3100);
   assert.equal(r.log.status.at(-1).label,'Po përfundoj regjistrimin…');
 });
+
+/* ---------- half sentences are never lost when the recogniser restarts ---------- */
+test('flushInterim keeps the words the browser never marked as final',()=>{
+  const r=rig();r.engine.start();r.engine.begin();
+  r.speak(400);
+  r.engine.setInterim('Arben Kola përgatit');
+  assert.equal(r.engine.flushInterim(),true,'there was an unfinished sentence');
+  assert.equal(r.engine.transcript(),'Arben Kola përgatit');
+  assert.deepEqual(r.log.transcript.at(-1),'Arben Kola përgatit','the panel keeps the words');
+  assert.equal(r.engine.flushInterim(),false,'nothing left to flush');
+  r.engine.setInterim('raportin nesër');            // the restarted session speaks on
+  assert.equal(r.engine.transcript(),'Arben Kola përgatit raportin nesër');
+});
+
+test('a restart mid-sentence neither loses nor duplicates the first words',()=>{
+  const r=rig();r.engine.start();r.engine.begin();
+  r.speak(500);
+  r.engine.setInterim('Cakto Arben Kola të përgatisë');   // onend arrives, no isFinal
+  r.engine.flushInterim();                                 // the caller flushes on onend
+  r.speak(400);
+  r.engine.setInterim('përgatisë raportin nesër');         // restart repeats the last word
+  r.speak(300);
+  r.engine.setInterim('raportin nesër urgjent');
+  assert.equal(r.engine.transcript(),'Cakto Arben Kola të përgatisë raportin nesër urgjent');
+  assert.equal(r.engine.transcript().match(/përgatisë/g).length,1,'no duplicated junction');
+  r.quiet(3100);r.clock.advance(900);
+  assert.equal(r.log.results[0].transcript,'Cakto Arben Kola të përgatisë raportin nesër urgjent');
+});
+
+test('flushing has no effect while idle and never creates text from nothing',()=>{
+  const r=rig();
+  assert.equal(r.engine.flushInterim(),false);
+  r.engine.start();r.engine.begin();
+  assert.equal(r.engine.flushInterim(),false,'empty interim');
+  assert.equal(r.engine.transcript(),'');
+  assert.equal(r.log.results.length,0,'flushing never delivers a draft on its own');
+});
+
+test('the opening state is explicit and never pretends to listen',()=>{
+  const r=rig();r.engine.start();
+  assert.equal(r.log.status.at(-1).label,'Po hap mikrofonin… prit një çast');
+  assert.equal(r.log.status.at(-1).state,'starting');
+  r.engine.begin();
+  assert.equal(r.log.status.at(-1).state,'listening');
+});

@@ -1281,6 +1281,19 @@ $('#voiceConfirm').onclick=()=>{
   const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
   let active=null, requestId=0;
 
+  /* Phones share one microphone between MediaRecorder and SpeechRecognition:
+   * running both at once makes the recorder lose words and the recogniser stutter.
+   * On touch devices we therefore keep exactly one consumer of the microphone. */
+  function isTouchOrMobile(){
+    try{
+      const nav=navigator||{};
+      if(/Android|iPhone|iPad|iPod|Mobile|SamsungBrowser|Opera Mini|IEMobile|Windows Phone/i.test(String(nav.userAgent||'')))return true;
+      if(Number(nav.maxTouchPoints||0)>0)return true;
+      if('ontouchstart' in window)return true;
+    }catch(e){}
+    return false;
+  }
+
   /* ---------- live dictation panel ---------- */
   function liveShow(show){livePanel.classList[show?'add':'remove']('show');}
   function liveState(text){$('#voiceLiveState').textContent=text;}
@@ -1326,7 +1339,8 @@ $('#voiceConfirm').onclick=()=>{
             raf=requestAnimationFrame(loop);
           };
           raf=requestAnimationFrame(loop);
-        }catch(e){this.stop();}
+          return true;
+        }catch(e){this.stop();return false;}
       },
       stop(){
         if(raf&&window.cancelAnimationFrame)window.cancelAnimationFrame(raf);
@@ -1348,8 +1362,10 @@ $('#voiceConfirm').onclick=()=>{
       })||'';
     }catch(e){return '';}
   }
+  /* Returns true only when the recorder is really capturing, so the UI never claims
+   * "listening" while the hardware is still being opened. */
   function startRecorder(session,stream){
-    if(!window.MediaRecorder)return;
+    if(!window.MediaRecorder)return false;
     try{
       const mime=pickMime();
       const recorder=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
@@ -1357,14 +1373,15 @@ $('#voiceConfirm').onclick=()=>{
       recorder.ondataavailable=e=>{if(e.data&&e.data.size)session.chunks.push(e.data);};
       recorder.onstop=()=>{
         finishAudio(session);
-        session.monitor?.stop();session.monitor=null;
+        session.monitor?.stop();session.monitor=null;session.monitorActive=false;
         try{session.stream?.getTracks().forEach(t=>t.stop());}catch(e){}
         session.stream=null;
         if(!session.recognition)session.engine?.complete();   // nothing left to wait for
       };
       recorder.onerror=()=>{session.recordError=true;};
       recorder.start(1000);
-    }catch(e){session.recorder=null;}
+      return recorder.state==='recording';
+    }catch(e){session.recorder=null;return false;}
   }
   function finishAudio(session){
     if(session.audioDone)return;
@@ -1414,16 +1431,22 @@ $('#voiceConfirm').onclick=()=>{
     };
     recognition.onend=()=>{
       if(active!==session)return;
-      const state=session.engine?.state;
-      if(state==='stopping'||session.stopped){session.engine?.complete();return;}
+      const engine=session.engine;
+      const state=engine?.state;
+      // Whatever the browser never marked as final must survive the restart.
+      if(engine&&state!=='idle')engine.flushInterim();
+      if(state==='stopping'||session.stopped){engine?.complete();return;}
       // Chrome/Android end the session after a short pause: keep listening.
       if(state==='listening'&&!session.cancelled&&(session.restarts||0)<200){
         session.restarts=(session.restarts||0)+1;
+        // Restart immediately: a 250 ms pause swallowed the first syllable of the
+        // next word. setTimeout(…,0) only yields the current event loop turn, which
+        // Chrome needs before start() is allowed again.
         setTimeout(()=>{
           if(active===session&&session.engine?.state==='listening'&&!session.stopped){
-            try{recognition.start();}catch(e){}
+            try{recognition.start();}catch(e){session.liveFailed=true;}
           }
-        },250);
+        },0);
       }
     };
     try{recognition.start();session.live=true;}
@@ -1490,9 +1513,11 @@ $('#voiceConfirm').onclick=()=>{
     if(/Failed to fetch|NetworkError|Load failed/i.test(message))return 'rrjeti dështoi';
     return message.slice(0,160);
   }
+  /* raw is the live transcript, kept only as a local fallback when audio is sent;
+   * blob is the full recording, which is what Whisper transcribes word for word. */
   function process(raw,blob=null){
     const text=String(raw||'').trim();
-    const sendAudio=!text&&!!(blob&&blob.size);
+    const sendAudio=!!(blob&&blob.size);
     if(!text&&!sendAudio){
       stopUi();idle();
       assistantStatus('Nuk u kap zë. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
@@ -1557,19 +1582,22 @@ $('#voiceConfirm').onclick=()=>{
       assistantStatus('Nuk u kap zë. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
       return Promise.resolve();
     }
-    // Live transcript available: send ONLY text, never pay twice by uploading audio.
-    if(live){
+    /* The live recogniser was interrupted (restarts), failed, or was never used:
+     * its text is half a sentence, so upload the complete recording to Whisper and
+     * keep the live text only as a local fallback if the server says no. */
+    const interrupted=!!(session.restarts>0||session.liveFailed||!session.useRecognition);
+    const waitForAudio=session.recordAudio&&(!live||interrupted);
+    if(!waitForAudio){
+      // A clean desktop recognition without a single restart: send only the text.
       session.blobPromise?.catch(()=>{});
       return process(live,null);
     }
     return session.blobPromise.catch(()=>null).then(blob=>{
-      if(!(blob&&blob.size)){
-        idle();
-        assistantStatus('Mikrofoni nuk dha audio ose ky browser nuk transkripton. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
-        assistantDiag('nuk u regjistrua audio · '+diagContext());
-        return;
-      }
-      return process('',blob);
+      if(blob&&blob.size)return process(live,blob);
+      if(live)return process(live,null);
+      idle();
+      assistantStatus('Mikrofoni nuk dha audio ose ky browser nuk transkripton. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
+      assistantDiag('nuk u regjistrua audio · '+diagContext());
     });
   }
 
@@ -1582,12 +1610,20 @@ $('#voiceConfirm').onclick=()=>{
     }
     const session={chunks:[],cancelled:false,stopped:false,released:false,audioDone:false};
     session.blobPromise=new Promise(resolve=>{session.resolveBlob=resolve;});
+    /* On a phone MediaRecorder and SpeechRecognition fight for the same microphone:
+     * the recorder loses syllables and the recogniser closes itself every second.
+     * So on touch devices exactly one consumer is opened — the recorder when the
+     * server can transcribe the audio, the recogniser only offline. */
+    const mobile=isTouchOrMobile();
+    session.audioMode=!!authClient&&!!window.MediaRecorder;      // audio can be transcribed server-side
+    session.useRecognition=!!Recognition&&!(mobile&&session.audioMode);
+    session.recordAudio=!!window.MediaRecorder&&(session.audioMode||!session.useRecognition);
     const engine=VoiceDictation.create({
       now:()=>Date.now(),
       timers:{set:(fn,ms)=>setTimeout(fn,ms),clear:id=>clearTimeout(id)},
       onStatus:status=>{
         livePanel.classList[status.state==='stopping'?'add':'remove']('stopping');
-        if(status.state==='starting')liveState('Po hap mikrofonin…');
+        if(status.state==='starting')liveState('Po hap mikrofonin… prit një çast');
         if(status.state==='listening')liveState('Po dëgjoj…');
         if(status.state==='stopping')liveState('Po përfundoj regjistrimin…');
       },
@@ -1612,10 +1648,11 @@ $('#voiceConfirm').onclick=()=>{
     session.engine=engine;
     active=session;
     button.disabled=true;ai.disabled=true;
-    liveShow(true);meter(0);liveText('');liveState('Po hap mikrofonin…');
+    liveShow(true);meter(0);liveText('');
+    liveState('Po hap mikrofonin… prit një çast');
     liveHint('Fli lirshëm — regjistrimi ndalon vetë pas 3 sekondash heshtjeje.');
     $('#voiceLiveCount').textContent='';
-    assistantStatus('Po hap mikrofonin… Lejo qasjen. Escape për anulim.');
+    assistantStatus('Po hap mikrofonin… prit një çast. Escape për anulim.');
     engine.start();
     let stream;
     try{
@@ -1639,28 +1676,50 @@ $('#voiceConfirm').onclick=()=>{
       return;
     }
     session.stream=stream;
-    startRecorder(session,stream);
+    /* 1) record the full audio (never a cut sentence) */
+    if(session.recordAudio)startRecorder(session,stream);
+    /* 2) live voice-activity detection on the same stream */
     const monitor=createLevelMonitor(stream);
-    session.energyVad=monitor.supported;
     session.monitor=monitor;
     if(monitor.supported){
       let lastUi=0;
-      monitor.start(level=>{
+      session.monitorActive=monitor.start(level=>{
         engine.noteLevel(level);
         const stamp=Date.now();
         if(stamp-lastUi<80)return;
         lastUi=stamp;meter(level);liveCountdown();
-      });
-    }else liveHint('Ky browser nuk mat zërin; ndalimi bazohet te rezultatet e transkriptimit. Kliko mikrofonin për të ndaluar.');
-    startRecognition(session);
+      })===true;
+    }
+    session.energyVad=monitor.supported&&session.monitorActive===true;
+    if(!session.energyVad)liveHint('Ky browser nuk mat zërin; ndalimi bazohet te rezultatet e transkriptimit. Kliko mikrofonin për të ndaluar.');
+    /* 3) live transcription, but never side by side with the recorder on a phone */
+    if(session.useRecognition)startRecognition(session);
     if(!Recognition){
       liveHint('Ky browser nuk transkripton drejtpërdrejt. Audioja do të transkriptohet pasi të ndalosh (3 sekonda heshtjeje ose klikim).');
+    }else if(!session.useRecognition){
+      liveHint('Në telefon mikrofonin e mban regjistrimi i audios. Audioja regjistrohet e plotë dhe transkriptohet pasi të ndalosh (3 sekonda heshtjeje ose klikim).');
+    }
+    /* 4) only now is the microphone really ready: claim "listening" */
+    const recorderOk=!session.recordAudio||session.recorder?.state==='recording';
+    if(!recorderOk){
+      session.recordAudio=false;                  // the recorder failed: no audio to send
+      if(!session.useRecognition&&Recognition)startRecognition(session); // best remaining text source
+      if(!session.recognition){
+        if(active===session)active=null;
+        try{stream.getTracks().forEach(t=>t.stop());}catch(e){}
+        session.stream=null;                       // already freed: do not stop the tracks twice
+        engine.fail('Regjistrimi i audios nuk nisi dot. Provo përsëri ose shkruaj kërkesën.');
+        return;
+      }
+      liveHint('Regjistrimi i audios nuk nisi; përdoret transkriptimi i drejtpërdrejtë.');
     }
     button.disabled=false;
     button.classList.add('listening');button.setAttribute('aria-pressed','true');
     button.title='Përfundo regjistrimin';
     engine.begin();
-    assistantStatus('Po dëgjoj… Ndalon vetë pas 3 sekondash heshtjeje; kliko mikrofonin për ta ndalur tani. Escape për anulim.');
+    assistantStatus(session.recordAudio&&!session.useRecognition
+      ?'Po dëgjoj… Audioja regjistrohet e plotë dhe transkriptohet pas ndalimit. Ndalon vetë pas 3 sekondash heshtjeje; kliko mikrofonin për ta ndalur tani. Escape për anulim.'
+      :'Po dëgjoj… Ndalon vetë pas 3 sekondash heshtjeje; kliko mikrofonin për ta ndalur tani. Escape për anulim.');
   }
 
   button.onclick=()=>{

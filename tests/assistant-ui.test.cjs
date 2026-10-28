@@ -29,7 +29,7 @@ function clock(){
 }
 function analysers(){const list=[];return list;}
 
-function setup({invoke,mediaDevices,MediaRecorder,SpeechRecognition,role='owner',AudioContext=true,notify}={}){
+function setup({invoke,mediaDevices,MediaRecorder,SpeechRecognition,role='owner',AudioContext=true,notify,userAgent='',maxTouchPoints=0}={}){
   const els=new Map(),events={},windowEvents={};
   let saved=0,stopped=0,notified=0;
   const $=selector=>{
@@ -85,7 +85,7 @@ function setup({invoke,mediaDevices,MediaRecorder,SpeechRecognition,role='owner'
     requestAnimationFrame,cancelAnimationFrame,
     window:{MediaRecorder,...(AudioContext?{AudioContext:FakeAudioContext}:{}),...(SpeechRecognition?{SpeechRecognition:FakeRecognition}:{}),
       addEventListener(name,fn){windowEvents[name]=fn;}},
-    navigator:{mediaDevices:mediaDevices||{getUserMedia:async()=>stream}},
+    navigator:{mediaDevices:mediaDevices||{getUserMedia:async()=>stream},userAgent,maxTouchPoints},
     MediaRecorder,AbortController,FormData,Blob,console,
   });
   vm.runInContext(code,context);
@@ -489,3 +489,172 @@ test('pagehide releases microphone and discards late AI responses',async()=>{
   assert.equal(app.$('#voiceConfirmOverlay').classList.contains('show'),false,'late AI response discarded after pagehide');
 });
 
+
+/* ---------- real phones: one microphone owner, full audio, no cut words ---------- */
+const PHONE_UA='Mozilla/5.0 (Linux; Android 14; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36';
+
+test('on a phone the recorder owns the microphone and the full audio is transcribed',async()=>{
+  let sent=null,calls=0;
+  const app=setup({
+    userAgent:PHONE_UA,maxTouchPoints:5,
+    SpeechRecognition:true,MediaRecorder:recorderClass(),
+    invoke:async(_name,options)=>{calls++;sent=options.body;return {data:draft};},
+  });
+  await app.$('#voiceTaskBtn').onclick();
+  assert.equal(app.recognizer,null,'SpeechRecognition must never fight MediaRecorder for the microphone');
+  assert.equal(app.$('#voiceLiveState').textContent,'Po dëgjoj…');
+  assert.match(app.$('#voiceLiveHint').textContent,/Audioja regjistrohet e plotë/);
+  app.speak(500);
+  assert.equal(app.$('#voiceLiveMeterBar').style.transform.includes('scaleX'),true,'the live meter still works');
+  app.quiet(2800);
+  assert.equal(app.stopped,0,'the microphone is still open before 3 s of silence');
+  app.quiet(400);
+  await tick();await tick();
+  assert.equal(calls,1,'exactly one transcription request');
+  assert.ok(sent instanceof FormData,'the complete recording is uploaded, never a half sentence');
+  assert.ok(sent.get('audio').size>0);
+  assert.equal(app.stopped,1,'the microphone is released');
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+  assert.equal(app.$('#voiceDraftSource').textContent,'Propozim nga AI — kontrolloje para ruajtjes');
+  app.$('#voiceCancel').onclick();
+  assert.equal(app.saved,0);
+});
+
+test('on a phone without a signed-in server the recogniser is used alone (offline mode)',async()=>{
+  const app=setup({userAgent:PHONE_UA,maxTouchPoints:5,SpeechRecognition:true,MediaRecorder:recorderClass()});
+  await app.$('#voiceTaskBtn').onclick();
+  assert.ok(app.recognizer,'offline the recogniser is the only way to get text');
+  assert.equal(app.$('#voiceLiveState').textContent,'Po dëgjoj…');
+  app.speak(400);
+  app.recognizer.result([{text:'Raporti',final:false}]);
+  assert.equal(app.$('#voiceLiveText').textContent,'Raporti');
+  app.events.keydown({key:'Escape'});
+  assert.equal(app.stopped,1);
+});
+
+test('a desktop recognition that restarts sends the complete audio, not the cut text',async()=>{
+  let sent=null;
+  const app=setup({
+    SpeechRecognition:true,MediaRecorder:recorderClass(),
+    invoke:async(_name,options)=>{sent=options.body;return {data:draft};},
+  });
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(400);
+  app.recognizer.result([{text:'Cakto Arben Kola',final:false}]);
+  app.recognizer.onend();                       // Chrome closes the session on a short pause
+  app.advance(0);                               // restart without the old 250 ms gap
+  assert.equal(app.recognizer.started,2,'the session is restarted immediately');
+  assert.equal(app.$('#voiceLiveText').textContent,'Cakto Arben Kola','the first words are never erased');
+  app.speak(300);
+  app.recognizer.result([{text:'përgatit raportin nesër',final:false}]);
+  assert.equal(app.$('#voiceLiveText').textContent,'Cakto Arben Kola përgatit raportin nesër');
+  app.quiet(3100);
+  await tick();await tick();
+  assert.ok(sent instanceof FormData,'the full recording goes to Whisper');
+  assert.ok(sent.get('audio').size>0);
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+  app.$('#voiceCancel').onclick();
+});
+
+test('a failed live recogniser also uploads the audio',async()=>{
+  let sent=null;
+  const app=setup({
+    SpeechRecognition:true,MediaRecorder:recorderClass(),
+    invoke:async(_name,options)=>{sent=options.body;return {data:draft};},
+  });
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(400);
+  app.recognizer.onerror({error:'network'});
+  app.recognizer.result([{text:'Raporti',final:false}]);
+  app.quiet(3100);
+  await tick();await tick();
+  assert.ok(sent instanceof FormData,'liveFailed means the text is only a fallback');
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+  app.$('#voiceCancel').onclick();
+});
+
+test('when Whisper is unreachable the captured words still open a local proposal',async()=>{
+  let sent=null;
+  const app=setup({
+    SpeechRecognition:true,MediaRecorder:recorderClass(),
+    invoke:async(_name,options)=>{
+      sent=options.body;
+      return {error:httpError(503,{error:'Asnjë ofrues AI nuk është konfiguruar.',code:'no_provider'})};
+    },
+  });
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(400);
+  app.recognizer.result([{text:'Cakto Arben Kola të përgatisë raportin',final:false}]);
+  app.recognizer.onend();                       // an interruption forces the audio path
+  app.advance(0);
+  app.speak(300);
+  app.recognizer.result([{text:'raportin nesër urgjent',final:false}]);
+  app.quiet(3100);
+  await tick();await tick();
+  assert.ok(sent instanceof FormData,'the audio was uploaded first');
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'),'the local fallback still opens');
+  assert.equal(app.$('#voiceDraftSource').textContent,'Përpunim lokal — AI nuk u përdor');
+  assert.equal(app.$('#voiceDraftAssignee').value,'Arben Kola');
+  assert.equal(app.$('#voiceDraftPriority').value,'Lart');
+  assert.match(app.$('#assistantStatus').textContent,/AI në server nuk u përdor/);
+  assert.equal(app.saved,0,'nothing is saved before confirmation');
+  app.$('#voiceCancel').onclick();
+});
+
+/* ---------- readiness: never claim "listening" before the hardware is open ---------- */
+test('the panel stays on "opening the microphone" until the recorder is really running',async()=>{
+  let openStream;
+  const app=setup({
+    SpeechRecognition:true,MediaRecorder:recorderClass(),
+    mediaDevices:{getUserMedia:()=>new Promise(resolve=>{openStream=resolve;})},
+    invoke:async()=>({data:draft}),
+  });
+  const pending=app.$('#voiceTaskBtn').onclick();
+  assert.ok(app.$('#voiceLive').classList.contains('show'),'the panel confirms the tap at once');
+  assert.equal(app.$('#voiceLiveState').textContent,'Po hap mikrofonin… prit një çast');
+  assert.match(app.$('#assistantStatus').textContent,/Po hap mikrofonin/);
+  assert.equal(app.recognizer,null,'nothing may touch the microphone before it is open');
+  openStream(app.stream);
+  await pending;
+  assert.equal(app.$('#voiceLiveState').textContent,'Po dëgjoj…');
+  assert.ok(app.recognizer,'recognition starts only once the capture is ready');
+  app.events.keydown({key:'Escape'});
+  assert.equal(app.stopped,1);
+});
+
+test('a recorder that never starts reports an error instead of pretending to listen',async()=>{
+  class Broken{
+    constructor(){this.state='inactive';this.mimeType='audio/webm';}
+    start(){/* stays inactive */}
+    stop(){if(this.onstop)this.onstop();}
+  }
+  const app=setup({MediaRecorder:Broken,invoke:async()=>({data:draft})});
+  await app.$('#voiceTaskBtn').onclick();
+  assert.notEqual(app.$('#voiceLiveState').textContent,'Po dëgjoj…');
+  assert.match(app.$('#assistantStatus').textContent,/Regjistrimi i audios nuk nisi dot/);
+  assert.equal(app.$('#voiceTaskBtn').disabled,false);
+  assert.equal(app.$('#aiTaskBtn').disabled,false);
+  assert.equal(app.stopped,1,'the microphone is freed');
+});
+
+test('a broken recorder falls back to live recognition instead of doing nothing',async()=>{
+  class Broken{
+    constructor(){this.state='inactive';this.mimeType='audio/webm';}
+    start(){/* stays inactive */}
+    stop(){if(this.onstop)this.onstop();}
+  }
+  let body=null;
+  const app=setup({SpeechRecognition:true,MediaRecorder:Broken,
+    invoke:async(_name,options)=>{body=options.body;return {data:draft};}});
+  await app.$('#voiceTaskBtn').onclick();
+  assert.ok(app.recognizer,'the recogniser takes over when the recorder is unusable');
+  assert.equal(app.$('#voiceLiveState').textContent,'Po dëgjoj…');
+  app.speak(400);
+  app.recognizer.result([{text:'Arben Kola përgatit raportin nesër',final:true}]);
+  app.quiet(3100);
+  await tick();await tick();
+  assert.equal(body instanceof FormData,false,'no audio was recorded, so only text is sent');
+  assert.equal(body.text,'Arben Kola përgatit raportin nesër');
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+  app.$('#voiceCancel').onclick();
+});
