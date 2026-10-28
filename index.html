@@ -1206,12 +1206,12 @@ function diagContext(){
   }catch(e){}
   return parts.join(' · ');
 }
-function showVoiceDraft(raw,data=null,source='Përpunim lokal — pa AI në server'){
+function showVoiceDraft(raw,data=null,source='Përpunim lokal — AI nuk u përdor'){
   const transcript=String(data?.transcript||raw||'').trim();
   voiceSaving=false;
   // An empty transcript must never open the confirmation window.
   if(!transcript){assistantStatus('Nuk u kap tekst. Provo përsëri ose shkruaj kërkesën.');return false;}
-  voiceDraft=TaskAssistant.normalize(data,raw,assistantPeople());
+  voiceDraft=data?TaskAssistant.normalize(data,raw,assistantPeople()):TaskAssistant.parse(transcript,assistantPeople());
   assistantReturnFocus=document.activeElement;
   $('#voiceDraftHeading').textContent='Konfirmo dërgimin';
   $('#voiceDraftTitle').value=voiceDraft.title;
@@ -1461,9 +1461,16 @@ $('#voiceConfirm').onclick=()=>{
         try{body=await response.json();}catch(e){}
         const text=body&&typeof body.error==='string'?body.error.trim():'';
         if(text)return text.slice(0,160);
-        if(body&&typeof body.message==='string'&&body.message.trim())return body.message.trim().slice(0,160);
+        const msg=body&&typeof body.message==='string'?body.message.trim():'';
+        if(/^(Invalid JWT|JWT expired)$/i.test(msg))return 'Sesioni ka skaduar. Hyr përsëri.';
+        if(msg)return msg.slice(0,160);
         if(typeof context.status==='number'&&context.status){
-          return context.status===404?'funksioni transcribe-task nuk është publikuar (404)':'HTTP '+context.status;
+          if(context.status===404)return 'funksioni transcribe-task nuk është publikuar (404)';
+          if(context.status===401)return 'Sesioni ka skaduar. Hyr përsëri.';
+          if(context.status===403)return 'Vetëm pronari mund të përdorë asistentin e detyrave.';
+          if(context.status===429)return 'Kredia e ofruesit AI ka mbaruar. Përdor një çelës falas (Groq) ose shto kredi.';
+          if(context.status===503)return 'Asnjë ofrues AI nuk është konfiguruar.';
+          return 'HTTP '+context.status;
         }
       }catch(e){}
     }
@@ -1474,6 +1481,13 @@ $('#voiceConfirm').onclick=()=>{
     return message.slice(0,160);
   }
   function process(raw,blob=null){
+    const text=String(raw||'').trim();
+    const sendAudio=!text&&!!(blob&&blob.size);
+    if(!text&&!sendAudio){
+      stopUi();idle();
+      assistantStatus('Nuk u kap zë. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
+      return Promise.resolve();
+    }
     const id=++requestId;
     assistantBusy=true;ai.disabled=true;button.disabled=true;
     const session={controller:new AbortController()};active=session;
@@ -1484,9 +1498,10 @@ $('#voiceConfirm').onclick=()=>{
     return (async()=>{
       try{
         if(!authClient)throw new Error('offline');
-        const body=blob?new FormData():{text:raw,today:TaskAssistant.dateKey(new Date())};
-        if(blob){
-          body.append('audio',blob,blob.type.includes('mp4')?'task.mp4':'task.webm');
+        const body=sendAudio?new FormData():{text,today:TaskAssistant.dateKey(new Date())};
+        if(sendAudio){
+          const ext=blob.type.includes('mp4')?'mp4':blob.type.includes('ogg')?'ogg':'webm';
+          body.append('audio',blob,'task.'+ext);
           body.append('today',TaskAssistant.dateKey(new Date()));
         }
         const result=await Promise.race([
@@ -1498,19 +1513,20 @@ $('#voiceConfirm').onclick=()=>{
         if(result.data?.error){const error=new Error(String(result.data.error));error.assistantMessage=String(result.data.error);throw error;}
         if(!result.data?.draft){const error=new Error('përgjigjja nuk përmbante propozim');error.assistantMessage='përgjigjja nuk përmbante propozim';throw error;}
         stopUi();
-        const opened=showVoiceDraft(raw,result.data,'Propozim nga AI — kontrolloje para ruajtjes');
+        const opened=showVoiceDraft(text,result.data,'Propozim nga AI — kontrolloje para ruajtjes');
         assistantStatus(opened?'Konfirmo dërgimin: kontrollo fushat dhe shtyp “Konfirmo dhe dërgo”.':'Nuk u kap tekst. Provo përsëri.');
       }catch(e){
         if(id!==requestId)return;
         stopUi();
         const reason=await explainFailure(e);
-        const audio=blob?' · audio: '+Math.max(1,Math.round(blob.size/1024))+' KB '+blob.type:'';
-        if(raw.trim()){
-          showVoiceDraft(raw);
+        if(id!==requestId)return;
+        const audio=sendAudio?' · audio: '+Math.max(1,Math.round(blob.size/1024))+' KB '+blob.type:'';
+        if(text){
+          showVoiceDraft(text,null,'Përpunim lokal — AI nuk u përdor');
           assistantStatus('AI në server nuk u përdor ('+reason+'). U përdor përpunimi lokal — kontrollo fushat.');
           if(reason!=='offline')assistantDiag('arsyeja: '+reason+audio+' · '+diagContext());
         }else{
-          assistantStatus('Audioja nuk u transkriptua: '+reason+'. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
+          assistantStatus('Audioja nuk u transkriptua: '+reason.replace(/\.+$/,'')+'. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
           assistantDiag('arsyeja: '+reason+audio+' · '+diagContext());
         }
       }finally{
@@ -1531,15 +1547,19 @@ $('#voiceConfirm').onclick=()=>{
       assistantStatus('Nuk u kap zë. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
       return Promise.resolve();
     }
+    // Live transcript available: send ONLY text, never pay twice by uploading audio.
+    if(live){
+      session.blobPromise?.catch(()=>{});
+      return process(live,null);
+    }
     return session.blobPromise.catch(()=>null).then(blob=>{
-      if(!live&&!(blob&&blob.size)){
+      if(!(blob&&blob.size)){
         idle();
         assistantStatus('Mikrofoni nuk dha audio ose ky browser nuk transkripton. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
         assistantDiag('nuk u regjistrua audio · '+diagContext());
         return;
       }
-      // A live transcript is what the owner already saw: use it, do not re-buy transcription.
-      return process(live,live?null:blob);
+      return process('',blob);
     });
   }
 

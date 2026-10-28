@@ -1,68 +1,290 @@
-const {test}=require('node:test');
-const assert=require('node:assert/strict');
-const vm=require('node:vm');
-const fs=require('node:fs');
-const {stripTypeScriptTypes}=require('node:module');
-const source=stripTypeScriptTypes(fs.readFileSync(require('node:path').join(__dirname,'../supabase/functions/transcribe-task/index.ts'),'utf8'));
-function endpoint({role='owner',key='test-key',invalidSession=false,providerStatus=200}={}){
-  let handler;const calls=[];
-  const env={SUPABASE_URL:'https://example.supabase.co',SUPABASE_ANON_KEY:'anon',OPENAI_API_KEY:key};
-  const json=(data,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json'}});
-  const fetch=async(url,options)=>{
-    calls.push({url,options});
-    if(url.endsWith('/auth/v1/user'))return json({id:'verified-user'},invalidSession?401:200);
-    if(url.includes('select=role'))return json([{role}]);
-    if(url.includes('select=display_name'))return json([{display_name:'Arben Kola'}]);
-    if(url.endsWith('audio/transcriptions'))return json({text:'Arben Kola raportin nesër'});
-    return json({choices:[{message:{content:JSON.stringify({title:'Raporti',assignee:'Arben Kola, Person imagjinar',due:'2026-02-30',priority:'urgent'})}}]},providerStatus);
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const fs = require('node:fs');
+const path = require('node:path');
+const { stripTypeScriptTypes } = require('node:module');
+
+const source = stripTypeScriptTypes(
+  fs.readFileSync(path.join(__dirname, '../supabase/functions/transcribe-task/index.ts'), 'utf8'),
+);
+
+const QUOTA_MSG = 'Kredia e ofruesit AI ka mbaruar. Përdor një çelës falas (Groq) ose shto kredi.';
+
+function endpoint({
+  role = 'owner',
+  groqKey = '',
+  openaiKey = 'openai-secret-key',
+  invalidSession = false,
+  providerResponder = null,
+  providerStatus = 200,
+} = {}) {
+  let handler;
+  const calls = [];
+  const env = {
+    SUPABASE_URL: 'https://example.supabase.co',
+    SUPABASE_ANON_KEY: 'anon',
+    GROQ_API_KEY: groqKey,
+    OPENAI_API_KEY: openaiKey,
   };
-  vm.runInNewContext(source,{Deno:{env:{get:name=>env[name]},serve:fn=>{handler=fn;}},
-    fetch,Request,Response,File,FormData,Uint8Array,TextDecoder,AbortSignal,Intl});
-  return {handler,calls};
+  const json = (data, status = 200) => new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const fetch = async (url, options) => {
+    calls.push({ url, options });
+    if (url.endsWith('/auth/v1/user')) return json({ id: 'verified-user' }, invalidSession ? 401 : 200);
+    if (url.includes('select=role')) return json([{ role }]);
+    if (url.includes('select=display_name')) return json([{ display_name: 'Arben Kola' }, { display_name: 'Ana Hoxha' }]);
+    if (providerResponder) return providerResponder(url, options, json);
+    if (url.endsWith('audio/transcriptions')) {
+      return json({ text: 'Arben Kola raportin nesër' }, providerStatus);
+    }
+    return json({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            title: 'Raporti',
+            assignee: 'Arben Kola, Person imagjinar',
+            due: '2026-02-30',
+            priority: 'urgent',
+          }),
+        },
+      }],
+    }, providerStatus);
+  };
+  vm.runInNewContext(source, {
+    Deno: { env: { get: name => env[name] }, serve: fn => { handler = fn; } },
+    fetch, Request, Response, File, FormData, Uint8Array, TextDecoder, AbortSignal, Intl, Date,
+  });
+  return { handler, calls };
 }
-const post=(body={text:'Arben Kola raportin nesër',today:'2026-10-28'},headers={})=>new Request('https://example.test/functions/v1/transcribe-task',{
-  method:'POST',headers:{Authorization:'Bearer user-token','Content-Type':'application/json',...headers},body:JSON.stringify(body),
+
+const isAiCall = c => c.url.includes('api.groq.com') || c.url.includes('api.openai.com');
+
+const post = (body = { text: 'Arben Kola raportin nesër', today: '2026-10-28' }, headers = {}) =>
+  new Request('https://example.test/functions/v1/transcribe-task', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer user-token', 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+
+const postAudio = (today = '2026-10-28', type = 'audio/webm', name = 'task.webm') => {
+  const form = new FormData();
+  form.append('audio', new Blob(['audio-bytes'], { type }), name);
+  form.append('today', today);
+  return new Request('https://example.test/functions/v1/transcribe-task', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer user-token' },
+    body: form,
+  });
+};
+
+test('handles CORS without calling external services', async () => {
+  const app = endpoint();
+  const result = await app.handler(new Request('https://example.test', { method: 'OPTIONS' }));
+  assert.equal(result.status, 200);
+  assert.equal(app.calls.length, 0);
+  assert.match(result.headers.get('Access-Control-Allow-Methods'), /POST/);
 });
-test('handles CORS without calling external services',async()=>{
-  const app=endpoint();const result=await app.handler(new Request('https://example.test',{method:'OPTIONS'}));
-  assert.equal(result.status,200);assert.equal(app.calls.length,0);assert.match(result.headers.get('Access-Control-Allow-Methods'),/POST/);
+
+test('rejects unsupported methods and missing authentication', async () => {
+  const app = endpoint();
+  assert.equal((await app.handler(new Request('https://example.test'))).status, 405);
+  const unauth = await app.handler(post(undefined, { Authorization: '' }));
+  assert.equal(unauth.status, 401);
+  assert.match((await unauth.json()).error, /Sesioni ka skaduar/i);
+  assert.equal(app.calls.length, 0);
 });
-test('rejects unsupported methods and missing authentication',async()=>{
-  const app=endpoint();assert.equal((await app.handler(new Request('https://example.test'))).status,405);
-  assert.equal((await app.handler(post(undefined,{Authorization:''}))).status,401);assert.equal(app.calls.length,0);
-});
-test('expired sessions and employee roles cannot incur provider usage',async()=>{
-  for(const options of [{invalidSession:true},{role:'employee'}]){
-    const app=endpoint(options);const result=await app.handler(post());
-    assert.equal(result.status,options.invalidSession?401:403);
-    assert.ok(app.calls.every(c=>!c.url.includes('openai')));
+
+test('expired sessions and employee roles cannot incur provider usage', async () => {
+  for (const options of [{ invalidSession: true, groqKey: 'gsk-test' }, { role: 'employee', groqKey: 'gsk-test' }]) {
+    const app = endpoint(options);
+    const result = await app.handler(post());
+    assert.equal(result.status, options.invalidSession ? 401 : 403);
+    const data = await result.json();
+    assert.match(data.error, options.invalidSession ? /Sesioni ka skaduar/ : /pronari/);
+    assert.ok(!app.calls.some(isAiCall));
   }
 });
-test('missing provider setup returns a safe actionable failure',async()=>{
-  const app=endpoint({key:''});const result=await app.handler(post());
-  assert.equal(result.status,503);assert.match((await result.json()).error,/konfiguruar/);
+
+test('provider selection: neither GROQ_API_KEY nor OPENAI_API_KEY returns 503 with zero external AI calls', async () => {
+  const app = endpoint({ groqKey: '', openaiKey: '' });
+  const result = await app.handler(postAudio());
+  assert.equal(result.status, 503);
+  const data = await result.json();
+  assert.match(data.error, /konfiguruar/);
+  assert.equal(data.code, 'no_provider');
+  assert.ok(!app.calls.some(isAiCall), 'no AI provider should be called');
+  assert.ok(!app.calls.some(c => c.url.includes('select=display_name')), 'stops before loading contacts');
 });
-test('rejects oversized requests and invalid text before provider usage',async()=>{
-  for(const request of [post(undefined,{'Content-Length':String(11*1024*1024)}),post({text:37}),post({text:'x'.repeat(6001)})]){
-    const app=endpoint();const result=await app.handler(request);
-    assert.ok([400,413].includes(result.status));assert.ok(app.calls.every(c=>!c.url.includes('openai')));
+
+test('provider selection: only GROQ_API_KEY uses whisper-large-v3-turbo (language=sq) and llama-3.3-70b-versatile JSON', async () => {
+  const app = endpoint({ groqKey: 'gsk_free_secret', openaiKey: '' });
+  const result = await app.handler(postAudio());
+  assert.equal(result.status, 200);
+  const aiCalls = app.calls.filter(isAiCall);
+  assert.equal(aiCalls.length, 2);
+  assert.equal(aiCalls[0].url, 'https://api.groq.com/openai/v1/audio/transcriptions');
+  assert.equal(aiCalls[0].options.headers.Authorization, 'Bearer gsk_free_secret');
+  const form = aiCalls[0].options.body;
+  assert.equal(form.get('model'), 'whisper-large-v3-turbo');
+  assert.equal(form.get('language'), 'sq');
+
+  assert.equal(aiCalls[1].url, 'https://api.groq.com/openai/v1/chat/completions');
+  const chatBody = JSON.parse(aiCalls[1].options.body);
+  assert.equal(chatBody.model, 'llama-3.3-70b-versatile');
+  assert.equal(chatBody.response_format.type, 'json_object');
+  assert.match(chatBody.messages[0].content, /JSON/);
+  assert.ok(app.calls.every(c => !c.url.includes('api.openai.com')));
+});
+
+test('provider selection: only OPENAI_API_KEY uses whisper-1 and gpt-4o-mini with json_schema', async () => {
+  const app = endpoint({ groqKey: '', openaiKey: 'sk-openai-only' });
+  const result = await app.handler(postAudio());
+  assert.equal(result.status, 200);
+  const aiCalls = app.calls.filter(isAiCall);
+  assert.equal(aiCalls.length, 2);
+  assert.equal(aiCalls[0].url, 'https://api.openai.com/v1/audio/transcriptions');
+  assert.equal(aiCalls[0].options.body.get('model'), 'whisper-1');
+  assert.equal(aiCalls[0].options.body.get('language'), 'sq');
+  assert.equal(aiCalls[1].url, 'https://api.openai.com/v1/chat/completions');
+  const chatBody = JSON.parse(aiCalls[1].options.body);
+  assert.equal(chatBody.model, 'gpt-4o-mini');
+  assert.equal(chatBody.response_format.type, 'json_schema');
+  assert.ok(app.calls.every(c => !c.url.includes('api.groq.com')));
+});
+
+test('provider selection: when both GROQ_API_KEY and OPENAI_API_KEY exist, Groq is preferred and OpenAI is untouched', async () => {
+  const app = endpoint({ groqKey: 'gsk_primary', openaiKey: 'sk_backup' });
+  const result = await app.handler(postAudio());
+  assert.equal(result.status, 200);
+  const aiCalls = app.calls.filter(isAiCall);
+  assert.equal(aiCalls.length, 2);
+  assert.ok(aiCalls.every(c => c.url.startsWith('https://api.groq.com/openai/v1/')));
+  assert.ok(app.calls.every(c => !c.url.includes('api.openai.com')));
+});
+
+test('fallback: when first provider fails with quota/credits, falls back to second provider and keeps same provider for draft', async () => {
+  const app = endpoint({
+    groqKey: 'gsk_exhausted',
+    openaiKey: 'sk_working_backup',
+    providerResponder: (url, _options, json) => {
+      if (url.includes('api.groq.com')) {
+        return json({ error: { message: 'Rate limit / quota reached', code: 'rate_limit_exceeded' } }, 429);
+      }
+      if (url.endsWith('audio/transcriptions')) {
+        return json({ text: 'Ana Hoxha kontrollo kontratën sot' });
+      }
+      return json({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              title: 'Kontrollo kontratën',
+              assignee: 'Ana Hoxha',
+              due: '2026-10-28',
+              priority: 'Lart',
+            }),
+          },
+        }],
+      });
+    },
+  });
+  const result = await app.handler(postAudio());
+  assert.equal(result.status, 200);
+  const data = await result.json();
+  assert.equal(data.transcript, 'Ana Hoxha kontrollo kontratën sot');
+  assert.deepEqual(data.draft, {
+    title: 'Kontrollo kontratën',
+    assignee: 'Ana Hoxha',
+    due: '2026-10-28',
+    priority: 'Lart',
+  });
+  const aiUrls = app.calls.filter(isAiCall).map(c => c.url);
+  assert.deepEqual(aiUrls, [
+    'https://api.groq.com/openai/v1/audio/transcriptions',
+    'https://api.openai.com/v1/audio/transcriptions',
+    'https://api.openai.com/v1/chat/completions',
+  ], 'uses the provider that succeeded in transcription directly for the task proposal');
+});
+
+test('fallback: when audio succeeds on Groq and chat model is unavailable, server local parser preserves transcript and contract', async () => {
+  const app = endpoint({
+    groqKey: 'gsk_only',
+    openaiKey: '',
+    providerResponder: (url, _options, json) => {
+      if (url.endsWith('audio/transcriptions')) {
+        return json({ text: 'Cakto Arben Kola përgatit raportin nesër urgjent' });
+      }
+      return json({ error: { message: 'The model does not exist', code: 'model_not_found' } }, 404);
+    },
+  });
+  const result = await app.handler(postAudio('2026-10-28'));
+  assert.equal(result.status, 200);
+  const data = await result.json();
+  assert.deepEqual(Object.keys(data), ['transcript', 'draft']);
+  assert.equal(data.transcript, 'Cakto Arben Kola përgatit raportin nesër urgjent');
+  assert.deepEqual(data.draft, {
+    title: 'Përgatit raportin',
+    assignee: 'Arben Kola',
+    due: '2026-10-29',
+    priority: 'Lart',
+  });
+});
+
+test('rejects oversized requests and invalid text before provider usage', async () => {
+  for (const request of [
+    post(undefined, { 'Content-Length': String(11 * 1024 * 1024) }),
+    post({ text: 37 }),
+    post({ text: 'x'.repeat(6001) }),
+  ]) {
+    const app = endpoint({ groqKey: 'gsk_key', openaiKey: 'sk_key' });
+    const result = await app.handler(request);
+    assert.ok([400, 413].includes(result.status));
+    assert.ok(!app.calls.some(isAiCall));
   }
 });
-test('valid requests use verified contacts and sanitize model output',async()=>{
-  const app=endpoint();const result=await app.handler(post());assert.equal(result.status,200);
-  const data=await result.json();assert.equal(data.draft.assignee,'Arben Kola');assert.equal(data.draft.due,'');assert.equal(data.draft.priority,'Mesme');
-  const call=app.calls.find(c=>c.url.includes('openai'));
-  const request=JSON.parse(call.options.body);const context=JSON.parse(request.messages[1].content);
-  assert.deepEqual(context.people,['Arben Kola']);assert.equal(context.today,'2026-10-28');
-  assert.equal(result.headers.get('Cache-Control'),'no-store');
+
+test('response preserves {transcript, draft} contract and sanitizes contacts, dates and priority', async () => {
+  const app = endpoint({ groqKey: 'gsk_valid', openaiKey: '' });
+  const result = await app.handler(post());
+  assert.equal(result.status, 200);
+  const data = await result.json();
+  assert.deepEqual(Object.keys(data), ['transcript', 'draft']);
+  assert.deepEqual(Object.keys(data.draft), ['title', 'assignee', 'due', 'priority']);
+  assert.equal(data.transcript, 'Arben Kola raportin nesër');
+  assert.equal(data.draft.title, 'Raporti');
+  assert.equal(data.draft.assignee, 'Arben Kola');
+  assert.equal(data.draft.due, '');
+  assert.equal(data.draft.priority, 'Mesme');
+  const call = app.calls.find(isAiCall);
+  const request = JSON.parse(call.options.body);
+  const context = JSON.parse(request.messages[1].content);
+  assert.deepEqual(context.people, ['Arben Kola', 'Ana Hoxha']);
+  assert.equal(context.today, '2026-10-28');
+  assert.equal(result.headers.get('Cache-Control'), 'no-store');
 });
-test('audio is transcribed before creating a draft',async()=>{
-  const app=endpoint();const form=new FormData();form.append('audio',new Blob(['audio'],{type:'audio/webm'}),'task.webm');form.append('today','2026-10-28');
-  const result=await app.handler(new Request('https://example.test',{method:'POST',headers:{Authorization:'Bearer user-token'},body:form}));
-  assert.equal(result.status,200);assert.equal(app.calls.filter(c=>c.url.includes('openai')).length,2);
-  assert.equal((await result.json()).transcript,'Arben Kola raportin nesër');
-});
-test('provider errors are not exposed verbatim to the browser',async()=>{
-  const app=endpoint({providerStatus:429});const result=await app.handler(post());assert.equal(result.status,429);
-  const data=await result.json();assert.match(data.error,/ngarkuar/);assert.ok(!JSON.stringify(data).includes('test-key'));
+
+test('"no credits" / insufficient_quota / 429 reports exact Albanian message without exposing keys or raw provider text', async () => {
+  const scenarios = [
+    { status: 429, body: { error: { message: 'You have no credits remaining. Key sk-secret-leak', type: 'insufficient_quota', code: 'insufficient_quota' } } },
+    { status: 400, body: { error: { message: 'You have no credits remaining for organization org-xyz (sk-secret-leak)' } } },
+    { status: 402, body: { error: { message: 'Billing hard limit / insufficient_quota', code: 'insufficient_quota' } } },
+  ];
+  for (const scenario of scenarios) {
+    const app = endpoint({
+      groqKey: '',
+      openaiKey: 'sk-secret-leak',
+      providerResponder: (_url, _opts, json) => json(scenario.body, scenario.status),
+    });
+    const result = await app.handler(postAudio());
+    assert.equal(result.status, 429);
+    const rawResponse = await result.text();
+    const data = JSON.parse(rawResponse);
+    assert.equal(data.error, QUOTA_MSG);
+    assert.equal(data.code, 'quota_exceeded');
+    assert.ok(!rawResponse.includes('sk-secret-leak'), 'must never leak API key');
+    assert.ok(!rawResponse.includes('You have no credits remaining'), 'must never leak raw English provider text');
+    assert.ok(!rawResponse.includes('org-xyz'), 'must never leak provider org details');
+  }
 });
