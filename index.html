@@ -339,6 +339,10 @@
   .comp-input{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:6px 14px;
     display:flex;flex-direction:column}
   #tTitle{background:transparent;border:none;color:var(--txt);outline:none;font-size:15px;padding:6px 0;width:100%}
+  .ai-compose-row{display:flex;align-items:center;gap:6px}
+  .voice-btn{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;display:grid;place-items:center;flex-shrink:0}
+  .voice-btn:hover,.voice-btn.listening{color:#fff;background:#d94b4b;border-color:#d94b4b}
+  .voice-btn svg{width:16px;height:16px}
   #tDesc{background:transparent;border:none;color:var(--txt);outline:none;font-size:13px;resize:none;
     width:100%;max-height:90px;font-family:inherit;border-top:1px solid var(--line);padding:6px 0 2px;display:none}
   .comp-input.expanded #tDesc{display:block}
@@ -547,7 +551,12 @@
           </button>
           <input type="file" id="fileInput" multiple style="display:none" />
           <div class="comp-input" id="compInput">
-            <input type="text" id="tTitle" placeholder="Shkruaj një detyrë..." autocomplete="off" />
+            <div class="ai-compose-row">
+              <input type="text" id="tTitle" placeholder="Shkruaj ose fol një detyrë..." autocomplete="off" />
+              <button type="button" class="voice-btn" id="voiceTaskBtn" title="Fol detyrën në shqip" aria-label="Fol detyrën">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg>
+              </button>
+            </div>
             <textarea id="tDesc" placeholder="Shto detaje (opsionale)..." rows="1"></textarea>
           </div>
           <label class="notify-all-label" title="Njofto në Chat, SMS dhe Email">
@@ -643,6 +652,31 @@
         <button class="btn-icon owner-only" id="empSmsSettBtn" title="Cilësimet SMS">⚙️</button>
       </div>
       <div class="emp-grid" id="empGrid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== VOICE TASK CONFIRMATION MODAL ===== -->
+<div class="overlay" id="voiceConfirmOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="ic">🎙️</span>
+      <div style="flex:1;min-width:0"><p class="mt">Konfirmo detyrën</p><p class="ms">Asistenti e dëgjoi kërkesën. Kontrolloje para dërgimit.</p></div>
+      <button class="x" id="voiceCancelTop">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>Titulli</label><input type="text" id="voiceDraftTitle" /></div>
+      <div class="field"><label>Përshkrimi / transkriptimi origjinal</label><textarea id="voiceDraftDesc" rows="5"></textarea></div>
+      <div class="row">
+        <div class="field"><label>Caktuar për</label><input type="text" id="voiceDraftAssignee" /></div>
+        <div class="field"><label>Afati</label><input type="date" id="voiceDraftDue" /></div>
+      </div>
+      <div class="field"><label>Prioriteti</label><select id="voiceDraftPriority"><option value="Ulet">Ulët</option><option value="Mesme">Mesëm</option><option value="Lart">Lartë</option></select></div>
+      <div class="hint">Asgjë nuk ruhet dhe nuk dërgohet pa shtypur butonin e konfirmimit.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="act ghost" id="voiceCancel">Anulo</button>
+      <button class="act" id="voiceConfirm">✅ Ruaj dhe dërgo</button>
     </div>
   </div>
 </div>
@@ -1102,6 +1136,68 @@ function renderPending(){
   $$('#pendingFiles .chip').forEach(c=>c.onclick=()=>{state.pending=state.pending.filter(f=>f.id!==c.dataset.rm);renderPending();});
 }
 
+/* VOICE TASK ASSISTANT */
+let voiceDraft = null;
+function parseVoiceTask(raw){
+  const original=String(raw||'').trim();
+  let text=original;
+  const people=(state.chat?.contacts||[]).map(c=>c.name).filter(Boolean);
+  const found=people.filter(name=>text.toLowerCase().includes(String(name).toLowerCase()));
+  let priority='Mesme';
+  if(/prioritet\s+i\s+lartë|prioritet\s+lart|urgjent/i.test(text)) priority='Lart';
+  else if(/prioritet\s+i\s+ulët|prioritet\s+ulet/i.test(text)) priority='Ulet';
+  let due='';
+  const d=new Date();
+  if(/nesër|neser/i.test(text)){d.setDate(d.getDate()+1);due=d.toISOString().slice(0,10);}
+  else if(/sot/i.test(text)) due=new Date().toISOString().slice(0,10);
+  let title=text;
+  found.forEach(name=>{title=title.replace(new RegExp(String(name).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'ig'),'');});
+  title=title.replace(/prioritet\s+i\s+lartë|prioritet\s+i\s+ulët|prioritet\s+lartë|prioritet\s+ulët|prioritet\s+lart|prioritet\s+ulet|urgjent/ig,'')
+    .replace(/cakto(?:ja|je)?\s+(?:për|per)?/ig,'').replace(/(?:sot|nesër|neser)(?:\s+në\s+orën?\s+\w+)?/ig,'')
+    .replace(/\s+/g,' ').replace(/^\s*[,.:;-]+|[,.:;-]+\s*$/g,'').trim();
+  if(!title) title=original;
+  return {original,title:title.charAt(0).toUpperCase()+title.slice(1),assignee:[...new Set(found)].join(', '),due,priority};
+}
+function showVoiceDraft(raw){
+  voiceDraft=parseVoiceTask(raw);
+  $('#voiceDraftTitle').value=voiceDraft.title;
+  $('#voiceDraftDesc').value=voiceDraft.original;
+  $('#voiceDraftAssignee').value=voiceDraft.assignee;
+  $('#voiceDraftDue').value=voiceDraft.due;
+  $('#voiceDraftPriority').value=voiceDraft.priority;
+  $('#voiceConfirmOverlay').classList.add('show');
+}
+function closeVoiceDraft(){voiceDraft=null;$('#voiceConfirmOverlay').classList.remove('show');}
+$('#voiceCancel').onclick=closeVoiceDraft;
+$('#voiceCancelTop').onclick=closeVoiceDraft;
+$('#voiceConfirm').onclick=()=>{
+  if(!voiceDraft)return;
+  $('#tTitle').value=$('#voiceDraftTitle').value.trim();
+  $('#tDesc').value=$('#voiceDraftDesc').value.trim();
+  $('#tAssignee').value=$('#voiceDraftAssignee').value.trim();
+  $('#tDue').value=$('#voiceDraftDue').value;
+  state.priority=$('#voiceDraftPriority').value;
+  $$('.pill').forEach(p=>p.classList.toggle('active',p.dataset.p===state.priority));
+  $('#notifyAllChannels').checked=true;
+  closeVoiceDraft();
+  addTask();
+};
+(function setupVoiceTask(){
+  const button=$('#voiceTaskBtn');
+  if(!button)return;
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SpeechRecognition){button.onclick=()=>toast('Përdor Chrome në Android ose PC për diktim në shqip','err');return;}
+  const recognition=new SpeechRecognition();
+  recognition.lang='sq-AL'; recognition.interimResults=true; recognition.continuous=true;
+  let transcript=''; let silenceTimer=null;
+  const finish=()=>{clearTimeout(silenceTimer);recognition.stop();button.classList.remove('listening');if(transcript.trim())showVoiceDraft(transcript.trim());};
+  recognition.onstart=()=>{transcript='';button.classList.add('listening');toast('Po dëgjoj... ndalo së foluri dhe pres 3 sekonda.','ok');};
+  recognition.onresult=(event)=>{transcript=[...event.results].map(r=>r[0].transcript).join(' ');clearTimeout(silenceTimer);silenceTimer=setTimeout(finish,3000);};
+  recognition.onend=()=>{button.classList.remove('listening');clearTimeout(silenceTimer);if(transcript.trim()&&!$('#voiceConfirmOverlay').classList.contains('show'))showVoiceDraft(transcript.trim());};
+  recognition.onerror=()=>{button.classList.remove('listening');clearTimeout(silenceTimer);toast('Mikrofoni nuk u dëgjua. Kontrollo lejen e browser-it.','err');};
+  button.onclick=()=>{if(button.classList.contains('listening'))finish();else{try{recognition.start();}catch(e){}}};
+})();
+
 /* ADD TASK */
 $('#addTaskBtn').addEventListener('click',addTask);
 async function notifyTaskChannels(task){
@@ -1109,8 +1205,9 @@ async function notifyTaskChannels(task){
   if(!task.assignee){toast('Detyra nuk ka punonjës të caktuar','err');return;}
   const {data,error}=await authClient.functions.invoke('notify-task',{body:{task}});
   if(error||data?.error){toast('Njoftimi dështoi: '+(data?.error||error?.message||'gabim'),'err');return;}
-  const r=data.result||{};
-  toast('Njoftimet: Chat '+r.chat+', SMS '+r.sms+', Email '+r.email,'ok');
+  const results=Array.isArray(data.result)?data.result:[data.result||{}];
+  const countStatus=(channel,status)=>results.filter(item=>item&&item[channel]===status).length;
+  toast('Njoftimet për '+results.length+' punonjës: Chat '+countStatus('chat','sent')+' të dërguara, SMS '+countStatus('sms','sent')+' të dërguara, Email '+countStatus('email','sent')+' të dërguara','ok');
 }
 function addTask(){
   const title=$('#tTitle').value.trim();
