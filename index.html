@@ -1189,11 +1189,43 @@ $('#voiceConfirm').onclick=()=>{
   if(!SpeechRecognition){button.onclick=()=>toast('Përdor Chrome në Android ose PC për diktim në shqip','err');return;}
   const recognition=new SpeechRecognition();
   recognition.lang='sq-AL'; recognition.interimResults=true; recognition.continuous=true;
-  let transcript=''; let silenceTimer=null;
-  const finish=()=>{clearTimeout(silenceTimer);recognition.stop();button.classList.remove('listening');if(transcript.trim())showVoiceDraft(transcript.trim());};
-  recognition.onstart=()=>{transcript='';button.classList.add('listening');toast('Po dëgjoj... ndalo së foluri dhe pres 3 sekonda.','ok');};
-  recognition.onresult=(event)=>{transcript=[...event.results].map(r=>r[0].transcript).join(' ');clearTimeout(silenceTimer);silenceTimer=setTimeout(finish,3000);};
-  recognition.onend=()=>{button.classList.remove('listening');clearTimeout(silenceTimer);if(transcript.trim()&&!$('#voiceConfirmOverlay').classList.contains('show'))showVoiceDraft(transcript.trim());};
+  let transcript=''; let silenceTimer=null; let recorder=null; let chunks=[]; let stopping=false;
+  const showProfessional=(data)=>{
+    const draft=data?.draft||{};
+    voiceDraft={original:data?.transcript||transcript,title:draft.title||data?.transcript||transcript,assignee:draft.assignee||'',due:draft.due||'',priority:draft.priority||'Mesme'};
+    $('#voiceDraftTitle').value=voiceDraft.title;
+    $('#voiceDraftDesc').value=voiceDraft.original;
+    $('#voiceDraftAssignee').value=voiceDraft.assignee;
+    $('#voiceDraftDue').value=voiceDraft.due;
+    $('#voiceDraftPriority').value=voiceDraft.priority;
+    $('#voiceConfirmOverlay').classList.add('show');
+  };
+  const processAudio=async(blob)=>{
+    if(!blob||!blob.size){showVoiceDraft(transcript);return;}
+    toast('Po e transkriptoj dhe po e kuptoj detyrën...','ok');
+    const form=new FormData(); form.append('audio',blob,'task.webm'); form.append('liveTranscript',transcript);
+    const {data,error}=await authClient.functions.invoke('transcribe-task',{body:form});
+    if(error||data?.error){toast('Asistenti profesional dështoi; po përdor tekstin live.','err');showVoiceDraft(transcript);return;}
+    showProfessional(data);
+  };
+  const finish=()=>{
+    if(stopping)return; stopping=true; clearTimeout(silenceTimer); button.classList.remove('listening');
+    try{recognition.stop();}catch(e){}
+    if(recorder&&recorder.state!=='inactive') recorder.stop(); else processAudio(null);
+  };
+  recognition.onstart=async()=>{
+    transcript=''; chunks=[]; stopping=false; button.classList.add('listening');
+    toast('Po dëgjoj... teksti shfaqet ndërsa flet.','ok');
+    if(window.MediaRecorder&&navigator.mediaDevices?.getUserMedia){
+      try{const stream=await navigator.mediaDevices.getUserMedia({audio:true}); recorder=new MediaRecorder(stream); recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);}; recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());processAudio(new Blob(chunks,{type:recorder.mimeType||'audio/webm'}));}; recorder.start();}catch(e){recorder=null;}
+    }
+  };
+  recognition.onresult=(event)=>{
+    transcript=[...event.results].map(r=>r[0].transcript).join(' ');
+    $('#tTitle').value=transcript;
+    clearTimeout(silenceTimer); silenceTimer=setTimeout(finish,3000);
+  };
+  recognition.onend=()=>{button.classList.remove('listening');if(!recorder&&!stopping&&transcript.trim())processAudio(null);};
   recognition.onerror=()=>{button.classList.remove('listening');clearTimeout(silenceTimer);toast('Mikrofoni nuk u dëgjua. Kontrollo lejen e browser-it.','err');};
   button.onclick=()=>{if(button.classList.contains('listening'))finish();else{try{recognition.start();}catch(e){}}};
 })();
