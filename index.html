@@ -1179,6 +1179,7 @@ function renderPending(){
    safe local fallback and explicit confirmation. Nothing is saved or sent before
    the owner presses "Konfirmo dhe dërgo". */
 let voiceDraft=null, assistantCancel=()=>{}, assistantBusy=false, assistantReturnFocus=null, voiceSaving=false;
+let voiceNotifyReminded=false;   // the owner is reminded once that notifying is his own choice
 const assistantPeople=()=>[...new Set((state.chat?.contacts||[]).filter(c=>!c.readonly).map(c=>c.name).filter(Boolean))];
 function parseVoiceTask(raw){return TaskAssistant.parse(raw,assistantPeople());}
 function assistantStatus(text){$('#assistantStatus').textContent=text;}
@@ -1208,7 +1209,7 @@ function diagContext(){
 }
 function showVoiceDraft(raw,data=null,source='Përpunim lokal — AI nuk u përdor'){
   const transcript=String(data?.transcript||raw||'').trim();
-  voiceSaving=false;
+  voiceSaving=false;voiceNotifyReminded=false;
   // An empty transcript must never open the confirmation window.
   if(!transcript){assistantStatus('Nuk u kap tekst. Provo përsëri ose shkruaj kërkesën.');return false;}
   voiceDraft=data?TaskAssistant.normalize(data,raw,assistantPeople()):TaskAssistant.parse(transcript,assistantPeople());
@@ -1252,6 +1253,15 @@ $('#voiceConfirm').onclick=()=>{
   if(due&&!TaskAssistant.validDate(due)){toast('Kontrollo afatin e detyrës','err');return;}
   const notify=$('#voiceDraftNotify').checked;
   if(notify&&!$('#voiceDraftAssignee').value.trim()){toast('Cakto një punonjës përpara njoftimit','err');$('#voiceDraftAssignee').focus();return;}
+  // Notifying is the owner's own click, never automatic. If the box is empty, remind him once.
+  if(!notify&&!voiceNotifyReminded){
+    voiceNotifyReminded=true;
+    $('#voiceDraftWarnings').textContent=($('#voiceDraftWarnings').textContent?$('#voiceDraftWarnings').textContent+'\n':'')
+      +'Kujtesë: punonjësi NUK do të njoftohet. Kliko katrorin “Njofto punonjësit” nëse do ta njoftosh, ose shtyp “Konfirmo dhe dërgo” sërish për të ruajtur pa njoftim.';
+    toast('Kujtesë: njoftimi nuk është zgjedhur','err');
+    $('#voiceDraftNotify').focus();
+    return;
+  }
   voiceSaving=true;                                   // one confirmation creates exactly one task
   $('#tTitle').value=title;
   $('#tDesc').value=$('#voiceDraftDesc').value.trim();

@@ -288,8 +288,33 @@ test('confirmation notifies only when the owner ticks it, and only once',async()
   app.quiet(3100);
   await tick();
   app.$('#voiceConfirm').onclick();
+  assert.equal(app.saved,0,'the first confirm only reminds the owner about notifying');
+  app.$('#voiceConfirm').onclick();
   assert.equal(app.saved,1);assert.equal(app.$('#notifyAllChannels').checked,false);
   assert.equal(app.notified,0,'no SMS/Email without an explicit choice');
+});
+test('unticked notification: the owner is reminded once, then can save without notifying',async()=>{
+  const app=setup();app.$('#tTitle').value='Arben Kola përgatit raportin nesër';app.$('#aiTaskBtn').onclick();await tick();
+  app.$('#voiceConfirm').onclick();
+  assert.equal(app.saved,0,'nothing is saved on the reminder click');
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'),'the confirmation stays open');
+  assert.match(app.$('#voiceDraftWarnings').textContent,/Kujtesë: punonjësi NUK do të njoftohet/);
+  assert.equal(app.$('#voiceDraftNotify').checked,false,'the app never ticks the box for the owner');
+  app.$('#voiceConfirm').onclick();app.$('#voiceConfirm').onclick();
+  assert.equal(app.saved,1);assert.equal(app.$('#notifyAllChannels').checked,false);assert.equal(app.notified,0);
+});
+test('ticked notification: saved at once, no reminder',async()=>{
+  const app=setup();app.$('#tTitle').value='Arben Kola përgatit raportin nesër';app.$('#aiTaskBtn').onclick();await tick();
+  app.$('#voiceDraftNotify').checked=true;app.$('#voiceConfirm').onclick();
+  assert.equal(app.saved,1);assert.equal(app.$('#notifyAllChannels').checked,true);
+  assert.doesNotMatch(app.$('#voiceDraftWarnings').textContent,/Kujtesë/);
+});
+test('the reminder is shown again for every new proposal',async()=>{
+  const app=setup();
+  app.$('#tTitle').value='Raporti nesër';app.$('#aiTaskBtn').onclick();await tick();
+  app.$('#voiceConfirm').onclick();app.$('#voiceCancel').onclick();
+  app.$('#aiTaskBtn').onclick();await tick();app.$('#voiceConfirm').onclick();
+  assert.equal(app.saved,0,'a new draft starts with a fresh reminder');
 });
 
 test('a browser without live transcription says so and still transcribes the audio',async()=>{
