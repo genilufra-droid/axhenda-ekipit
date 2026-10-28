@@ -2,10 +2,12 @@
 
 Aplikacioni statik për detyrat, chat-in dhe lidhjen Cloud me Supabase.
 
+Skedarët e faqes: `index.html`, `task-assistant.js` (analiza lokale e detyrës) dhe `voice-dictation.js` (motori i diktimit me zbulim të heshtjes 3-sekondëshe). Të tre duhet të jenë në të njëjtën dosje.
+
 ## GitHub Pages
 
 1. Krijo një repository publik në GitHub.
-2. Ngarko `index.html` dhe `task-assistant.js` në degën `main`.
+2. Ngarko `index.html`, `task-assistant.js` dhe `voice-dictation.js` në degën `main`.
 3. Hyr te **Settings → Pages**.
 4. Te **Build and deployment**, zgjidh **Deploy from a branch**.
 5. Zgjidh degën `main`, folderin `/ (root)`, pastaj **Save**.
