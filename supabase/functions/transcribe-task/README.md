@@ -13,15 +13,18 @@ Funksioni `transcribe-task` transkripton audio në shqip dhe kthen një **propoz
    ```
 
    Mos përdor `--no-verify-jwt`. Përveç verifikimit në gateway, funksioni verifikon përdoruesin në Auth dhe rolin në databazë. Për projektet me konfigurim të ri të gateway/çelësave, ndiq konfigurimin e përshtatshëm të platformës pa hequr kontrollet e Auth dhe rolit në kod.
-4. Publiko **edhe `task-assistant.js` pranë `index.html`**. Hap aplikacionin me HTTPS për mikrofonin.
+4. Publiko **edhe `task-assistant.js` dhe `voice-dictation.js` pranë `index.html`**. Hap aplikacionin me HTTPS për mikrofonin.
 
 `SUPABASE_URL` dhe `SUPABASE_ANON_KEY` ofrohen nga mjedisi i funksioneve. Nuk kërkohet migrim i ri i databazës. Ky ndryshim në repository nuk e publikon vetë funksionin dhe nuk vendos secrets.
 
 ## Sjellja
 
 - Tekst: shkruaj p.sh. “Cakto Arben Kola të përgatisë raportin nesër, urgjent” dhe shtyp **✨ AI**.
-- Audio: shtyp mikrofonin, fol dhe shtype sërish për të përfunduar. Kufiri i regjistrimit është 60 sekonda. Browser-at me njohje zanore e ndalin edhe pas 5 sekondash heshtjeje pas rezultatit të fundit.
-- **Escape** anulon regjistrimin/kërkesën ose mbyll propozimin. Mikrofoni lirohet pas ndalimit, gabimit dhe largimit nga faqja.
+- Audio: shtyp **një herë** mikrofonin dhe fol. Teksti shfaqet drejtpërdrejt në panelin “Po dëgjoj…”. Regjistrimi ndalon vetë kur mikrofonit i mungon **zë real për 3 sekonda të plota** (matet me RMS nga Web Audio API, jo nga mungesa e rezultateve të SpeechRecognition). Çdo fjalë e re e rifillon numërimin; pauzat e shkurtra dhe zëri i ulët nuk e ndërpresin. Kufiri i një diktimi është 60 sekonda; një klikim i dytë ndalon menjëherë.
+- Pas ndalimit hapet automatikisht dritarja **“Konfirmo dërgimin”** me titull, përshkrim/transkriptim, punonjës, afat dhe prioritet. Asgjë nuk ruhet dhe asnjë SMS/Email nuk dërgohet pa shtypur **“Konfirmo dhe dërgo”**; **“Anulo”** nuk ruan dhe nuk njofton. Njoftimi është zgjedhje e veçantë brenda kësaj dritareje dhe nuk trashëgohet nga shiriti i kompozimit.
+- Pa zë ose me transkriptim bosh dritarja e konfirmimit **nuk hapet**.
+- Nëse browser-i nuk ofron transkriptim të drejtpërdrejtë (p.sh. disa versione iOS/Safari ose Chrome me shërbim të bllokuar), paneli e thotë qartë dhe audioja transkriptohet në server pas ndalimit — nuk pretendohet transkriptim live.
+- **Escape** (ose butoni “Anulo” në panel) anulon regjistrimin/kërkesën ose mbyll propozimin. Mikrofoni dhe `AudioContext` lirohen gjithmonë: pas ndalimit, gabimit, anulimit dhe largimit nga faqja.
 - Nëse shërbimi nuk është konfiguruar ose dështon, teksti/transkriptimi i browser-it analizohet lokalisht. Kjo shënohet qartë; nuk pretendohet se është përgjigje nga AI. Në browser pa transkriptim lokal, dështimi i serverit kërkon shkrim manual.
 - Njohja lokale mbulon sot/nesër/pasnesër, pas N ditësh/javësh, ditët e javës, YYYY-MM-DD dhe DD.MM.YYYY / DD/MM/YYYY. Përdor data kalendarike lokale; një ditë jave e njëjtë me sot do të thotë java tjetër.
 - Punonjësit e propozuar nga AI kontrollohen kundrejt kontakteve. Datat e pamundura refuzohen. Emrat e panjohur/afatet e paqarta kërkojnë kontroll manual.
@@ -44,6 +47,8 @@ TZ=Europe/Tirane node --test tests/*.test.cjs
 Për verifikim manual pas publikimit:
 
 - si pronar: tekst, audio, anulim me Escape, ndalim manual, afat i pavlefshëm, titull bosh;
+- diktim i vetëm me një shtypje: teksti duhet të shfaqet gjatë të folurit, të ndalet vetë pas 3 sekondash heshtjeje dhe të rifillojë numërimin kur flet përsëri;
+- provo në telefon (Android Chrome dhe iPhone Safari) me ekran të ndezur dhe me telefonatë/zë të ulët;
 - blloko lejen e mikrofonit; provo pa lidhje dhe pa funksion AI;
 - kontrollo që anulimi nuk ndryshon formularin dhe që një konfirmim shton vetëm një detyrë;
 - provo si punonjës dhe me token të skaduar: endpoint-i duhet të refuzojë;
