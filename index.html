@@ -1281,9 +1281,10 @@ $('#voiceConfirm').onclick=()=>{
   const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
   let active=null, requestId=0;
 
-  /* Phones share one microphone between MediaRecorder and SpeechRecognition:
-   * running both at once makes the recorder lose words and the recogniser stutter.
-   * On touch devices we therefore keep exactly one consumer of the microphone. */
+  /* Phones share one microphone between MediaRecorder and SpeechRecognition, so the
+   * two must not grab it at the same moment: the recorder goes first and the live
+   * recogniser follows a moment later (see RECOGNITION_DELAY_MS). On touch devices
+   * the panel therefore shows live text while the full audio is still recorded. */
   function isTouchOrMobile(){
     try{
       const nav=navigator||{};
@@ -1398,6 +1399,35 @@ $('#voiceConfirm').onclick=()=>{
     session.resolveBlob?.(blob);
   }
 
+  /* The recorder needs a clean start: on a phone SpeechRecognition takes the input
+   * over and the recording loses the first syllables. Recording starts first and the
+   * recogniser follows this many milliseconds later; without a recorder the live
+   * text starts at once, so no syllable is ever delayed for the usual case. */
+  const RECOGNITION_DELAY_MS=200;
+  /* Chrome/Android end a recognition session on every short pause. Restarting at
+   * once keeps the words flowing; only a burst of restarts gets a short breather so
+   * a broken recogniser cannot spin on the microphone. */
+  const RESTART_WINDOW_MS=2000, RESTART_STORM=3, RESTART_BACKOFF_MS=150;
+  function restartDelay(session){
+    const now=Date.now();
+    const recent=(session.restartTimes||[]).filter(at=>now-at<RESTART_WINDOW_MS);
+    recent.push(now);
+    session.restartTimes=recent;
+    return recent.length>RESTART_STORM?RESTART_BACKOFF_MS:0;
+  }
+
+  function startRecognitionSoon(session,delay){
+    if(!Recognition)return;
+    if(session.recognitionStart){clearTimeout(session.recognitionStart);session.recognitionStart=null;}
+    if(!delay)return startRecognition(session);
+    session.recognitionStart=setTimeout(()=>{
+      session.recognitionStart=null;
+      if(active!==session||session.stopped||session.cancelled)return;
+      if(!session.engine||session.engine.state==='idle')return;
+      startRecognition(session);
+    },delay);
+  }
+
   function startRecognition(session){
     if(!Recognition)return;
     let recognition;
@@ -1439,23 +1469,30 @@ $('#voiceConfirm').onclick=()=>{
       // Chrome/Android end the session after a short pause: keep listening.
       if(state==='listening'&&!session.cancelled&&(session.restarts||0)<200){
         session.restarts=(session.restarts||0)+1;
-        // Restart immediately: a 250 ms pause swallowed the first syllable of the
-        // next word. setTimeout(…,0) only yields the current event loop turn, which
-        // Chrome needs before start() is allowed again.
+        // Restart immediately: a fixed pause swallowed the first syllable of the
+        // next word. A short breather only follows a storm of restarts, and even
+        // then setTimeout(…,0) yields the event loop turn Chrome needs before
+        // start() is allowed again.
         setTimeout(()=>{
           if(active===session&&session.engine?.state==='listening'&&!session.stopped){
             try{recognition.start();}catch(e){session.liveFailed=true;}
           }
-        },0);
+        },restartDelay(session));
       }
     };
     try{recognition.start();session.live=true;}
     catch(e){session.recognition=null;session.liveFailed=true;}
   }
 
+  /* A recogniser still waiting for its delayed start must never touch the microphone
+   * after the owner stopped talking. */
+  function cancelDelayedRecognition(session){
+    if(session.recognitionStart){clearTimeout(session.recognitionStart);session.recognitionStart=null;}
+  }
   function stopCapture(session){
     if(!session||session.stopped)return;
     session.stopped=true;
+    cancelDelayedRecognition(session);
     liveState('Po përfundoj regjistrimin…');
     // The recorder must flush before the audio promise is resolved.
     let recorderStopped=false;
@@ -1469,6 +1506,7 @@ $('#voiceConfirm').onclick=()=>{
   }
   function releaseCapture(session){
     if(!session||!session.chunks)return;                 // not a dictation session
+    cancelDelayedRecognition(session);
     session.chunks=session.chunks||[];
     try{session.recognition?.abort?.();}catch(e){}
     session.recognition=null;
@@ -1586,7 +1624,10 @@ $('#voiceConfirm').onclick=()=>{
      * its text is half a sentence, so upload the complete recording to Whisper and
      * keep the live text only as a local fallback if the server says no. */
     const interrupted=!!(session.restarts>0||session.liveFailed||!session.useRecognition);
-    const waitForAudio=session.recordAudio&&(!live||interrupted);
+    /* On a phone the recogniser runs only to show live text: the recording stays the
+     * final source of the words even when the live result never restarted. */
+    const phonePreview=!!(session.mobile&&session.recordAudio&&session.useRecognition);
+    const waitForAudio=session.recordAudio&&(!live||interrupted||phonePreview);
     if(!waitForAudio){
       // A clean desktop recognition without a single restart: send only the text.
       session.blobPromise?.catch(()=>{});
@@ -1610,14 +1651,14 @@ $('#voiceConfirm').onclick=()=>{
     }
     const session={chunks:[],cancelled:false,stopped:false,released:false,audioDone:false};
     session.blobPromise=new Promise(resolve=>{session.resolveBlob=resolve;});
-    /* On a phone MediaRecorder and SpeechRecognition fight for the same microphone:
-     * the recorder loses syllables and the recogniser closes itself every second.
-     * So on touch devices exactly one consumer is opened — the recorder when the
-     * server can transcribe the audio, the recogniser only offline. */
+    /* On a phone the microphone is shared: the recorder and the live recogniser can
+     * both be opened, but never at the same instant (the recorder goes first, the
+     * recogniser follows RECOGNITION_DELAY_MS later) and the audio stays the final
+     * source of the text — the live words are only what the owner sees while talking. */
     const mobile=isTouchOrMobile();
-    session.audioMode=!!authClient&&!!window.MediaRecorder;      // audio can be transcribed server-side
-    session.useRecognition=!!Recognition&&!(mobile&&session.audioMode);
-    session.recordAudio=!!window.MediaRecorder&&(session.audioMode||!session.useRecognition);
+    session.mobile=mobile;
+    session.useRecognition=!!Recognition;                       // live text while speaking
+    session.recordAudio=!!window.MediaRecorder;                 // full audio for Whisper
     const engine=VoiceDictation.create({
       now:()=>Date.now(),
       timers:{set:(fn,ms)=>setTimeout(fn,ms),clear:id=>clearTimeout(id)},
@@ -1676,7 +1717,8 @@ $('#voiceConfirm').onclick=()=>{
       return;
     }
     session.stream=stream;
-    /* 1) record the full audio (never a cut sentence) */
+    /* 1) record the full audio (never a cut sentence) — the recorder always gets the
+     * microphone before the recogniser, so the first syllables are captured cleanly */
     if(session.recordAudio)startRecorder(session,stream);
     /* 2) live voice-activity detection on the same stream */
     const monitor=createLevelMonitor(stream);
@@ -1691,19 +1733,34 @@ $('#voiceConfirm').onclick=()=>{
       })===true;
     }
     session.energyVad=monitor.supported&&session.monitorActive===true;
-    if(!session.energyVad)liveHint('Ky browser nuk mat zërin; ndalimi bazohet te rezultatet e transkriptimit. Kliko mikrofonin për të ndaluar.');
-    /* 3) live transcription, but never side by side with the recorder on a phone */
-    if(session.useRecognition)startRecognition(session);
+    /* 3) live transcription for the panel. On a phone, where the recorder and the
+     * recogniser share one microphone, the recogniser waits RECOGNITION_DELAY_MS so
+     * the recording starts cleanly; everywhere else it starts at once, so the usual
+     * case never adds a pause that could swallow a syllable. */
+    if(session.useRecognition){
+      startRecognitionSoon(session,session.mobile&&session.recordAudio?RECOGNITION_DELAY_MS:0);
+    }
     if(!Recognition){
       liveHint('Ky browser nuk transkripton drejtpërdrejt. Audioja do të transkriptohet pasi të ndalosh (3 sekonda heshtjeje ose klikim).');
-    }else if(!session.useRecognition){
-      liveHint('Në telefon mikrofonin e mban regjistrimi i audios. Audioja regjistrohet e plotë dhe transkriptohet pasi të ndalosh (3 sekonda heshtjeje ose klikim).');
+    }else if(session.useRecognition&&session.recordAudio){
+      liveHint('Teksti shfaqet live ndërsa flet. Audioja regjistrohet e plotë dhe teksti final merret prej saj pasi të ndalosh (3 sekonda heshtjeje ose klikim).');
+    }else if(session.recordAudio){
+      liveHint('Audioja regjistrohet e plotë dhe transkriptohet pasi të ndalosh (3 sekonda heshtjeje ose klikim).');
+    }
+    if(!session.energyVad){
+      liveHint(session.useRecognition
+        ?'Ky browser nuk mat zërin; ndalimi bazohet te rezultatet e transkriptimit. Kliko mikrofonin për të ndaluar.'
+        :'Ky browser nuk mat zërin; regjistrimi ndalon pas 60 sekondash ose kur klikon mikrofonin.');
     }
     /* 4) only now is the microphone really ready: claim "listening" */
     const recorderOk=!session.recordAudio||session.recorder?.state==='recording';
     if(!recorderOk){
       session.recordAudio=false;                  // the recorder failed: no audio to send
-      if(!session.useRecognition&&Recognition)startRecognition(session); // best remaining text source
+      if(session.useRecognition&&Recognition&&!session.recognition){
+        // the recogniser takes over now instead of waiting for its delayed start
+        cancelDelayedRecognition(session);
+        startRecognition(session);                // best remaining text source
+      }
       if(!session.recognition){
         if(active===session)active=null;
         try{stream.getTracks().forEach(t=>t.stop());}catch(e){}
@@ -1719,6 +1776,8 @@ $('#voiceConfirm').onclick=()=>{
     engine.begin();
     assistantStatus(session.recordAudio&&!session.useRecognition
       ?'Po dëgjoj… Audioja regjistrohet e plotë dhe transkriptohet pas ndalimit. Ndalon vetë pas 3 sekondash heshtjeje; kliko mikrofonin për ta ndalur tani. Escape për anulim.'
+      :session.recordAudio&&session.useRecognition
+      ?'Po dëgjoj… Teksti shfaqet live ndërsa flet; teksti final vjen nga audioja e plotë pas ndalimit. Ndalon vetë pas 3 sekondash heshtjeje; kliko mikrofonin për ta ndalur tani. Escape për anulim.'
       :'Po dëgjoj… Ndalon vetë pas 3 sekondash heshtjeje; kliko mikrofonin për ta ndalur tani. Escape për anulim.');
   }
 
