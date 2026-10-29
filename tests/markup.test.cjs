@@ -29,8 +29,10 @@ test('the confirmation window has the required labels and fields',()=>{
   for(const id of ['voiceDraftTitle','voiceDraftDesc','voiceDraftAssignee','voiceDraftDue','voiceDraftPriority','voiceDraftNotify'])
     assert.ok(ids.has(id),'missing field '+id);
   assert.match(html,/id="voiceLive"/);
-  assert.match(html,/id="voiceLiveText"/);
+  assert.match(html,/id="voiceLiveState"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.doesNotMatch(html,/id="voiceLiveText"/,'the panel must not duplicate the composer transcript');
   assert.match(html,/id="voiceLiveCancel"/);
+  assert.doesNotMatch(html.match(/<input[^>]*id="tTitle"[^>]*>/)[0],/aria-live/,'individual dictated words must not be announced as a live region');
 });
 
 test('the app never records without the dictation engine',()=>{

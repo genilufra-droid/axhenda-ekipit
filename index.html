@@ -338,7 +338,7 @@
   .attach-btn svg{width:20px;height:20px}
   .comp-input{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:6px 14px;
     display:flex;flex-direction:column}
-  #tTitle{background:transparent;border:none;color:var(--txt);outline:none;font-size:15px;padding:6px 0;width:100%}
+  #tTitle{background:transparent;border:none;color:var(--txt);outline:none;font-size:15px;padding:6px 0;width:100%;min-width:0}
   .ai-compose-row{display:flex;align-items:center;gap:6px}
   .voice-btn{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;display:grid;place-items:center;flex-shrink:0}
   .voice-btn:hover,.voice-btn.listening{color:#fff;background:#d94b4b;border-color:#d94b4b}
@@ -355,7 +355,6 @@
   .voice-meter{flex:1;height:6px;min-width:54px;border-radius:3px;background:var(--line);overflow:hidden}
   .voice-meter i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#4f7cff,#d94b4b);transform:scaleX(0);transform-origin:left;transition:transform .09s linear}
   .voice-count{font-variant-numeric:tabular-nums}
-  .voice-live-text{margin:8px 0 0;font-size:14px;line-height:1.35;color:var(--txt);min-height:20px;max-height:120px;overflow:auto;white-space:pre-wrap}
   .voice-live-hint{margin:6px 0 0;font-size:11px;color:var(--muted)}
   .assistant-diag{display:none;margin:2px 14px 8px;padding:8px 10px;border:1px dashed var(--line);border-radius:10px;background:var(--panel)}
   .assistant-diag.show{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
@@ -590,13 +589,12 @@
       <div class="voice-live" id="voiceLive">
         <div class="voice-live-head">
           <span class="voice-dot" aria-hidden="true"></span>
-          <span id="voiceLiveState">Po dëgjoj…</span>
+          <span id="voiceLiveState" role="status" aria-live="polite">Po dëgjoj…</span>
           <span class="voice-meter" aria-hidden="true"><i id="voiceLiveMeterBar"></i></span>
           <span class="voice-count" id="voiceLiveCount" aria-hidden="true"></span>
           <button type="button" class="act ghost sm" id="voiceLiveCancel">Anulo</button>
         </div>
-        <p class="voice-live-text" id="voiceLiveText"></p>
-        <p class="voice-live-hint" id="voiceLiveHint">Fli lirshëm — regjistrimi ndalon vetë pas 3 sekondash heshtjeje.</p>
+        <p class="voice-live-hint" id="voiceLiveHint">Fol lirshëm — regjistrimi ndalon vetë pas 3 sekondash heshtjeje.</p>
       </div>
       <div class="assistant-diag" id="assistantDiagBox">
         <p class="assistant-diag-text" id="assistantDiag"></p>
@@ -1178,11 +1176,19 @@ function renderPending(){
 /* TASK ASSISTANT: text, live voice dictation with real voice-activity detection,
    safe local fallback and explicit confirmation. Nothing is saved or sent before
    the owner presses "Konfirmo dhe dërgo". */
-let voiceDraft=null, assistantCancel=()=>{}, assistantBusy=false, assistantReturnFocus=null, voiceSaving=false;
+let voiceDraft=null, voiceDraftComposerPrefix=null, assistantCancel=()=>{}, assistantBusy=false, assistantReturnFocus=null, voiceSaving=false;
 let voiceNotifyReminded=false;   // the owner is reminded once that notifying is his own choice
 const assistantPeople=()=>[...new Set((state.chat?.contacts||[]).filter(c=>!c.readonly).map(c=>c.name).filter(Boolean))];
 function parseVoiceTask(raw){return TaskAssistant.parse(raw,assistantPeople());}
 function assistantStatus(text){$('#assistantStatus').textContent=text;}
+// Updating an input's value and selection does not focus it or dispatch keyboard events.
+function setVoiceComposer(value){
+  const input=$('#tTitle');
+  input.value=value;
+  const end=input.value.length;
+  if(typeof input.setSelectionRange==='function')input.setSelectionRange(end,end);
+  input.scrollLeft=input.scrollWidth;
+}
 function assistantDiag(text){
   const box=$('#assistantDiagBox'), line=$('#assistantDiag');
   line.textContent=text||'';
@@ -1207,12 +1213,13 @@ function diagContext(){
   }catch(e){}
   return parts.join(' · ');
 }
-function showVoiceDraft(raw,data=null,source='Përpunim lokal — AI nuk u përdor'){
+function showVoiceDraft(raw,data=null,source='Përpunim lokal — AI nuk u përdor',composerPrefix=null){
   const transcript=String(data?.transcript||raw||'').trim();
   voiceSaving=false;voiceNotifyReminded=false;
   // An empty transcript must never open the confirmation window.
   if(!transcript){assistantStatus('Nuk u kap tekst. Provo përsëri ose shkruaj kërkesën.');return false;}
   voiceDraft=data?TaskAssistant.normalize(data,raw,assistantPeople()):TaskAssistant.parse(transcript,assistantPeople());
+  voiceDraftComposerPrefix=composerPrefix;
   assistantReturnFocus=document.activeElement;
   $('#voiceDraftHeading').textContent='Konfirmo dërgimin';
   $('#voiceDraftTitle').value=voiceDraft.title;
@@ -1228,16 +1235,21 @@ function showVoiceDraft(raw,data=null,source='Përpunim lokal — AI nuk u përd
   $('#voiceDraftTitle').focus();
   return true;
 }
-function closeVoiceDraft(){
-  voiceDraft=null;$('#voiceConfirmOverlay').classList.remove('show');
-  assistantReturnFocus?.focus();
+function closeVoiceDraft(restoreFocus=true){
+  voiceDraft=null;voiceDraftComposerPrefix=null;$('#voiceConfirmOverlay').classList.remove('show');
+  const previous=assistantReturnFocus;assistantReturnFocus=null;
+  if(restoreFocus)previous?.focus();
 }
-$('#voiceCancel').onclick=closeVoiceDraft;
-$('#voiceCancelTop').onclick=closeVoiceDraft;
-$('#voiceConfirmOverlay').addEventListener('click',e=>{if(e.target===$('#voiceConfirmOverlay'))closeVoiceDraft();});
+function cancelVoiceDraft(restoreFocus=true){
+  if(voiceDraftComposerPrefix!==null)setVoiceComposer(voiceDraftComposerPrefix);
+  closeVoiceDraft(restoreFocus);
+}
+$('#voiceCancel').onclick=()=>cancelVoiceDraft();
+$('#voiceCancelTop').onclick=()=>cancelVoiceDraft();
+$('#voiceConfirmOverlay').addEventListener('click',e=>{if(e.target===$('#voiceConfirmOverlay'))cancelVoiceDraft();});
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    if(voiceDraft){e.preventDefault();closeVoiceDraft();}else assistantCancel();
+    if(voiceDraft){e.preventDefault();cancelVoiceDraft();}else assistantCancel();
   }
   if(e.key==='Tab'&&voiceDraft){
     const items=[...$('#voiceConfirmOverlay').querySelectorAll('button,input,textarea,select')].filter(el=>!el.disabled);
@@ -1295,10 +1307,14 @@ $('#voiceConfirm').onclick=()=>{
     return false;
   }
 
-  /* ---------- live dictation panel ---------- */
+  /* ---------- live dictation panel and composer ---------- */
   function liveShow(show){livePanel.classList[show?'add':'remove']('show');}
   function liveState(text){$('#voiceLiveState').textContent=text;}
-  function liveText(text){$('#voiceLiveText').textContent=text||'…';}
+  function liveComposer(session,text){
+    const prefix=session.composerPrefix, words=String(text||'');
+    const separator=prefix&&words&&!/\s$/.test(prefix)?' ':'';
+    setVoiceComposer(prefix+separator+words);
+  }
   function liveHint(text){$('#voiceLiveHint').textContent=text;}
   function liveCountdown(){
     const left=active?.engine?.remaining?.();
@@ -1553,21 +1569,22 @@ $('#voiceConfirm').onclick=()=>{
   }
   /* raw is the live transcript, kept only as a local fallback when audio is sent;
    * blob is the full recording, which is what Whisper transcribes word for word. */
-  function process(raw,blob=null){
+  function process(raw,blob=null,dictationSession=null){
     const text=String(raw||'').trim();
     const sendAudio=!!(blob&&blob.size);
     if(!text&&!sendAudio){
+      if(active===dictationSession)active=null;
       stopUi();idle();
       assistantStatus('Nuk u kap zë. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
       return Promise.resolve();
     }
     const id=++requestId;
     assistantBusy=true;ai.disabled=true;button.disabled=true;
-    const session={controller:new AbortController()};active=session;
+    const session={controller:new AbortController(),dictation:dictationSession};active=session;
     liveState('Po përgatis detyrën…');
     assistantStatus('Po përgatis detyrën… (deri në 90 s) Escape për anulim.');
     assistantDiag('');
-    let timer;
+    let timer, serverTranscript='';
     return (async()=>{
       try{
         if(!authClient)throw new Error('offline');
@@ -1584,9 +1601,14 @@ $('#voiceConfirm').onclick=()=>{
         if(id!==requestId)return;
         if(result.error)throw result.error;
         if(result.data?.error){const error=new Error(String(result.data.error));error.assistantMessage=String(result.data.error);throw error;}
+        // The live words are only a preview. Replace them with the server's
+        // transcript, keeping the owner's original composer prefix intact.
+        const transcript=result.data?.transcript;
+        if(typeof transcript==='string')serverTranscript=transcript.trim();
+        if(dictationSession&&serverTranscript)liveComposer(dictationSession,serverTranscript);
         if(!result.data?.draft){const error=new Error('përgjigjja nuk përmbante propozim');error.assistantMessage='përgjigjja nuk përmbante propozim';throw error;}
         stopUi();
-        const opened=showVoiceDraft(text,result.data,'Propozim nga AI — kontrolloje para ruajtjes');
+        const opened=showVoiceDraft(text,result.data,'Propozim nga AI — kontrolloje para ruajtjes',dictationSession?.composerPrefix??null);
         assistantStatus(opened?'Konfirmo dërgimin: kontrollo fushat dhe shtyp “Konfirmo dhe dërgo”.':'Nuk u kap tekst. Provo përsëri.');
       }catch(e){
         if(id!==requestId)return;
@@ -1594,8 +1616,11 @@ $('#voiceConfirm').onclick=()=>{
         const reason=await explainFailure(e);
         if(id!==requestId)return;
         const audio=sendAudio?' · audio: '+Math.max(1,Math.round(blob.size/1024))+' KB '+blob.type:'';
-        if(text){
-          showVoiceDraft(text,null,'Përpunim lokal — AI nuk u përdor');
+        // If transcription succeeded but the proposal was missing, parse that
+        // authoritative text locally rather than falling back to the preview.
+        const fallback=serverTranscript||text;
+        if(fallback){
+          showVoiceDraft(fallback,null,'Përpunim lokal — AI nuk u përdor',dictationSession?.composerPrefix??null);
           assistantStatus('AI në server nuk u përdor ('+reason+'). U përdor përpunimi lokal — kontrollo fushat.');
           if(reason!=='offline')assistantDiag('arsyeja: '+reason+audio+' · '+diagContext());
         }else{
@@ -1610,13 +1635,13 @@ $('#voiceConfirm').onclick=()=>{
   }
 
   function handleResult(session,result){
+    if(active!==session||session.cancelled)return Promise.resolve();
     const live=String(result?.transcript||'').trim();
     const heard=!!result?.heardSpeech;
-    if(active===session)active=null;
     stopUi();
     // Nobody spoke and nothing was transcribed: never open the confirmation window.
     if(!live&&!heard){
-      idle();
+      active=null;idle();
       assistantStatus('Nuk u kap zë. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
       return Promise.resolve();
     }
@@ -1631,12 +1656,14 @@ $('#voiceConfirm').onclick=()=>{
     if(!waitForAudio){
       // A clean desktop recognition without a single restart: send only the text.
       session.blobPromise?.catch(()=>{});
-      return process(live,null);
+      return process(live,null,session);
     }
+    // Keep the session cancellable while MediaRecorder flushes its last chunk.
     return session.blobPromise.catch(()=>null).then(blob=>{
-      if(blob&&blob.size)return process(live,blob);
-      if(live)return process(live,null);
-      idle();
+      if(active!==session||session.cancelled)return;
+      if(blob&&blob.size)return process(live,blob,session);
+      if(live)return process(live,null,session);
+      active=null;idle();
       assistantStatus('Mikrofoni nuk dha audio ose ky browser nuk transkripton. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
       assistantDiag('nuk u regjistrua audio · '+diagContext());
     });
@@ -1649,7 +1676,7 @@ $('#voiceConfirm').onclick=()=>{
       assistantStatus('Ky browser nuk jep qasje te mikrofoni. Shkruaj kërkesën dhe shtyp ✨ AI.');
       return;
     }
-    const session={chunks:[],cancelled:false,stopped:false,released:false,audioDone:false};
+    const session={chunks:[],cancelled:false,stopped:false,released:false,audioDone:false,composerPrefix:$('#tTitle').value};
     session.blobPromise=new Promise(resolve=>{session.resolveBlob=resolve;});
     /* On a phone the microphone is shared: the recorder and the live recogniser can
      * both be opened, but never at the same instant (the recorder goes first, the
@@ -1668,18 +1695,17 @@ $('#voiceConfirm').onclick=()=>{
         if(status.state==='listening')liveState('Po dëgjoj…');
         if(status.state==='stopping')liveState('Po përfundoj regjistrimin…');
       },
-      onTranscript:text=>{
-        liveText(text);
-        assistantStatus('Po dëgjoj: '+text);
-      },
+      onTranscript:text=>liveComposer(session,text),
       onResult:result=>handleResult(session,result),
       onCancel:()=>{
         if(active===session)active=null;
+        setVoiceComposer(session.composerPrefix);
         stopUi();idle();
         assistantStatus('Regjistrimi u anulua. Asnjë detyrë nuk u ruajt dhe asnjë njoftim nuk u dërgua.');
       },
       onError:message=>{
         if(active===session)active=null;
+        setVoiceComposer(session.composerPrefix);
         stopUi();idle();
         assistantStatus(message||'Mikrofoni nuk u hap.');
       },
@@ -1689,9 +1715,9 @@ $('#voiceConfirm').onclick=()=>{
     session.engine=engine;
     active=session;
     button.disabled=true;ai.disabled=true;
-    liveShow(true);meter(0);liveText('');
+    liveShow(true);meter(0);
     liveState('Po hap mikrofonin… prit një çast');
-    liveHint('Fli lirshëm — regjistrimi ndalon vetë pas 3 sekondash heshtjeje.');
+    liveHint('Fol lirshëm — regjistrimi ndalon vetë pas 3 sekondash heshtjeje.');
     $('#voiceLiveCount').textContent='';
     assistantStatus('Po hap mikrofonin… prit një çast. Escape për anulim.');
     engine.start();
@@ -1804,19 +1830,33 @@ $('#voiceConfirm').onclick=()=>{
     const session=active;
     requestId++;                                        // any late AI answer is now worthless
     try{session?.controller?.abort?.();}catch(e){}
+    if(session)session.cancelled=true;
     if(session?.engine&&session.engine.state!=='idle'){
-      session.cancelled=true;
       session.engine.cancel();                          // releases the mic and resets the UI
       return;
     }
     active=null;
+    const dictation=session?.dictation||(session?.engine?session:null);
+    if(dictation)setVoiceComposer(dictation.composerPrefix);
     if(session)releaseCapture(session);
     stopUi();idle();
     assistantStatus('Veprimi u anulua. Asnjë detyrë nuk u ruajt dhe asnjë njoftim nuk u dërgua.');
   };
   window.addEventListener('pagehide',()=>{
+    const session=active;
     requestId++;
-    if(active){active.cancelled=true;active.engine?.cancel();releaseCapture(active);active=null;}
+    if(voiceDraft)cancelVoiceDraft(false);
+    if(session){
+      session.cancelled=true;
+      try{session.controller?.abort?.();}catch(e){}
+      if(session.engine&&session.engine.state!=='idle')session.engine.cancel();
+      else{
+        const dictation=session.dictation||(session.engine?session:null);
+        if(dictation)setVoiceComposer(dictation.composerPrefix);
+        releaseCapture(session);
+      }
+      active=null;
+    }
     stopUi();idle();
   });
 })();
