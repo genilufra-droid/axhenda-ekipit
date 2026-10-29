@@ -22,16 +22,19 @@ Teste: `TZ=Europe/Tirane node --test tests/*.test.cjs`.
 
 ## Diktimi me zë (asistenti)
 
-- **Telefon (Android/iOS) dhe pajisje me prekje:** mikrofoni ka vetëm një përdorues —
-  `MediaRecorder`. `SpeechRecognition` nuk ndizet paralel, sepse në celular të dy
-  konkurrojnë për mikrofonin dhe fjalët priten në mes. Kur je i loguar, audioja e plotë
-  dërgohet te `transcribe-task` (Groq `whisper-large-v3-turbo`) dhe transkriptohet e saktë.
-  Pa hyrje (offline) përdoret vetëm `SpeechRecognition`, përsëri pa regjistrim paralel.
+- **Telefon (Android/iOS) dhe pajisje me prekje:** kur të dyja janë të disponueshme,
+  `MediaRecorder` nis i pari dhe `SpeechRecognition` nis 200 ms më pas. Teksti live
+  është parapamje; kur serveri është i disponueshëm, audioja e plotë dërgohet për
+  transkriptimin final. Përndryshe përdoret përpunimi lokal i tekstit live.
 - **Kompjuter:** përdoret `SpeechRecognition` për tekst live; nëse sesioni i njohjes
-  ndërpritet/riniset (ose dështon), audioja e plotë dërgohet në server dhe teksti live
-  mbetet vetëm si fallback lokal.
-- **Papritur:** `flushInterim()` ruan fjalët e papërfunduara kur browseri e mbyll sesionin
-  e njohjes pa `isFinal`, dhe rinisja bëhet menjëherë (pa vonesë 250 ms).
+  ndërpritet/riniset (ose dështon), audioja e plotë dërgohet në server. Pa server,
+  teksti live mbetet si fallback për përpunimin lokal.
+- **Kompozuesi:** fjalët live shfaqen te fusha e titullit pas tekstit ekzistues, pa
+  hapur tastierën. Transkriptimi i serverit zëvendëson parapamjen; anulimi rikthen
+  tekstin që ishte në fushë para diktimit. Drafti kërkon gjithmonë konfirmim.
+- **Ndërprerjet:** `flushInterim()` ruan fjalët e papërfunduara kur browseri e mbyll
+  sesionin pa `isFinal`. Rinisja është e menjëhershme, me 150 ms pushim vetëm pas më
+  shumë se tre rinisjeve brenda dy sekondave.
 - **Statusi:** derisa `getUserMedia`, `MediaRecorder` (state `recording`) dhe VAD-i me
   `AudioContext` të jenë gati, paneli shfaq “Po hap mikrofonin… prit një çast” dhe nuk
   shënohet si “Po dëgjoj…”.
