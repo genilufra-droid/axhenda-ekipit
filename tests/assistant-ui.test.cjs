@@ -63,9 +63,11 @@ function setup({invoke,mediaDevices,MediaRecorder,SpeechRecognition,role='owner'
     start(){this.started++;}
     stop(){this.stoppedAt=this.stoppedAt??time.now();if(this.onend)this.onend();}
     abort(){this.aborted=true;if(this.onend)this.onend();}
-    result(list){
+    /* `list` is the whole result list Chrome keeps for the session; resultIndex is
+     * the first entry the event reports (Chrome reports only the changed index). */
+    result(list,resultIndex=0){
       const results=list.map(item=>{const alt=[{transcript:item.text}];alt.isFinal=!!item.final;return alt;});
-      this.onresult&&this.onresult({resultIndex:0,results});
+      this.onresult&&this.onresult({resultIndex,results});
     }
   }
 
@@ -959,4 +961,118 @@ test('a valid audio transcript remains authoritative even when the server omits 
     app.$('#voiceCancel').onclick();
     assert.equal(title.value,'Para');
   }
+});
+
+/* ---------- accuracy: nothing lost, nothing said twice ---------- */
+test('an interim result reported at a new index never wipes the words already shown',async()=>{
+  const app=setup({SpeechRecognition:true,invoke:async()=>({data:draft})});
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(400);
+  app.recognizer.result([{text:'Cakto Arben Kola',final:false}]);
+  assert.equal(app.$('#tTitle').value,'Cakto Arben Kola');
+  /* Chrome now reports only the second, unfinished result. */
+  app.recognizer.result([
+    {text:'Cakto Arben Kola',final:false},
+    {text:'të përgatisë raportin',final:false},
+  ],1);
+  assert.equal(app.$('#tTitle').value,'Cakto Arben Kola të përgatisë raportin','the first words survive');
+  /* The same phrase is finalised: it is written once, not twice. */
+  app.recognizer.result([
+    {text:'Cakto Arben Kola',final:true},
+    {text:'të përgatisë raportin nesër',final:true},
+  ],0);
+  assert.equal(app.$('#tTitle').value,'Cakto Arben Kola të përgatisë raportin nesër');
+  assert.equal((app.$('#tTitle').value.match(/Cakto/g)||[]).length,1);
+  app.events.keydown({key:'Escape'});
+});
+
+test('a phrase finalised twice by the browser is written only once',async()=>{
+  const app=setup({SpeechRecognition:true,invoke:async()=>({data:draft})});
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(400);
+  app.recognizer.result([{text:'Dërgo faturat',final:true}],0);
+  app.recognizer.result([{text:'Dërgo faturat',final:true}],0);   // the same final again
+  assert.equal(app.$('#tTitle').value,'Dërgo faturat');
+  app.recognizer.result([
+    {text:'Dërgo faturat',final:true},
+    {text:'te Arben Kola',final:true},
+  ],0);
+  assert.equal(app.$('#tTitle').value,'Dërgo faturat te Arben Kola');
+  assert.equal((app.$('#tTitle').value.match(/Dërgo/g)||[]).length,1);
+  app.events.keydown({key:'Escape'});
+});
+
+test('a restarted session numbers its results from zero again and still appends them',async()=>{
+  const app=setup({SpeechRecognition:true,MediaRecorder:recorderClass(),invoke:async()=>({data:draft})});
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(400);
+  app.recognizer.result([{text:'Cakto Arben Kola të përgatisë raportin',final:true}],0);
+  assert.equal(app.$('#tTitle').value,'Cakto Arben Kola të përgatisë raportin');
+  app.recognizer.onend();                       // Chrome closes the session on a short pause
+  app.advance(0);
+  app.speak(300);
+  /* The new session starts over at index 0 — the first result must not be ignored. */
+  app.recognizer.result([{text:'nesër urgjent',final:true}],0);
+  assert.equal(app.$('#tTitle').value,'Cakto Arben Kola të përgatisë raportin nesër urgjent');
+  app.recognizer.result([
+    {text:'nesër urgjent',final:true},
+    {text:'për Arbenin',final:false},
+  ],1);
+  assert.equal(app.$('#tTitle').value,'Cakto Arben Kola të përgatisë raportin nesër urgjent për Arbenin');
+  assert.equal((app.$('#tTitle').value.match(/urgjent/g)||[]).length,1,'no repetition across the restart');
+  app.events.keydown({key:'Escape'});
+});
+
+test('a correction from the recogniser replaces the preview instead of duplicating it',async()=>{
+  const app=setup({SpeechRecognition:true,invoke:async()=>({data:draft})});
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(400);
+  app.recognizer.result([{text:'Dërgo faturat',final:false}],0);
+  assert.equal(app.$('#tTitle').value,'Dërgo faturat');
+  app.recognizer.result([{text:'Dërgo faturën Arbenit nesër',final:true}],0);
+  assert.equal(app.$('#tTitle').value,'Dërgo faturën Arbenit nesër','one copy of the phrase');
+  app.events.keydown({key:'Escape'});
+});
+
+test('a browser that does not know Albanian stops the recogniser instead of fighting for the microphone',async()=>{
+  let sent=null;
+  const heard='Dërgo faturat te Arben Kola nesër';
+  const app=setup({userAgent:PHONE_UA,maxTouchPoints:5,SpeechRecognition:true,MediaRecorder:recorderClass(),
+    invoke:async(_name,options)=>{sent=options.body;return {data:{transcript:heard,draft:draft.draft}};}});
+  await app.$('#voiceTaskBtn').onclick();
+  app.advance(200);
+  app.speak(400);
+  app.recognizer.onerror({error:'language-not-supported'});
+  assert.match(app.$('#voiceLiveHint').textContent,/nuk njeh shqipen/);
+  assert.match(app.$('#assistantStatus').textContent,/nuk mbështet shqipen/);
+  const started=app.recognizer.started;
+  app.recognizer.onend();
+  app.advance(0);app.advance(600);
+  assert.equal(app.recognizer.started,started,'a hopeless recogniser is never restarted');
+  app.speak(400);
+  app.quiet(3100);
+  await tick();await tick();
+  assert.ok(sent instanceof FormData,'the complete recording is still the source of the words');
+  assert.equal(app.$('#voiceDraftDesc').value,heard);
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+  app.$('#voiceCancel').onclick();
+});
+
+/* ---------- diagnostics distinguish a preview problem from a transcription problem ---------- */
+test('the failure details say whether the preview or the final transcript was incomplete',async()=>{
+  const app=setup({userAgent:PHONE_UA,maxTouchPoints:5,SpeechRecognition:true,MediaRecorder:recorderClass(),
+    invoke:async()=>({data:{transcript:'Cakto Arben Kola të përgatisë raportin për nesër'}})});  // no draft
+  await app.$('#voiceTaskBtn').onclick();
+  app.advance(200);
+  app.speak(500);
+  app.recognizer.result([{text:'cakto arben kola raportin',final:false}],0);
+  app.quiet(3100);
+  await tick();await tick();
+  const details=app.$('#assistantDiag').textContent;
+  assert.match(details,/parapamja live: 4 fjalë/);
+  assert.match(details,/transkripti final: 8 fjalë/);
+  assert.match(details,/dallimi live\/final: -0 \/ \+4/);
+  assert.match(details,/pajisja: Android · Chrome/,'the device can be reported without devtools');
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+  app.$('#voiceCancel').onclick();
 });
