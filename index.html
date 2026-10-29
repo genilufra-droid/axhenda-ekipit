@@ -1199,10 +1199,27 @@ $('#assistantDiagCopy').onclick=async()=>{
   try{await navigator.clipboard.writeText(text);toast('Detajet u kopjuan','ok');}
   catch(e){toast('Kopjo me dorë tekstin e detajeve','err');}
 };
+/* Which phone and which browser is the owner using? Without this a report cannot
+   be acted on: the live preview depends on the browser's own recogniser. */
+function deviceSummary(){
+  try{
+    const ua=String(navigator.userAgent||'');
+    const device=/Android/i.test(ua)?'Android':/iPhone|iPad|iPod/i.test(ua)?'iOS'
+      :/Windows/i.test(ua)?'Windows':/Mac OS X/i.test(ua)?'macOS':/Linux/i.test(ua)?'Linux':'e panjohur';
+    const browser=/SamsungBrowser/i.test(ua)?'Samsung Internet'
+      :/EdgA|Edg\//i.test(ua)?'Edge'
+      :/OPR\/|Opera/i.test(ua)?'Opera'
+      :/CriOS|Chrome/i.test(ua)?'Chrome'
+      :/FxiOS|Firefox/i.test(ua)?'Firefox'
+      :/Safari/i.test(ua)?'Safari':'browser i panjohur';
+    return device+' · '+browser;
+  }catch(e){return 'e panjohur';}
+}
 /* Everything the owner needs to report a failure without developer tools. */
 function diagContext(){
   const parts=[];
   try{
+    parts.push('pajisja: '+deviceSummary());
     parts.push('faqja: '+(window.isSecureContext?'https':'jo-https'));
     parts.push('hyrja: '+(typeof currentUser!=='undefined'&&currentUser?'po':'jo'));
     parts.push('mikrofon: '+(navigator.mediaDevices?.getUserMedia?'po':'jo'));
@@ -1212,6 +1229,29 @@ function diagContext(){
     parts.push('ora: '+new Date().toISOString());
   }catch(e){}
   return parts.join(' · ');
+}
+/* Distinguishes a problem of the live preview from a problem of the final
+   transcription. Shown only with the details of a failure, never as a claim
+   about accuracy. */
+function dictationDiag(session){
+  if(!session)return '';
+  try{
+    const parts=[];
+    const live=String(session.liveText||'').trim();
+    const finalText=String(session.finalText||'').trim();
+    if(live)parts.push('parapamja live: '+VoiceDictation.wordCount(live)+' fjalë');
+    if(finalText){
+      parts.push('transkripti final: '+VoiceDictation.wordCount(finalText)+' fjalë');
+      if(live){
+        const diff=VoiceDictation.compareTranscripts(live,finalText);
+        parts.push('dallimi live/final: -'+diff.onlyLive.length+' / +'+diff.onlyFinal.length);
+      }
+    }
+    if(session.liveError)parts.push('njohësi: '+session.liveError);
+    parts.push('rinisje njohësi: '+(session.restarts||0));
+    parts.push('matës zëri: '+(session.energyVad?'po':'jo'));
+    return parts.join(' · ');
+  }catch(e){return '';}
 }
 function showVoiceDraft(raw,data=null,source='Përpunim lokal — AI nuk u përdor',composerPrefix=null){
   const transcript=String(data?.transcript||raw||'').trim();
@@ -1449,41 +1489,55 @@ $('#voiceConfirm').onclick=()=>{
     let recognition;
     try{recognition=new Recognition();}catch(e){return;}
     session.recognition=recognition;
+    /* Which final phrase of this recognition session was already handed to the
+       engine. A new instance starts with an empty result list, so it starts at -1. */
+    let consumedFinal=-1;
     recognition.lang='sq-AL';
     recognition.interimResults=true;
     recognition.continuous=true;
     recognition.maxAlternatives=1;
     recognition.onresult=event=>{
-      if(active!==session||!session.engine||session.engine.state==='idle')return;
-      let interim='',finalText='';
-      for(let i=event.resultIndex;i<event.results.length;i++){
-        const result=event.results[i];
-        if(!result||!result[0])continue;
-        if(result.isFinal)finalText+=result[0].transcript+' ';
-        else interim+=result[0].transcript+' ';
-      }
-      if(finalText)session.engine.addFinal(finalText);
-      session.engine.setInterim(interim.trim());
+      // A recogniser that was already replaced or released can never write again.
+      if(active!==session||session.recognition!==recognition)return;
+      if(!session.engine||session.engine.state==='idle')return;
+      /* readResults() reads every unfinished hypothesis, not only the index this
+       * event reports — otherwise the half sentence already on screen was thrown
+       * away and the preview restarted mid-sentence. */
+      const heard=VoiceDictation.readResults(event,consumedFinal);
+      if(heard.finalIndex>consumedFinal)consumedFinal=heard.finalIndex;
+      if(heard.finalText)session.engine.addFinal(heard.finalText);
+      session.engine.setInterim(heard.interim);
       // Only when the browser cannot measure sound: recognition activity drives the timer.
       if(!session.energyVad)session.engine.markSpeech();
     };
     recognition.onerror=event=>{
-      if(active!==session)return;
+      if(active!==session||session.recognition!==recognition)return;
       const code=String(event?.error||'');
       if(code==='aborted'||code==='no-speech')return;
       session.liveFailed=true;
+      session.liveError=code;
+      /* These errors never heal by restarting. Restarting anyway takes the
+       * microphone away from the recorder over and over — and the full recording,
+       * not the preview, is what the words are finally taken from. */
+      const fatal=code==='language-not-supported'||code==='not-allowed'||code==='service-not-allowed'||code==='audio-capture';
+      if(fatal)session.recognitionFatal=true;
+      if(code==='language-not-supported'){
+        liveHint('Ky browser nuk njeh shqipen për tekst live. Vazhdo të flasësh: audioja e plotë transkriptohet saktë pas ndalimit.');
+        assistantStatus('Teksti live nuk mbështet shqipen në këtë browser; audioja e plotë transkriptohet pas ndalimit.');
+        return;
+      }
       liveHint('Transkriptimi i drejtpërdrejtë nuk është i disponueshëm në këtë browser. Audioja do të transkriptohet pas ndalimit.');
       assistantStatus('Transkriptimi live nuk është i disponueshëm; audioja do të transkriptohet pas ndalimit.');
     };
     recognition.onend=()=>{
-      if(active!==session)return;
+      if(active!==session||session.recognition!==recognition)return;
       const engine=session.engine;
       const state=engine?.state;
       // Whatever the browser never marked as final must survive the restart.
       if(engine&&state!=='idle')engine.flushInterim();
       if(state==='stopping'||session.stopped){engine?.complete();return;}
       // Chrome/Android end the session after a short pause: keep listening.
-      if(state==='listening'&&!session.cancelled&&(session.restarts||0)<200){
+      if(state==='listening'&&!session.cancelled&&!session.recognitionFatal&&(session.restarts||0)<200){
         session.restarts=(session.restarts||0)+1;
         // Restart immediately: a fixed pause swallowed the first syllable of the
         // next word. A short breather only follows a storm of restarts, and even
@@ -1491,6 +1545,7 @@ $('#voiceConfirm').onclick=()=>{
         // start() is allowed again.
         setTimeout(()=>{
           if(active===session&&session.engine?.state==='listening'&&!session.stopped){
+            consumedFinal=-1;             // the restarted session numbers its results from 0
             try{recognition.start();}catch(e){session.liveFailed=true;}
           }
         },restartDelay(session));
@@ -1605,6 +1660,7 @@ $('#voiceConfirm').onclick=()=>{
         // transcript, keeping the owner's original composer prefix intact.
         const transcript=result.data?.transcript;
         if(typeof transcript==='string')serverTranscript=transcript.trim();
+        if(dictationSession)dictationSession.finalText=serverTranscript;
         if(dictationSession&&serverTranscript)liveComposer(dictationSession,serverTranscript);
         if(!result.data?.draft){const error=new Error('përgjigjja nuk përmbante propozim');error.assistantMessage='përgjigjja nuk përmbante propozim';throw error;}
         stopUi();
@@ -1619,13 +1675,14 @@ $('#voiceConfirm').onclick=()=>{
         // If transcription succeeded but the proposal was missing, parse that
         // authoritative text locally rather than falling back to the preview.
         const fallback=serverTranscript||text;
+        const details=[audio,dictationDiag(dictationSession)].filter(Boolean).join(' · ');
         if(fallback){
           showVoiceDraft(fallback,null,'Përpunim lokal — AI nuk u përdor',dictationSession?.composerPrefix??null);
           assistantStatus('AI në server nuk u përdor ('+reason+'). U përdor përpunimi lokal — kontrollo fushat.');
-          if(reason!=='offline')assistantDiag('arsyeja: '+reason+audio+' · '+diagContext());
+          if(reason!=='offline')assistantDiag('arsyeja: '+reason+details+' · '+diagContext());
         }else{
           assistantStatus('Audioja nuk u transkriptua: '+reason.replace(/\.+$/,'')+'. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
-          assistantDiag('arsyeja: '+reason+audio+' · '+diagContext());
+          assistantDiag('arsyeja: '+reason+details+' · '+diagContext());
         }
       }finally{
         clearTimeout(timer);
@@ -1638,6 +1695,7 @@ $('#voiceConfirm').onclick=()=>{
     if(active!==session||session.cancelled)return Promise.resolve();
     const live=String(result?.transcript||'').trim();
     const heard=!!result?.heardSpeech;
+    session.liveText=live;                       // only for the diagnostics comparison
     stopUi();
     // Nobody spoke and nothing was transcribed: never open the confirmation window.
     if(!live&&!heard){

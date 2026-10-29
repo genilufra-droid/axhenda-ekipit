@@ -1,6 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {create,mergeTranscript,clean}=require('../voice-dictation.js');
+const {create,mergeTranscript,clean,readResults,compareTranscripts}=require('../voice-dictation.js');
 
 /* Deterministic clock: no real waiting, timers fire in order when time moves. */
 function fakeClock(){
@@ -263,4 +263,148 @@ test('the opening state is explicit and never pretends to listen',()=>{
   assert.equal(r.log.status.at(-1).state,'starting');
   r.engine.begin();
   assert.equal(r.log.status.at(-1).state,'listening');
+});
+
+/* ---------- Albanian words: nothing is written twice, nothing is rewritten ---------- */
+test('a word already written is not repeated at the junction, however it is spelled',()=>{
+  assert.equal(mergeTranscript('Dërgo raportin','raportin, nesër'),'Dërgo raportin nesër','punctuation');
+  assert.equal(mergeTranscript('Cakto Arben Kola','ARBEN KOLA të përgatisë'),'Cakto Arben Kola të përgatisë','case');
+  assert.equal(mergeTranscript('Cakto Arben Kola të përgatisë','përgatisë raportin'),'Cakto Arben Kola të përgatisë raportin');
+  assert.equal(mergeTranscript('përgatit raportin','pergatit raportin nesër'),'përgatit raportin nesër','typed without ë/ç');
+  assert.equal(mergeTranscript('Dërgo faturat','faturën Arbenit'),'Dërgo faturat Arbenit','same word, other case form');
+  assert.equal(mergeTranscript('Cakto Arben','Arbenit raportin nesër'),'Cakto Arben raportin nesër','a name in another case form');
+});
+
+test('different words are never fused, only one junction word may be re-inflected',()=>{
+  assert.equal(mergeTranscript('Paguaj shumë','shumicën e kohës'),'Paguaj shumë shumicën e kohës','"shumë" is not "shumicën"');
+  assert.equal(mergeTranscript('Raporti vjetor','shifrat mujore'),'Raporti vjetor shifrat mujore');
+  assert.equal(mergeTranscript('Dërgo faturat nesër','faturën urgjent'),'Dërgo faturat nesër faturën urgjent','two changed words are not the same phrase');
+  assert.equal(mergeTranscript('Faturat e reja','faturën e vjetër'),'Faturat e reja faturën e vjetër','only one word of the junction may differ');
+});
+
+test('the original spelling of what was already said is never rewritten',()=>{
+  assert.equal(mergeTranscript('Raporti Vjetor','vjetor 2026'),'Raporti Vjetor 2026');
+  assert.equal(mergeTranscript('Cakto Arben Kola','Arben Kola'),'Cakto Arben Kola');
+});
+
+/* ---------- SpeechRecognition events are read without losing words ---------- */
+test('readResults keeps every unfinished hypothesis, not only the reported index',()=>{
+  /* Chrome reports only the index that changed; results[0] stays unfinished and
+   * used to be dropped, so the preview restarted mid-sentence. */
+  assert.deepEqual(
+    readResults({resultIndex:1,results:[
+      {0:{transcript:'Cakto Arben Kola'},isFinal:false},
+      {0:{transcript:'të përgatisë'},isFinal:false},
+    ]}),
+    {interim:'Cakto Arben Kola të përgatisë',finalText:'',finalIndex:-1});
+  /* Every final text is handed over once, together with the unfinished tail. */
+  assert.deepEqual(
+    readResults({resultIndex:1,results:[
+      {0:{transcript:'Cakto Arben Kola'},isFinal:true},
+      {0:{transcript:'të përgatisë raportin'},isFinal:true},
+      {0:{transcript:'nesër'},isFinal:false},
+    ]}),
+    {interim:'nesër',finalText:'Cakto Arben Kola të përgatisë raportin',finalIndex:1});
+  /* A final that arrives late for an earlier index is not lost either. */
+  assert.deepEqual(
+    readResults({resultIndex:0,results:[
+      {0:{transcript:'Cakto Arben Kola'},isFinal:true},
+      {0:{transcript:'të përgatisë raportin'},isFinal:true},
+    ]},-1),
+    {interim:'',finalText:'Cakto Arben Kola të përgatisë raportin',finalIndex:1});
+  /* A phrase already handed over is never counted a second time. */
+  assert.deepEqual(
+    readResults({resultIndex:1,results:[
+      {0:{transcript:'Cakto Arben Kola'},isFinal:true},
+      {0:{transcript:'të përgatisë raportin'},isFinal:true},
+      {0:{transcript:'nesër'},isFinal:false},
+    ]},1),
+    {interim:'nesër',finalText:'',finalIndex:-1});
+});
+
+test('readResults survives the shapes browsers really deliver',()=>{
+  const empty={interim:'',finalText:'',finalIndex:-1};
+  assert.deepEqual(readResults(null),empty);
+  assert.deepEqual(readResults({}),empty);
+  assert.deepEqual(readResults({results:[]}),empty);
+  assert.deepEqual(readResults({resultIndex:5,results:[{0:{transcript:'Raporti'},isFinal:false}]}),
+    {interim:'Raporti',finalText:'',finalIndex:-1},'an out-of-range index cannot throw');
+  assert.deepEqual(readResults({resultIndex:0,results:[
+    {0:{transcript:'   '},isFinal:false},{0:{transcript:'Raporti'},isFinal:true},{0:null,isFinal:false},
+  ]}),{interim:'',finalText:'Raporti',finalIndex:1},'empty alternatives and hoarse results are skipped');
+});
+
+test('a new result index never erases the words already on screen',()=>{
+  const r=rig();r.engine.start();r.engine.begin();r.speak(400);
+  let consumed=-1;
+  const apply=event=>{
+    const heard=readResults(event,consumed);
+    if(heard.finalIndex>consumed)consumed=heard.finalIndex;
+    if(heard.finalText)r.engine.addFinal(heard.finalText);
+    r.engine.setInterim(heard.interim);
+  };
+  apply({resultIndex:0,results:[{0:{transcript:'Cakto Arben'},isFinal:false}]});
+  assert.equal(r.engine.transcript(),'Cakto Arben');
+  apply({resultIndex:1,results:[
+    {0:{transcript:'Cakto Arben'},isFinal:false},
+    {0:{transcript:'Kola të përgatisë'},isFinal:false},
+  ]});
+  assert.equal(r.engine.transcript(),'Cakto Arben Kola të përgatisë','the first words survive the new index');
+  apply({resultIndex:1,results:[
+    {0:{transcript:'Cakto Arben Kola'},isFinal:true},
+    {0:{transcript:'të përgatisë raportin'},isFinal:true},
+  ]});
+  assert.equal(r.engine.transcript(),'Cakto Arben Kola të përgatisë raportin');
+  assert.equal((r.engine.transcript().match(/Cakto/g)||[]).length,1,'no repetition');
+  r.quiet(3100);r.clock.advance(900);
+  assert.equal(r.log.results[0].transcript,'Cakto Arben Kola të përgatisë raportin');
+});
+
+/* ---------- recogniser corrections and restarts ---------- */
+test('a final result replaces the pending preview without duplicating it',()=>{
+  const r=rig();r.engine.start();r.engine.begin();r.speak(500);
+  r.engine.setInterim('Arben Kola përgatit');
+  r.engine.addFinal('Arben Kola përgatit raportin nesër');
+  assert.equal(r.engine.transcript(),'Arben Kola përgatit raportin nesër');
+  r.engine.setInterim('nesër urgjent');
+  r.engine.addFinal('nesër, urgjent.');          // the same words, finally punctuated
+  assert.equal(r.engine.transcript(),'Arben Kola përgatit raportin nesër urgjent.','the correction is not appended twice');
+  assert.equal((r.engine.transcript().match(/nesër/gi)||[]).length,1);
+});
+
+test('a restart that re-says the last word in another form does not duplicate it',()=>{
+  const r=rig();r.engine.start();r.engine.begin();r.speak(600);
+  r.engine.setInterim('Cakto Arben Kola të përgatisë raportin');
+  r.engine.flushInterim();                        // the browser closes the session
+  r.speak(300);
+  r.engine.setInterim('përgatit raportin nesër'); // the new session re-inflects the verb
+  r.speak(300);
+  r.engine.setInterim('raportin nesër urgjent');
+  assert.equal(r.engine.transcript(),'Cakto Arben Kola të përgatisë raportin nesër urgjent');
+  assert.equal((r.engine.transcript().match(/përgati/g)||[]).length,1,'the junction is not written twice');
+  r.quiet(3100);r.clock.advance(900);
+  assert.equal(r.log.results[0].transcript,'Cakto Arben Kola të përgatisë raportin nesër urgjent');
+});
+
+test('a whole sentence repeated by a restarted session is only written once',()=>{
+  const r=rig();r.engine.start();r.engine.begin();r.speak(700);
+  r.engine.setInterim('Dërgo faturat te Arben Kola');
+  r.engine.flushInterim();
+  r.speak(200);
+  r.engine.setInterim('Dërgo faturat te Arben Kola');   // the restarted session starts over
+  assert.equal(r.engine.transcript(),'Dërgo faturat te Arben Kola');
+  r.engine.setInterim('Dërgo faturat te Arben Kola nesër');
+  assert.equal(r.engine.transcript(),'Dërgo faturat te Arben Kola nesër');
+});
+
+/* ---------- diagnostics: live preview vs final transcript ---------- */
+test('the preview and the final transcript can be compared word by word',()=>{
+  const diff=compareTranscripts('Cakto arben kola raportin','Cakto Arben Kola të përgatisë raportin për nesër');
+  assert.equal(diff.liveWords,4);
+  assert.equal(diff.finalWords,8);
+  assert.deepEqual(diff.onlyLive,[]);
+  assert.deepEqual(diff.onlyFinal,['te','pergatise','per','neser'],'what the audio added, in order');
+  assert.deepEqual(compareTranscripts('',''),{liveWords:0,finalWords:0,onlyLive:[],onlyFinal:[]});
+  const missing=compareTranscripts('Dërgo faturat nesër','Dërgo faturat');
+  assert.deepEqual(missing.onlyLive,['neser'],'a word the final transcript never heard');
 });
