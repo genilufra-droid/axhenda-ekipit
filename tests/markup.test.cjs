@@ -60,7 +60,7 @@ test('the microphone order that works on phones is untouched',()=>{
   assert.match(app,/session\.mobile&&session\.recordAudio\?RECOGNITION_DELAY_MS:0/);
   assert.match(app,/if\(engine&&state!=='idle'\)engine\.flushInterim\(\);/, 'onend still flushes the unfinished words');
   assert.match(app,/const RESTART_WINDOW_MS=2000, RESTART_STORM=3, RESTART_BACKOFF_MS=150;/,'the restart backoff is unchanged');
-  assert.match(app,/const interrupted=!!\(session\.restarts>0\|\|session\.liveFailed\|\|!session\.useRecognition\);/,'the audio is sent under the same conditions');
+  assert.match(app,/if\(!session\.recordAudio\)\{/,'the live text is only used when no recording exists');
 });
 
 test('the final server transcript stays authoritative and the live text stays the fallback',()=>{
@@ -75,4 +75,12 @@ test('the dictation panel explains the language case and keeps the diagnostics h
   assert.match(html,/function dictationDiag\(session\)/);
   assert.match(html,/dallimi live\/final/);
   assert.match(html,/pajisja: '\+deviceSummary\(\)/);
+});
+
+test('the recording is always preferred over the browser preview',()=>{
+  const app=html.slice(0,html.indexOf('/* ADD TASK */'));
+  assert.match(app,/if\(!session\.recordAudio\)\{/,'the live words are only used when nothing was recorded');
+  assert.doesNotMatch(app,/phonePreview/,'the phone-only shortcut is gone');
+  assert.match(app,/body\.append\('vocabulary',vocabulary\)/,'the names are sent with the audio');
+  assert.match(app,/function voiceVocabulary\(\)/);
 });

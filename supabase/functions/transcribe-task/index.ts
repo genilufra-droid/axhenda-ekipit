@@ -81,7 +81,9 @@ function configuredProviders(): Provider[] {
       name: 'groq',
       baseUrl: 'https://api.groq.com/openai/v1/',
       key: groqKey,
-      whisperModel: (Deno.env.get('GROQ_WHISPER_MODEL') || '').trim() || 'whisper-large-v3-turbo',
+      // The turbo variant is faster but noticeably weaker on less-resourced
+      // languages such as Albanian; accuracy of the words wins here.
+      whisperModel: (Deno.env.get('GROQ_WHISPER_MODEL') || '').trim() || 'whisper-large-v3',
       taskModel: (Deno.env.get('GROQ_TASK_MODEL') || '').trim() || 'llama-3.3-70b-versatile',
       jsonMode: 'object',
     });
@@ -97,6 +99,26 @@ function configuredProviders(): Provider[] {
     });
   }
   return list;
+}
+
+/* Whisper reads this prompt as the text that came just before the recording. It
+ * does not rewrite anything and it does not invent a task: it only helps the model
+ * spell the Albanian letters, the words this team uses and the names it already
+ * knows. Kept short (the model only looks at the last ~224 tokens) and ending with a
+ * full stop, because a prompt that stops mid-sentence makes Whisper repeat itself. */
+const WHISPER_CONTEXT = 'Detyrë e re për ekipin: cakto, përgatit, dërgo, raport, raportin mujor, '
+  + 'inventar, faturë, faturat, furnizues, magazinë, pagesë, afat, urgjent, nesër, javën tjetër.';
+
+function whisperPrompt(vocabulary: string): string {
+  const names = String(vocabulary || '')
+    .split(',')
+    .map(name => name.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim())
+    .filter(name => name.length > 0 && name.length <= 60)
+    .slice(0, 40)
+    .join(', ');
+  const text = names ? WHISPER_CONTEXT + ' Emrat e ekipit: ' + names + '.' : WHISPER_CONTEXT;
+  // Never longer than the model reads, never ending mid-sentence.
+  return text.slice(0, 700).replace(/[\s.,;:]+$/, '') + '.';
 }
 
 function audioFileName(file: File): string {
@@ -329,7 +351,7 @@ Deno.serve(async (req: Request) => {
     }
     const bytes = await limitedBody(req);
     const contentType = req.headers.get('content-type') || '';
-    let transcript = '', today = '', audio: File | null = null;
+    let transcript = '', today = '', audio: File | null = null, vocabulary = '';
     try {
       if (contentType.includes('multipart/form-data')) {
         const form = await new Response(bytes, { headers: { 'Content-Type': contentType } }).formData();
@@ -339,6 +361,9 @@ Deno.serve(async (req: Request) => {
         }
         audio = file;
         today = String(form.get('today') || '');
+        // Data, never instructions: only the names are kept, and the server writes
+        // the sentence they are put into.
+        vocabulary = form.get('vocabulary') ? String(form.get('vocabulary')).slice(0, 2000) : '';
       } else if (contentType.includes('application/json')) {
         const body = JSON.parse(new TextDecoder().decode(bytes));
         if (typeof body.text !== 'string') throw new RequestError(400, 'Teksti mungon.', 'missing_text');
@@ -372,6 +397,10 @@ Deno.serve(async (req: Request) => {
           form.append('file', audio, audioFileName(audio));
           form.append('model', p.whisperModel);
           form.append('language', 'sq');
+          // Deterministic decoding: the same audio is not guessed differently twice.
+          form.append('temperature', '0');
+          // Names and vocabulary as context, so they come back spelled correctly.
+          form.append('prompt', whisperPrompt(vocabulary));
           const result = await callProvider(p, 'audio/transcriptions', form, false);
           transcript = typeof result?.text === 'string' ? result.text.trim() : '';
           activeProvider = p;

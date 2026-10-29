@@ -423,7 +423,10 @@ test('no recorded audio and no transcript never calls the AI',async()=>{
   assert.match(app.$('#assistantStatus').textContent,/Mikrofoni nuk dha audio/);
   assert.equal(app.saved,0);
 });
-test('live transcript sends ONLY text and never uploads recorded audio',async()=>{
+test('the complete recording is the source of the words, not the browser preview',async()=>{
+  /* The browser's recogniser is a preview: it was never trained on Albanian and it
+   * rewrites its own words. Whenever a recording exists it is uploaded, so the words
+   * come from the audio even when the live text looked complete and clean. */
   let sentBody=null;
   const app=setup({
     SpeechRecognition:true,
@@ -435,10 +438,8 @@ test('live transcript sends ONLY text and never uploads recorded audio',async()=
   app.recognizer.result([{text:'Cakto Arben Kola të përgatisë raportin nesër urgjent',final:true}]);
   app.quiet(3100);
   await tick();await tick();
-  assert.equal(sentBody instanceof FormData,false,'must never upload FormData audio when live text exists');
-  assert.equal(typeof sentBody.text,'string');
-  assert.equal(sentBody.text,'Cakto Arben Kola të përgatisë raportin nesër urgjent');
-  assert.equal('audio' in sentBody,false);
+  assert.ok(sentBody instanceof FormData,'the recording is uploaded even when the preview was clean');
+  assert.ok(sentBody.get('audio').size>0);
   assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
 });
 test('server down or missing provider falls back to TaskAssistant.parse and opens confirmation with clear local note',async()=>{
@@ -1073,6 +1074,45 @@ test('the failure details say whether the preview or the final transcript was in
   assert.match(details,/transkripti final: 8 fjalë/);
   assert.match(details,/dallimi live\/final: -0 \/ \+4/);
   assert.match(details,/pajisja: Android · Chrome/,'the device can be reported without devtools');
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
+  app.$('#voiceCancel').onclick();
+});
+
+test('the team names go with the recording as context for the transcription',async()=>{
+  for(const [device,options] of [['phone',{userAgent:PHONE_UA,maxTouchPoints:5}],['desktop',{}]]){
+    let sent=null;
+    const app=setup({...options,SpeechRecognition:true,MediaRecorder:recorderClass(),
+      invoke:async(_name,request)=>{sent=request.body;return {data:draft};}});
+    await app.$('#voiceTaskBtn').onclick();
+    if(device==='phone')app.advance(200);
+    app.speak(500);
+    app.recognizer.result([{text:'cakto arben kola raportin',final:true}],0);
+    app.quiet(3100);
+    await tick();await tick();
+    assert.ok(sent instanceof FormData,device+': the recording is uploaded');
+    assert.equal(sent.get('vocabulary'),'Arben Kola','the names are sent as data, not as instructions');
+    assert.ok(sent.get('today'),'the date is still sent');
+    assert.equal(sent.getAll('vocabulary').length,1);
+    app.$('#voiceCancel').onclick();
+  }
+});
+
+test('without any recording the live words are still used and no audio field is invented',async()=>{
+  let sent=null;
+  class Broken{
+    constructor(){this.state='inactive';this.mimeType='audio/webm';}
+    start(){/* stays inactive */}
+    stop(){if(this.onstop)this.onstop();}
+  }
+  const app=setup({SpeechRecognition:true,MediaRecorder:Broken,
+    invoke:async(_name,request)=>{sent=request.body;return {data:draft};}});
+  await app.$('#voiceTaskBtn').onclick();
+  app.speak(400);
+  app.recognizer.result([{text:'Arben Kola përgatit raportin',final:true}],0);
+  app.quiet(3100);
+  await tick();await tick();
+  assert.equal(sent instanceof FormData,false,'nothing was recorded, so only text is sent');
+  assert.equal(sent.text,'Arben Kola përgatit raportin');
   assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
   app.$('#voiceCancel').onclick();
 });
