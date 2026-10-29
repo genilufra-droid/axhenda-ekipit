@@ -1622,6 +1622,19 @@ $('#voiceConfirm').onclick=()=>{
     if(/Failed to fetch|NetworkError|Load failed/i.test(message))return 'rrjeti dështoi';
     return message.slice(0,160);
   }
+  /* The names the team really uses. The server gives them to Whisper as context, so
+   * a name is spelled the way it is written and not the way it sounded; without it
+   * "Arben Kola" came back as whatever was closest to the sound. Context only —
+   * the transcription itself is never rewritten by the app. */
+  function voiceVocabulary(){
+    try{
+      return assistantPeople()
+        .map(name=>String(name).replace(/\s+/g,' ').trim())
+        .filter(name=>name&&name.length<=60)
+        .slice(0,40)
+        .join(', ');
+    }catch(e){return '';}
+  }
   /* raw is the live transcript, kept only as a local fallback when audio is sent;
    * blob is the full recording, which is what Whisper transcribes word for word. */
   function process(raw,blob=null,dictationSession=null){
@@ -1648,6 +1661,8 @@ $('#voiceConfirm').onclick=()=>{
           const ext=blob.type.includes('mp4')?'mp4':blob.type.includes('ogg')?'ogg':'webm';
           body.append('audio',blob,'task.'+ext);
           body.append('today',TaskAssistant.dateKey(new Date()));
+          const vocabulary=voiceVocabulary();
+          if(vocabulary)body.append('vocabulary',vocabulary);
         }
         const result=await Promise.race([
           authClient.functions.invoke('transcribe-task',{body,signal:session.controller.signal}),
@@ -1703,16 +1718,12 @@ $('#voiceConfirm').onclick=()=>{
       assistantStatus('Nuk u kap zë. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
       return Promise.resolve();
     }
-    /* The live recogniser was interrupted (restarts), failed, or was never used:
-     * its text is half a sentence, so upload the complete recording to Whisper and
-     * keep the live text only as a local fallback if the server says no. */
-    const interrupted=!!(session.restarts>0||session.liveFailed||!session.useRecognition);
-    /* On a phone the recogniser runs only to show live text: the recording stays the
-     * final source of the words even when the live result never restarted. */
-    const phonePreview=!!(session.mobile&&session.recordAudio&&session.useRecognition);
-    const waitForAudio=session.recordAudio&&(!live||interrupted||phonePreview);
-    if(!waitForAudio){
-      // A clean desktop recognition without a single restart: send only the text.
+    /* The browser's own recogniser is only a preview: it guesses, it is not trained
+     * on Albanian and it rewrites its own words. The complete recording transcribed
+     * by the server is what the words are taken from — on the phone and on the
+     * computer alike, even when the live text looked complete and clean. Only when
+     * no audio exists at all (broken recorder) is the live text used. */
+    if(!session.recordAudio){
       session.blobPromise?.catch(()=>{});
       return process(live,null,session);
     }

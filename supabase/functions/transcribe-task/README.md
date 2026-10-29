@@ -7,7 +7,7 @@ Funksioni `transcribe-task` transkripton audio në shqip dhe kthen një **propoz
 Zgjedhja e ofruesit bëhet vetëm në server sipas sekreteve të konfiguruara, në këtë rend:
 
 1. **`GROQ_API_KEY` (falas — i rekomanduar):**
-   - Transkriptim audio: `whisper-large-v3-turbo` (`language=sq`) te `https://api.groq.com/openai/v1/audio/transcriptions` (opsionale: `GROQ_WHISPER_MODEL`).
+   - Transkriptim audio: `whisper-large-v3` (`language=sq`, `temperature=0`) te `https://api.groq.com/openai/v1/audio/transcriptions` (opsionale: `GROQ_WHISPER_MODEL`; p.sh. `whisper-large-v3-turbo` është më i shpejtë por më i dobët në shqip).
    - Propozim detyre: `llama-3.3-70b-versatile` me `response_format: { type: "json_object" }` (opsionale: `GROQ_TASK_MODEL`).
 2. **`OPENAI_API_KEY` (opsional / rezervë):**
    - Transkriptim audio: `whisper-1` (`language=sq`) te `https://api.openai.com/v1/audio/transcriptions` (opsionale: `OPENAI_WHISPER_MODEL`).
@@ -35,7 +35,8 @@ Zgjedhja e ofruesit bëhet vetëm në server sipas sekreteve të konfiguruara, n
 
 - Tekst: shkruaj p.sh. “Cakto Arben Kola të përgatisë raportin nesër, urgjent” dhe shtyp **✨ AI**.
 - Audio: shtyp **një herë** mikrofonin dhe fol. Teksti shfaqet drejtpërdrejt në panelin “Po dëgjoj…”. Regjistrimi ndalon vetë kur mikrofonit i mungon **zë real për 3 sekonda të plota** (matet me RMS nga Web Audio API, jo nga mungesa e rezultateve të SpeechRecognition). Çdo fjalë e re e rifillon numërimin; pauzat e shkurtra dhe zëri i ulët nuk e ndërpresin. Kufiri i një diktimi është 60 sekonda; një klikim i dytë ndalon menjëherë.
-- Kur transkriptimi live ka dhënë tekst, dërgohet **vetëm teksti** (asnjëherë audio shtesë).
+- Kur ekziston regjistrim, audioja e plotë dërgohet **gjithmonë** (edhe kur teksti live duket i plotë): transkriptimi i serverit është burimi i fjalëve, teksti live është parapamje/fallback.
+- Transkriptimi drejtohet me `language=sq`, `temperature=0` dhe një `prompt` konteksti të ndërtuar në server: fjalori i detyrave + emrat që klienti dërgon në fushën `vocabulary` (të pastruar, të kufizuar, pa rreshta të re — janë të dhëna, jo udhëzime). Konteksti ndihmon drejtshkrimin e emrave; nuk e rishkruan tekstin.
 - Pas ndalimit hapet automatikisht dritarja **“Konfirmo dërgimin”** me titull, përshkrim/transkriptim, punonjës, afat dhe prioritet. Asgjë nuk ruhet dhe asnjë SMS/Email nuk dërgohet pa shtypur **“Konfirmo dhe dërgo”**; **“Anulo”** nuk ruan dhe nuk njofton. Njoftimi është zgjedhje e veçantë brenda kësaj dritareje dhe nuk trashëgohet nga shiriti i kompozimit.
 - Pa zë ose me transkriptim bosh dritarja e konfirmimit **nuk hapet**.
 - Nëse browser-i nuk ofron transkriptim të drejtpërdrejtë në shqip (p.sh. Samsung Internet në Android ose disa versione iOS/Safari), audioja dërgohet te `transcribe-task` dhe transkriptohet në server pas ndalimit.

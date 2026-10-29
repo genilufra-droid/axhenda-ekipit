@@ -26,9 +26,15 @@ Teste: `TZ=Europe/Tirane node --test tests/*.test.cjs`.
   `MediaRecorder` nis i pari dhe `SpeechRecognition` nis 200 ms më pas. Teksti live
   është parapamje; kur serveri është i disponueshëm, audioja e plotë dërgohet për
   transkriptimin final. Përndryshe përdoret përpunimi lokal i tekstit live.
-- **Kompjuter:** përdoret `SpeechRecognition` për tekst live; nëse sesioni i njohjes
-  ndërpritet/riniset (ose dështon), audioja e plotë dërgohet në server. Pa server,
-  teksti live mbetet si fallback për përpunimin lokal.
+- **Kompjuter dhe telefon:** parapamja live vjen nga `SpeechRecognition`, por
+  **audioja e plotë dërgohet gjithmonë** kur regjistrimi ekziston — edhe kur teksti
+  live duket i plotë. Transkriptimi i serverit është burimi i fjalëve; teksti live
+  përdoret vetëm kur nuk u regjistrua audio (regjistruesi dështoi) ose kur serveri
+  nuk kthen tekst. Pa server, teksti live mbetet si fallback për përpunimin lokal.
+- **Konteksti për emrat:** me audion dërgohen edhe emrat e punonjësve; serveri i jep
+  Whisper-it si kontekst (`prompt`), që emrat të shkruhen ashtu siç shkruhen dhe jo
+  siç tingëllojnë. Konteksti nuk e ndryshon transkriptimin, thjesht e drejton
+  drejtshkrimin; numri i emrave dhe gjatësia e tekstit janë të kufizuara.
 - **Kompozuesi:** fjalët live shfaqen te fusha e titullit pas tekstit ekzistues, pa
   hapur tastierën. Transkriptimi i serverit zëvendëson parapamjen; anulimi rikthen
   tekstin që ishte në fushë para diktimit. Drafti kërkon gjithmonë konfirmim.
