@@ -338,28 +338,11 @@
   .attach-btn svg{width:20px;height:20px}
   .comp-input{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:6px 14px;
     display:flex;flex-direction:column}
-  #tTitle{background:transparent;border:none;color:var(--txt);outline:none;font-size:15px;padding:6px 0;width:100%;min-width:0}
+  #tTitle{background:transparent;border:none;color:var(--txt);outline:none;font-size:15px;padding:6px 0;width:100%}
   .ai-compose-row{display:flex;align-items:center;gap:6px}
   .voice-btn{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;display:grid;place-items:center;flex-shrink:0}
   .voice-btn:hover,.voice-btn.listening{color:#fff;background:#d94b4b;border-color:#d94b4b}
-  .assistant-btn{border:1px solid var(--line);border-radius:12px;background:var(--chip);color:var(--brand);padding:6px 9px;font-weight:700;cursor:pointer;white-space:nowrap}
-  .assistant-btn:disabled,.voice-btn:disabled{opacity:.55;cursor:wait}
-  .assistant-status{font-size:12px;color:var(--muted);padding:5px 14px;min-height:26px}
-  .assistant-warning{white-space:pre-line;color:var(--warn);font-size:13px;margin-bottom:12px}
   .voice-btn svg{width:16px;height:16px}
-  .voice-live{display:none;margin:6px 14px 4px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--panel2)}
-  .voice-live.show{display:block}
-  .voice-live-head{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);flex-wrap:wrap}
-  .voice-dot{width:9px;height:9px;border-radius:50%;background:#d94b4b;flex-shrink:0;animation:voicePulse 1.2s ease-in-out infinite}
-  .voice-live.stopping .voice-dot{animation:none;background:var(--brand)}
-  .voice-meter{flex:1;height:6px;min-width:54px;border-radius:3px;background:var(--line);overflow:hidden}
-  .voice-meter i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#4f7cff,#d94b4b);transform:scaleX(0);transform-origin:left;transition:transform .09s linear}
-  .voice-count{font-variant-numeric:tabular-nums}
-  .voice-live-hint{margin:6px 0 0;font-size:11px;color:var(--muted)}
-  .assistant-diag{display:none;margin:2px 14px 8px;padding:8px 10px;border:1px dashed var(--line);border-radius:10px;background:var(--panel)}
-  .assistant-diag.show{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
-  .assistant-diag-text{margin:0;flex:1;min-width:180px;font-size:11px;line-height:1.45;color:var(--muted);word-break:break-word;user-select:all}
-  @keyframes voicePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.7)}}
   #tDesc{background:transparent;border:none;color:var(--txt);outline:none;font-size:13px;resize:none;
     width:100%;max-height:90px;font-family:inherit;border-top:1px solid var(--line);padding:6px 0 2px;display:none}
   .comp-input.expanded #tDesc{display:block}
@@ -371,6 +354,11 @@
   .notify-all-label input{width:auto}
   .pending-files{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
   .locked-note{padding:12px 16px;color:var(--muted);font-size:13px;text-align:center;border-top:1px solid var(--line);background:var(--panel2)}
+  .assistant-card{display:flex;align-items:center;gap:10px;padding:9px 12px;margin:8px 12px 0;border:1px solid var(--line);border-radius:14px;background:linear-gradient(135deg,rgba(0,168,132,.10),rgba(89,73,198,.10));}
+  .assistant-avatar{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;flex-shrink:0;background:linear-gradient(145deg,#0aa983,#7666d9);box-shadow:0 4px 12px rgba(0,168,132,.25);}
+  .assistant-avatar svg{width:30px;height:30px}.assistant-avatar.talking{animation:assistantPulse 1s infinite alternate}
+  .assistant-name{font-weight:800;font-size:13px}.assistant-status{color:var(--muted);font-size:11px;margin-top:2px}
+  @keyframes assistantPulse{from{transform:scale(1)}to{transform:scale(1.08);box-shadow:0 0 0 8px rgba(0,168,132,.12)}}
 
   /* right column reused */
   input[type=text],input[type=tel],input[type=date],input[type=password],select,textarea{
@@ -547,6 +535,13 @@
 
       <div class="chat" id="taskList"></div>
 
+      <div class="assistant-card" id="assistantCard">
+        <div class="assistant-avatar" id="assistantAvatar" aria-label="Asistentja e Axhendës">
+          <svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="21" fill="#fff" opacity=".96"/><path d="M15 21c0-5 4-9 9-9s9 4 9 9v7c0 5-4 9-9 9s-9-4-9-9v-7Z" fill="#7666d9"/><circle cx="20" cy="23" r="2" fill="#fff"/><circle cx="28" cy="23" r="2" fill="#fff"/><path d="M19 29c3 2 7 2 10 0" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M12 18c1-5 5-9 12-9s11 4 12 9" stroke="#0aa983" stroke-width="3" stroke-linecap="round"/></svg>
+        </div>
+        <div style="min-width:0"><div class="assistant-name">Asistentja e Axhendës</div><div class="assistant-status" id="assistantStatus">Gati për të dëgjuar pronarin</div></div>
+      </div>
+
       <!-- WhatsApp-style composer (owner) -->
       <div class="composer owner-only block">
         <div class="pending-files" id="pendingFiles"></div>
@@ -570,7 +565,6 @@
           <div class="comp-input" id="compInput">
             <div class="ai-compose-row">
               <input type="text" id="tTitle" placeholder="Shkruaj ose fol një detyrë..." autocomplete="off" />
-              <button type="button" class="assistant-btn" id="aiTaskBtn" title="Përgatit një detyrë nga teksti">✨ AI</button>
               <button type="button" class="voice-btn" id="voiceTaskBtn" title="Fol detyrën në shqip" aria-label="Fol detyrën">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg>
               </button>
@@ -584,21 +578,6 @@
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5v-6l8-2.5-8-2.5v-6l19 8.5z"/></svg>
           </button>
         </div>
-      </div>
-      <div id="assistantStatus" class="assistant-status" role="status" aria-live="polite">✨ Shkruaj kërkesën dhe shtyp AI, ose shtyp mikrofonin një herë dhe fol. Regjistrimi ndalon vetë pas 3 sekondash heshtjeje. Teksti/audioja përpunohet nga shërbime të jashtme kur janë aktive.</div>
-      <div class="voice-live" id="voiceLive">
-        <div class="voice-live-head">
-          <span class="voice-dot" aria-hidden="true"></span>
-          <span id="voiceLiveState" role="status" aria-live="polite">Po dëgjoj…</span>
-          <span class="voice-meter" aria-hidden="true"><i id="voiceLiveMeterBar"></i></span>
-          <span class="voice-count" id="voiceLiveCount" aria-hidden="true"></span>
-          <button type="button" class="act ghost sm" id="voiceLiveCancel">Anulo</button>
-        </div>
-        <p class="voice-live-hint" id="voiceLiveHint">Fol lirshëm — regjistrimi ndalon vetë pas 3 sekondash heshtjeje.</p>
-      </div>
-      <div class="assistant-diag" id="assistantDiagBox">
-        <p class="assistant-diag-text" id="assistantDiag"></p>
-        <button type="button" class="act ghost sm" id="assistantDiagCopy">Kopjo detajet</button>
       </div>
       <div class="locked-note" id="lockedNote">🔒 Vetëm <b>pronari</b> mund të shtojë detyra. Kalo te modaliteti Pronar për të shkruar.</div>
       </div><!-- /tableView -->
@@ -690,28 +669,26 @@
 </div>
 
 <!-- ===== VOICE TASK CONFIRMATION MODAL ===== -->
-<div class="overlay" id="voiceConfirmOverlay" role="dialog" aria-modal="true" aria-labelledby="voiceDraftHeading">
+<div class="overlay" id="voiceConfirmOverlay">
   <div class="modal">
     <div class="modal-head">
       <span class="ic">🎙️</span>
-      <div style="flex:1;min-width:0"><p class="mt" id="voiceDraftHeading">Konfirmo dërgimin</p><p class="ms" id="voiceDraftSource">Kontrollo fushat para ruajtjes.</p></div>
+      <div style="flex:1;min-width:0"><p class="mt">Konfirmo detyrën</p><p class="ms">Asistenti e dëgjoi kërkesën. Kontrolloje para dërgimit.</p></div>
       <button class="x" id="voiceCancelTop">&times;</button>
     </div>
     <div class="modal-body">
-      <div class="assistant-warning" id="voiceDraftWarnings" role="status"></div>
-      <div class="field"><label for="voiceDraftTitle">Titulli *</label><input type="text" id="voiceDraftTitle" maxlength="300" required /></div>
-      <div class="field"><label for="voiceDraftDesc">Përshkrimi / transkriptimi origjinal</label><textarea id="voiceDraftDesc" rows="5"></textarea></div>
+      <div class="field"><label>Titulli</label><input type="text" id="voiceDraftTitle" /></div>
+      <div class="field"><label>Përshkrimi / transkriptimi origjinal</label><textarea id="voiceDraftDesc" rows="5"></textarea></div>
       <div class="row">
-        <div class="field"><label for="voiceDraftAssignee">Caktuar për</label><input type="text" id="voiceDraftAssignee" list="employeeList" /></div>
-        <div class="field"><label for="voiceDraftDue">Afati</label><input type="date" id="voiceDraftDue" /></div>
+        <div class="field"><label>Caktuar për</label><input type="text" id="voiceDraftAssignee" /></div>
+        <div class="field"><label>Afati</label><input type="date" id="voiceDraftDue" /></div>
       </div>
-      <div class="field"><label for="voiceDraftPriority">Prioriteti</label><select id="voiceDraftPriority"><option value="Ulet">Ulët</option><option value="Mesme">Mesëm</option><option value="Lart">Lartë</option></select></div>
-      <label class="notify-all-label"><input type="checkbox" id="voiceDraftNotify" /> Njofto punonjësit e zgjedhur (Chat, SMS, Email)</label>
-      <div class="hint">Asgjë nuk ruhet dhe nuk dërgohet pa shtypur “Konfirmo dhe dërgo”. Njoftimet dërgohen vetëm nëse i shënon vetë.</div>
+      <div class="field"><label>Prioriteti</label><select id="voiceDraftPriority"><option value="Ulet">Ulët</option><option value="Mesme">Mesëm</option><option value="Lart">Lartë</option></select></div>
+      <div class="hint">Asgjë nuk ruhet dhe nuk dërgohet pa shtypur butonin e konfirmimit.</div>
     </div>
     <div class="modal-foot">
       <button class="act ghost" id="voiceCancel">Anulo</button>
-      <button class="act" id="voiceConfirm">✅ Konfirmo dhe dërgo</button>
+      <button class="act" id="voiceConfirm">✅ Ruaj dhe dërgo</button>
     </div>
   </div>
 </div>
@@ -952,8 +929,6 @@
   </div>
 </div>
 
-<script src="task-assistant.js"></script>
-<script src="voice-dictation.js"></script>
 <script>
 const $=(s)=>document.querySelector(s), $$=(s)=>document.querySelectorAll(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -1173,761 +1148,116 @@ function renderPending(){
   $$('#pendingFiles .chip').forEach(c=>c.onclick=()=>{state.pending=state.pending.filter(f=>f.id!==c.dataset.rm);renderPending();});
 }
 
-/* TASK ASSISTANT: text, live voice dictation with real voice-activity detection,
-   safe local fallback and explicit confirmation. Nothing is saved or sent before
-   the owner presses "Konfirmo dhe dërgo". */
-let voiceDraft=null, voiceDraftComposerPrefix=null, assistantCancel=()=>{}, assistantBusy=false, assistantReturnFocus=null, voiceSaving=false;
-let voiceNotifyReminded=false;   // the owner is reminded once that notifying is his own choice
-const assistantPeople=()=>[...new Set((state.chat?.contacts||[]).filter(c=>!c.readonly).map(c=>c.name).filter(Boolean))];
-function parseVoiceTask(raw){return TaskAssistant.parse(raw,assistantPeople());}
-function assistantStatus(text){$('#assistantStatus').textContent=text;}
-// Updating an input's value and selection does not focus it or dispatch keyboard events.
-function setVoiceComposer(value){
-  const input=$('#tTitle');
-  input.value=value;
-  const end=input.value.length;
-  if(typeof input.setSelectionRange==='function')input.setSelectionRange(end,end);
-  input.scrollLeft=input.scrollWidth;
+/* VOICE TASK ASSISTANT */
+let voiceDraft = null;
+function assistantStatus(text,talking=false){
+  const s=$('#assistantStatus'), a=$('#assistantAvatar');
+  if(s)s.textContent=text;
+  if(a)a.classList.toggle('talking',!!talking);
 }
-function assistantDiag(text){
-  const box=$('#assistantDiagBox'), line=$('#assistantDiag');
-  line.textContent=text||'';
-  box.classList[text?'add':'remove']('show');
+function assistantSpeak(text){
+  assistantStatus(text,true);
+  if(!('speechSynthesis' in window)){setTimeout(()=>assistantStatus('Gati për detyrën',false),2400);return;}
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text); u.lang='sq-AL'; u.rate=.95; u.pitch=1.05;
+  u.onend=()=>assistantStatus('Gati për detyrën',false); u.onerror=()=>assistantStatus('Gati për detyrën',false);
+  speechSynthesis.speak(u);
 }
-$('#assistantDiagCopy').onclick=async()=>{
-  const text=$('#assistantDiag').textContent||'';
-  try{await navigator.clipboard.writeText(text);toast('Detajet u kopjuan','ok');}
-  catch(e){toast('Kopjo me dorë tekstin e detajeve','err');}
-};
-/* Which phone and which browser is the owner using? Without this a report cannot
-   be acted on: the live preview depends on the browser's own recogniser. */
-function deviceSummary(){
-  try{
-    const ua=String(navigator.userAgent||'');
-    const device=/Android/i.test(ua)?'Android':/iPhone|iPad|iPod/i.test(ua)?'iOS'
-      :/Windows/i.test(ua)?'Windows':/Mac OS X/i.test(ua)?'macOS':/Linux/i.test(ua)?'Linux':'e panjohur';
-    const browser=/SamsungBrowser/i.test(ua)?'Samsung Internet'
-      :/EdgA|Edg\//i.test(ua)?'Edge'
-      :/OPR\/|Opera/i.test(ua)?'Opera'
-      :/CriOS|Chrome/i.test(ua)?'Chrome'
-      :/FxiOS|Firefox/i.test(ua)?'Firefox'
-      :/Safari/i.test(ua)?'Safari':'browser i panjohur';
-    return device+' · '+browser;
-  }catch(e){return 'e panjohur';}
+function parseVoiceTask(raw){
+  const original=String(raw||'').trim();
+  let text=original;
+  const people=(state.chat?.contacts||[]).map(c=>c.name).filter(Boolean);
+  const found=people.filter(name=>text.toLowerCase().includes(String(name).toLowerCase()));
+  let priority='Mesme';
+  if(/prioritet\s+i\s+lartë|prioritet\s+lart|urgjent/i.test(text)) priority='Lart';
+  else if(/prioritet\s+i\s+ulët|prioritet\s+ulet/i.test(text)) priority='Ulet';
+  let due='';
+  const d=new Date();
+  if(/nesër|neser/i.test(text)){d.setDate(d.getDate()+1);due=d.toISOString().slice(0,10);}
+  else if(/sot/i.test(text)) due=new Date().toISOString().slice(0,10);
+  let title=text;
+  found.forEach(name=>{title=title.replace(new RegExp(String(name).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'ig'),'');});
+  title=title.replace(/prioritet\s+i\s+lartë|prioritet\s+i\s+ulët|prioritet\s+lartë|prioritet\s+ulët|prioritet\s+lart|prioritet\s+ulet|urgjent/ig,'')
+    .replace(/cakto(?:ja|je)?\s+(?:për|per)?/ig,'').replace(/(?:sot|nesër|neser)(?:\s+në\s+orën?\s+\w+)?/ig,'')
+    .replace(/\s+/g,' ').replace(/^\s*[,.:;-]+|[,.:;-]+\s*$/g,'').trim();
+  if(!title) title=original;
+  return {original,title:title.charAt(0).toUpperCase()+title.slice(1),assignee:[...new Set(found)].join(', '),due,priority};
 }
-/* Everything the owner needs to report a failure without developer tools. */
-function diagContext(){
-  const parts=[];
-  try{
-    parts.push('pajisja: '+deviceSummary());
-    parts.push('faqja: '+(window.isSecureContext?'https':'jo-https'));
-    parts.push('hyrja: '+(typeof currentUser!=='undefined'&&currentUser?'po':'jo'));
-    parts.push('mikrofon: '+(navigator.mediaDevices?.getUserMedia?'po':'jo'));
-    parts.push('MediaRecorder: '+(window.MediaRecorder?'po':'jo'));
-    parts.push('AudioContext: '+((window.AudioContext||window.webkitAudioContext)?'po':'jo'));
-    parts.push('transkriptim live: '+((window.SpeechRecognition||window.webkitSpeechRecognition)?'po':'jo'));
-    parts.push('ora: '+new Date().toISOString());
-  }catch(e){}
-  return parts.join(' · ');
-}
-/* Distinguishes a problem of the live preview from a problem of the final
-   transcription. Shown only with the details of a failure, never as a claim
-   about accuracy. */
-function dictationDiag(session){
-  if(!session)return '';
-  try{
-    const parts=[];
-    const live=String(session.liveText||'').trim();
-    const finalText=String(session.finalText||'').trim();
-    if(live)parts.push('parapamja live: '+VoiceDictation.wordCount(live)+' fjalë');
-    if(finalText){
-      parts.push('transkripti final: '+VoiceDictation.wordCount(finalText)+' fjalë');
-      if(live){
-        const diff=VoiceDictation.compareTranscripts(live,finalText);
-        parts.push('dallimi live/final: -'+diff.onlyLive.length+' / +'+diff.onlyFinal.length);
-      }
-    }
-    if(session.liveError)parts.push('njohësi: '+session.liveError);
-    parts.push('rinisje njohësi: '+(session.restarts||0));
-    parts.push('matës zëri: '+(session.energyVad?'po':'jo'));
-    return parts.join(' · ');
-  }catch(e){return '';}
-}
-function showVoiceDraft(raw,data=null,source='Përpunim lokal — AI nuk u përdor',composerPrefix=null){
-  const transcript=String(data?.transcript||raw||'').trim();
-  voiceSaving=false;voiceNotifyReminded=false;
-  // An empty transcript must never open the confirmation window.
-  if(!transcript){assistantStatus('Nuk u kap tekst. Provo përsëri ose shkruaj kërkesën.');return false;}
-  voiceDraft=data?TaskAssistant.normalize(data,raw,assistantPeople()):TaskAssistant.parse(transcript,assistantPeople());
-  voiceDraftComposerPrefix=composerPrefix;
-  assistantReturnFocus=document.activeElement;
-  $('#voiceDraftHeading').textContent='Konfirmo dërgimin';
+function showVoiceDraft(raw){
+  voiceDraft=parseVoiceTask(raw);
   $('#voiceDraftTitle').value=voiceDraft.title;
   $('#voiceDraftDesc').value=voiceDraft.original;
   $('#voiceDraftAssignee').value=voiceDraft.assignee;
   $('#voiceDraftDue').value=voiceDraft.due;
   $('#voiceDraftPriority').value=voiceDraft.priority;
-  // Notifications are opt-in here; a previously ticked composer box is never inherited.
-  $('#voiceDraftNotify').checked=false;
-  $('#voiceDraftWarnings').textContent=voiceDraft.warnings.join('\n');
-  $('#voiceDraftSource').textContent=source;
   $('#voiceConfirmOverlay').classList.add('show');
-  $('#voiceDraftTitle').focus();
-  return true;
 }
-function closeVoiceDraft(restoreFocus=true){
-  voiceDraft=null;voiceDraftComposerPrefix=null;$('#voiceConfirmOverlay').classList.remove('show');
-  const previous=assistantReturnFocus;assistantReturnFocus=null;
-  if(restoreFocus)previous?.focus();
-}
-function cancelVoiceDraft(restoreFocus=true){
-  if(voiceDraftComposerPrefix!==null)setVoiceComposer(voiceDraftComposerPrefix);
-  closeVoiceDraft(restoreFocus);
-}
-$('#voiceCancel').onclick=()=>cancelVoiceDraft();
-$('#voiceCancelTop').onclick=()=>cancelVoiceDraft();
-$('#voiceConfirmOverlay').addEventListener('click',e=>{if(e.target===$('#voiceConfirmOverlay'))cancelVoiceDraft();});
-document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){
-    if(voiceDraft){e.preventDefault();cancelVoiceDraft();}else assistantCancel();
-  }
-  if(e.key==='Tab'&&voiceDraft){
-    const items=[...$('#voiceConfirmOverlay').querySelectorAll('button,input,textarea,select')].filter(el=>!el.disabled);
-    if(e.shiftKey&&document.activeElement===items[0]){e.preventDefault();items.at(-1).focus();}
-    else if(!e.shiftKey&&document.activeElement===items.at(-1)){e.preventDefault();items[0].focus();}
-  }
-});
+function closeVoiceDraft(){voiceDraft=null;$('#voiceConfirmOverlay').classList.remove('show');}
+$('#voiceCancel').onclick=closeVoiceDraft;
+$('#voiceCancelTop').onclick=closeVoiceDraft;
 $('#voiceConfirm').onclick=()=>{
-  if(!voiceDraft||voiceSaving)return;
-  if(cloud.role!=='owner'){toast('Vetëm pronari mund të shtojë detyra','err');return;}
-  const title=$('#voiceDraftTitle').value.trim(), due=$('#voiceDraftDue').value;
-  if(!title){toast('Shkruaj titullin e detyrës','err');$('#voiceDraftTitle').focus();return;}
-  if(due&&!TaskAssistant.validDate(due)){toast('Kontrollo afatin e detyrës','err');return;}
-  const notify=$('#voiceDraftNotify').checked;
-  if(notify&&!$('#voiceDraftAssignee').value.trim()){toast('Cakto një punonjës përpara njoftimit','err');$('#voiceDraftAssignee').focus();return;}
-  // Notifying is the owner's own click, never automatic. If the box is empty, remind him once.
-  if(!notify&&!voiceNotifyReminded){
-    voiceNotifyReminded=true;
-    $('#voiceDraftWarnings').textContent=($('#voiceDraftWarnings').textContent?$('#voiceDraftWarnings').textContent+'\n':'')
-      +'Kujtesë: punonjësi NUK do të njoftohet. Kliko katrorin “Njofto punonjësit” nëse do ta njoftosh, ose shtyp “Konfirmo dhe dërgo” sërish për të ruajtur pa njoftim.';
-    toast('Kujtesë: njoftimi nuk është zgjedhur','err');
-    $('#voiceDraftNotify').focus();
-    return;
-  }
-  voiceSaving=true;                                   // one confirmation creates exactly one task
-  $('#tTitle').value=title;
+  if(!voiceDraft)return;
+  $('#tTitle').value=$('#voiceDraftTitle').value.trim();
   $('#tDesc').value=$('#voiceDraftDesc').value.trim();
   $('#tAssignee').value=$('#voiceDraftAssignee').value.trim();
-  $('#tDue').value=due;
+  $('#tDue').value=$('#voiceDraftDue').value;
   state.priority=$('#voiceDraftPriority').value;
   $$('.pill').forEach(p=>p.classList.toggle('active',p.dataset.p===state.priority));
-  $('#notifyAllChannels').checked=notify;
-  assistantStatus('Konfirmo dërgimin…');
+  $('#notifyAllChannels').checked=true;
   closeVoiceDraft();
+  assistantSpeak('Detyra u ruajt dhe po dërgohet te punonjësit.');
   addTask();
-  assistantStatus(notify?'Detyra u ruajt dhe punonjësit e zgjedhur u njoftuan.':'Detyra u ruajt. Asnjë SMS/Email nuk u dërgua sepse nuk e zgjodhe.');
 };
-
-(function setupTaskAssistant(){
-  const button=$('#voiceTaskBtn'), ai=$('#aiTaskBtn'), livePanel=$('#voiceLive');
-  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-  let active=null, requestId=0;
-
-  /* Phones share one microphone between MediaRecorder and SpeechRecognition, so the
-   * two must not grab it at the same moment: the recorder goes first and the live
-   * recogniser follows a moment later (see RECOGNITION_DELAY_MS). On touch devices
-   * the panel therefore shows live text while the full audio is still recorded. */
-  function isTouchOrMobile(){
-    try{
-      const nav=navigator||{};
-      if(/Android|iPhone|iPad|iPod|Mobile|SamsungBrowser|Opera Mini|IEMobile|Windows Phone/i.test(String(nav.userAgent||'')))return true;
-      if(Number(nav.maxTouchPoints||0)>0)return true;
-      if('ontouchstart' in window)return true;
-    }catch(e){}
-    return false;
-  }
-
-  /* ---------- live dictation panel and composer ---------- */
-  function liveShow(show){livePanel.classList[show?'add':'remove']('show');}
-  function liveState(text){$('#voiceLiveState').textContent=text;}
-  function liveComposer(session,text){
-    const prefix=session.composerPrefix, words=String(text||'');
-    const separator=prefix&&words&&!/\s$/.test(prefix)?' ':'';
-    setVoiceComposer(prefix+separator+words);
-  }
-  function liveHint(text){$('#voiceLiveHint').textContent=text;}
-  function liveCountdown(){
-    const left=active?.engine?.remaining?.();
-    $('#voiceLiveCount').textContent=left==null?'':(left/1000).toFixed(1)+'s';
-  }
-  function meter(level){
-    const bar=$('#voiceLiveMeterBar');
-    if(bar)bar.style.transform='scaleX('+Math.min(1,Math.max(0,level*10)).toFixed(2)+')';
-  }
-  function idle(){
-    assistantBusy=false;ai.disabled=false;button.disabled=false;
-    button.classList.remove('listening');button.setAttribute('aria-pressed','false');
-    button.title='Fol detyrën në shqip';
-  }
-  function stopUi(){liveShow(false);meter(0);}
-
-  /* ---------- microphone energy monitor (voice activity detection) ---------- */
-  function createLevelMonitor(stream){
-    const Ctx=window.AudioContext||window.webkitAudioContext;
-    if(!Ctx)return {supported:false,start(){},stop(){}};
-    let ctx=null,source=null,analyser=null,raf=0,buffer=null;
-    return {
-      supported:true,
-      start(onLevel){
-        try{
-          ctx=new Ctx();
-          if(ctx.state==='suspended'&&ctx.resume)ctx.resume().catch(()=>{});
-          source=ctx.createMediaStreamSource(stream);
-          analyser=ctx.createAnalyser();
-          analyser.fftSize=1024;analyser.smoothingTimeConstant=0.25;
-          source.connect(analyser);
-          buffer=new Uint8Array(analyser.fftSize);
-          const loop=()=>{
-            if(!analyser)return;
-            analyser.getByteTimeDomainData(buffer);
-            let sum=0;
-            for(let i=0;i<buffer.length;i++){const v=(buffer[i]-128)/128;sum+=v*v;}
-            onLevel(Math.sqrt(sum/buffer.length));
-            raf=requestAnimationFrame(loop);
-          };
-          raf=requestAnimationFrame(loop);
-          return true;
-        }catch(e){this.stop();return false;}
-      },
-      stop(){
-        if(raf&&window.cancelAnimationFrame)window.cancelAnimationFrame(raf);
-        raf=0;
-        try{source&&source.disconnect();}catch(e){}
-        try{analyser&&analyser.disconnect();}catch(e){}
-        try{ctx&&ctx.close();}catch(e){}
-        ctx=null;source=null;analyser=null;buffer=null;
-      }
-    };
-  }
-
-  /* ---------- recording + speech recognition ---------- */
-  function pickMime(){
-    try{
-      if(typeof MediaRecorder.isTypeSupported!=='function')return '';
-      return ['audio/webm;codecs=opus','audio/webm','audio/mp4'].find(type=>{
-        try{return MediaRecorder.isTypeSupported(type);}catch(e){return false;}
-      })||'';
-    }catch(e){return '';}
-  }
-  /* Returns true only when the recorder is really capturing, so the UI never claims
-   * "listening" while the hardware is still being opened. */
-  function startRecorder(session,stream){
-    if(!window.MediaRecorder)return false;
-    try{
-      const mime=pickMime();
-      const recorder=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);
-      session.recorder=recorder;
-      recorder.ondataavailable=e=>{if(e.data&&e.data.size)session.chunks.push(e.data);};
-      recorder.onstop=()=>{
-        finishAudio(session);
-        session.monitor?.stop();session.monitor=null;session.monitorActive=false;
-        try{session.stream?.getTracks().forEach(t=>t.stop());}catch(e){}
-        session.stream=null;
-        if(!session.recognition)session.engine?.complete();   // nothing left to wait for
-      };
-      recorder.onerror=()=>{session.recordError=true;};
-      recorder.start(1000);
-      return recorder.state==='recording';
-    }catch(e){session.recorder=null;return false;}
-  }
-  function finishAudio(session){
-    if(session.audioDone)return;
-    session.audioDone=true;
-    let blob=null;
-    if(session.chunks&&session.chunks.length){
-      const type=session.recorder?.mimeType||'';
-      blob=new Blob(session.chunks,type?{type}:undefined);
-      // Some Android browsers (Samsung Internet) report an empty type; the server
-      // rejects unknown MIME types, so give the recording a usable container type.
-      if(!blob.type)blob=new Blob(session.chunks,{type:'audio/webm'});
-    }
-    session.blob=blob;
-    session.resolveBlob?.(blob);
-  }
-
-  /* The recorder needs a clean start: on a phone SpeechRecognition takes the input
-   * over and the recording loses the first syllables. Recording starts first and the
-   * recogniser follows this many milliseconds later; without a recorder the live
-   * text starts at once, so no syllable is ever delayed for the usual case. */
-  const RECOGNITION_DELAY_MS=200;
-  /* Chrome/Android end a recognition session on every short pause. Restarting at
-   * once keeps the words flowing; only a burst of restarts gets a short breather so
-   * a broken recogniser cannot spin on the microphone. */
-  const RESTART_WINDOW_MS=2000, RESTART_STORM=3, RESTART_BACKOFF_MS=150;
-  function restartDelay(session){
-    const now=Date.now();
-    const recent=(session.restartTimes||[]).filter(at=>now-at<RESTART_WINDOW_MS);
-    recent.push(now);
-    session.restartTimes=recent;
-    return recent.length>RESTART_STORM?RESTART_BACKOFF_MS:0;
-  }
-
-  function startRecognitionSoon(session,delay){
-    if(!Recognition)return;
-    if(session.recognitionStart){clearTimeout(session.recognitionStart);session.recognitionStart=null;}
-    if(!delay)return startRecognition(session);
-    session.recognitionStart=setTimeout(()=>{
-      session.recognitionStart=null;
-      if(active!==session||session.stopped||session.cancelled)return;
-      if(!session.engine||session.engine.state==='idle')return;
-      startRecognition(session);
-    },delay);
-  }
-
-  function startRecognition(session){
-    if(!Recognition)return;
-    let recognition;
-    try{recognition=new Recognition();}catch(e){return;}
-    session.recognition=recognition;
-    /* Which final phrase of this recognition session was already handed to the
-       engine. A new instance starts with an empty result list, so it starts at -1. */
-    let consumedFinal=-1;
-    recognition.lang='sq-AL';
-    recognition.interimResults=true;
-    recognition.continuous=true;
-    recognition.maxAlternatives=1;
-    recognition.onresult=event=>{
-      // A recogniser that was already replaced or released can never write again.
-      if(active!==session||session.recognition!==recognition)return;
-      if(!session.engine||session.engine.state==='idle')return;
-      /* readResults() reads every unfinished hypothesis, not only the index this
-       * event reports — otherwise the half sentence already on screen was thrown
-       * away and the preview restarted mid-sentence. */
-      const heard=VoiceDictation.readResults(event,consumedFinal);
-      if(heard.finalIndex>consumedFinal)consumedFinal=heard.finalIndex;
-      if(heard.finalText)session.engine.addFinal(heard.finalText);
-      session.engine.setInterim(heard.interim);
-      // Only when the browser cannot measure sound: recognition activity drives the timer.
-      if(!session.energyVad)session.engine.markSpeech();
-    };
-    recognition.onerror=event=>{
-      if(active!==session||session.recognition!==recognition)return;
-      const code=String(event?.error||'');
-      if(code==='aborted'||code==='no-speech')return;
-      session.liveFailed=true;
-      session.liveError=code;
-      /* These errors never heal by restarting. Restarting anyway takes the
-       * microphone away from the recorder over and over — and the full recording,
-       * not the preview, is what the words are finally taken from. */
-      const fatal=code==='language-not-supported'||code==='not-allowed'||code==='service-not-allowed'||code==='audio-capture';
-      if(fatal)session.recognitionFatal=true;
-      if(code==='language-not-supported'){
-        liveHint('Ky browser nuk njeh shqipen për tekst live. Vazhdo të flasësh: audioja e plotë transkriptohet saktë pas ndalimit.');
-        assistantStatus('Teksti live nuk mbështet shqipen në këtë browser; audioja e plotë transkriptohet pas ndalimit.');
-        return;
-      }
-      liveHint('Transkriptimi i drejtpërdrejtë nuk është i disponueshëm në këtë browser. Audioja do të transkriptohet pas ndalimit.');
-      assistantStatus('Transkriptimi live nuk është i disponueshëm; audioja do të transkriptohet pas ndalimit.');
-    };
-    recognition.onend=()=>{
-      if(active!==session||session.recognition!==recognition)return;
-      const engine=session.engine;
-      const state=engine?.state;
-      // Whatever the browser never marked as final must survive the restart.
-      if(engine&&state!=='idle')engine.flushInterim();
-      if(state==='stopping'||session.stopped){engine?.complete();return;}
-      // Chrome/Android end the session after a short pause: keep listening.
-      if(state==='listening'&&!session.cancelled&&!session.recognitionFatal&&(session.restarts||0)<200){
-        session.restarts=(session.restarts||0)+1;
-        // Restart immediately: a fixed pause swallowed the first syllable of the
-        // next word. A short breather only follows a storm of restarts, and even
-        // then setTimeout(…,0) yields the event loop turn Chrome needs before
-        // start() is allowed again.
-        setTimeout(()=>{
-          if(active===session&&session.engine?.state==='listening'&&!session.stopped){
-            consumedFinal=-1;             // the restarted session numbers its results from 0
-            try{recognition.start();}catch(e){session.liveFailed=true;}
-          }
-        },restartDelay(session));
-      }
-    };
-    try{recognition.start();session.live=true;}
-    catch(e){session.recognition=null;session.liveFailed=true;}
-  }
-
-  /* A recogniser still waiting for its delayed start must never touch the microphone
-   * after the owner stopped talking. */
-  function cancelDelayedRecognition(session){
-    if(session.recognitionStart){clearTimeout(session.recognitionStart);session.recognitionStart=null;}
-  }
-  function stopCapture(session){
-    if(!session||session.stopped)return;
-    session.stopped=true;
-    cancelDelayedRecognition(session);
-    liveState('Po përfundoj regjistrimin…');
-    // The recorder must flush before the audio promise is resolved.
-    let recorderStopped=false;
-    if(session.recorder&&session.recorder.state==='recording'){try{session.recorder.stop();recorderStopped=true;}catch(e){}}
-    if(recorderStopped&&!session.audioFallback){                  // safety net if onstop never fires
-      session.audioFallback=true;
-      setTimeout(()=>finishAudio(session),2000);
-    }
-    try{session.recognition?.stop();}catch(e){session.recognition=null;}
-    if(!session.recognition&&!recorderStopped)session.engine?.complete();
-  }
-  function releaseCapture(session){
-    if(!session||!session.chunks)return;                 // not a dictation session
-    cancelDelayedRecognition(session);
-    session.chunks=session.chunks||[];
-    try{session.recognition?.abort?.();}catch(e){}
-    session.recognition=null;
-    session.monitor?.stop();session.monitor=null;
-    try{session.stream?.getTracks().forEach(t=>t.stop());}catch(e){}
-    session.stream=null;
-    if(session.recorder&&session.recorder.state==='recording'){try{session.recorder.stop();}catch(e){}}
-    // Never cut the audio short: MediaRecorder.onstop flushes the last chunk and resolves.
-    if(!session.recorder)finishAudio(session);
-    else if(!session.audioFallback){session.audioFallback=true;setTimeout(()=>finishAudio(session),2000);}
-    session.released=true;
-  }
-
-  /* ---------- AI proposal ---------- */
-  /* Turn whatever the platform gave us into a short, honest Albanian reason. */
-  async function explainFailure(error){
-    if(error&&typeof error.assistantMessage==='string'&&error.assistantMessage)return error.assistantMessage;
-    const context=error&&error.context;
-    if(context&&typeof context==='object'){
-      try{
-        const response=typeof context.clone==='function'?context.clone():context;
-        let body=null;
-        try{body=await response.json();}catch(e){}
-        const text=body&&typeof body.error==='string'?body.error.trim():'';
-        if(text)return text.slice(0,160);
-        const msg=body&&typeof body.message==='string'?body.message.trim():'';
-        if(/^(Invalid JWT|JWT expired)$/i.test(msg))return 'Sesioni ka skaduar. Hyr përsëri.';
-        if(msg)return msg.slice(0,160);
-        if(typeof context.status==='number'&&context.status){
-          if(context.status===404)return 'funksioni transcribe-task nuk është publikuar (404)';
-          if(context.status===401)return 'Sesioni ka skaduar. Hyr përsëri.';
-          if(context.status===403)return 'Vetëm pronari mund të përdorë asistentin e detyrave.';
-          if(context.status===429)return 'Kredia e ofruesit AI ka mbaruar. Përdor një çelës falas (Groq) ose shto kredi.';
-          if(context.status===503)return 'Asnjë ofrues AI nuk është konfiguruar.';
-          return 'HTTP '+context.status;
-        }
-      }catch(e){}
-    }
-    const message=String(error&&error.message||'').trim();
-    if(!message)return 'gabim i panjohur';
-    if(/non-2xx/i.test(message))return 'funksioni ktheu gabim';
-    if(/Failed to fetch|NetworkError|Load failed/i.test(message))return 'rrjeti dështoi';
-    return message.slice(0,160);
-  }
-  /* The names the team really uses. The server gives them to Whisper as context, so
-   * a name is spelled the way it is written and not the way it sounded; without it
-   * "Arben Kola" came back as whatever was closest to the sound. Context only —
-   * the transcription itself is never rewritten by the app. */
-  function voiceVocabulary(){
-    try{
-      return assistantPeople()
-        .map(name=>String(name).replace(/\s+/g,' ').trim())
-        .filter(name=>name&&name.length<=60)
-        .slice(0,40)
-        .join(', ');
-    }catch(e){return '';}
-  }
-  /* raw is the live transcript, kept only as a local fallback when audio is sent;
-   * blob is the full recording, which is what Whisper transcribes word for word. */
-  function process(raw,blob=null,dictationSession=null){
-    const text=String(raw||'').trim();
-    const sendAudio=!!(blob&&blob.size);
-    if(!text&&!sendAudio){
-      if(active===dictationSession)active=null;
-      stopUi();idle();
-      assistantStatus('Nuk u kap zë. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
-      return Promise.resolve();
-    }
-    const id=++requestId;
-    assistantBusy=true;ai.disabled=true;button.disabled=true;
-    const session={controller:new AbortController(),dictation:dictationSession};active=session;
-    liveState('Po përgatis detyrën…');
-    assistantStatus('Po përgatis detyrën… (deri në 90 s) Escape për anulim.');
-    assistantDiag('');
-    let timer, serverTranscript='';
-    return (async()=>{
-      try{
-        if(!authClient)throw new Error('offline');
-        const body=sendAudio?new FormData():{text,today:TaskAssistant.dateKey(new Date())};
-        if(sendAudio){
-          const ext=blob.type.includes('mp4')?'mp4':blob.type.includes('ogg')?'ogg':'webm';
-          body.append('audio',blob,'task.'+ext);
-          body.append('today',TaskAssistant.dateKey(new Date()));
-          const vocabulary=voiceVocabulary();
-          if(vocabulary)body.append('vocabulary',vocabulary);
-        }
-        const result=await Promise.race([
-          authClient.functions.invoke('transcribe-task',{body,signal:session.controller.signal}),
-          new Promise((_,reject)=>{timer=setTimeout(()=>{session.controller.abort();const error=new Error('timeout');error.assistantMessage='serveri nuk u përgjigj brenda 90 sekondash';reject(error);},90000);})
-        ]);
-        if(id!==requestId)return;
-        if(result.error)throw result.error;
-        if(result.data?.error){const error=new Error(String(result.data.error));error.assistantMessage=String(result.data.error);throw error;}
-        // The live words are only a preview. Replace them with the server's
-        // transcript, keeping the owner's original composer prefix intact.
-        const transcript=result.data?.transcript;
-        if(typeof transcript==='string')serverTranscript=transcript.trim();
-        if(dictationSession)dictationSession.finalText=serverTranscript;
-        if(dictationSession&&serverTranscript)liveComposer(dictationSession,serverTranscript);
-        if(!result.data?.draft){const error=new Error('përgjigjja nuk përmbante propozim');error.assistantMessage='përgjigjja nuk përmbante propozim';throw error;}
-        stopUi();
-        const opened=showVoiceDraft(text,result.data,'Propozim nga AI — kontrolloje para ruajtjes',dictationSession?.composerPrefix??null);
-        assistantStatus(opened?'Konfirmo dërgimin: kontrollo fushat dhe shtyp “Konfirmo dhe dërgo”.':'Nuk u kap tekst. Provo përsëri.');
-      }catch(e){
-        if(id!==requestId)return;
-        stopUi();
-        const reason=await explainFailure(e);
-        if(id!==requestId)return;
-        const audio=sendAudio?' · audio: '+Math.max(1,Math.round(blob.size/1024))+' KB '+blob.type:'';
-        // If transcription succeeded but the proposal was missing, parse that
-        // authoritative text locally rather than falling back to the preview.
-        const fallback=serverTranscript||text;
-        const details=[audio,dictationDiag(dictationSession)].filter(Boolean).join(' · ');
-        if(fallback){
-          showVoiceDraft(fallback,null,'Përpunim lokal — AI nuk u përdor',dictationSession?.composerPrefix??null);
-          assistantStatus('AI në server nuk u përdor ('+reason+'). U përdor përpunimi lokal — kontrollo fushat.');
-          if(reason!=='offline')assistantDiag('arsyeja: '+reason+details+' · '+diagContext());
-        }else{
-          assistantStatus('Audioja nuk u transkriptua: '+reason.replace(/\.+$/,'')+'. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
-          assistantDiag('arsyeja: '+reason+details+' · '+diagContext());
-        }
-      }finally{
-        clearTimeout(timer);
-        if(id===requestId){active=null;idle();}
-      }
-    })();
-  }
-
-  function handleResult(session,result){
-    if(active!==session||session.cancelled)return Promise.resolve();
-    const live=String(result?.transcript||'').trim();
-    const heard=!!result?.heardSpeech;
-    session.liveText=live;                       // only for the diagnostics comparison
-    stopUi();
-    // Nobody spoke and nothing was transcribed: never open the confirmation window.
-    if(!live&&!heard){
-      active=null;idle();
-      assistantStatus('Nuk u kap zë. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
-      return Promise.resolve();
-    }
-    /* The browser's own recogniser is only a preview: it guesses, it is not trained
-     * on Albanian and it rewrites its own words. The complete recording transcribed
-     * by the server is what the words are taken from — on the phone and on the
-     * computer alike, even when the live text looked complete and clean. Only when
-     * no audio exists at all (broken recorder) is the live text used. */
-    if(!session.recordAudio){
-      session.blobPromise?.catch(()=>{});
-      return process(live,null,session);
-    }
-    // Keep the session cancellable while MediaRecorder flushes its last chunk.
-    return session.blobPromise.catch(()=>null).then(blob=>{
-      if(active!==session||session.cancelled)return;
-      if(blob&&blob.size)return process(live,blob,session);
-      if(live)return process(live,null,session);
-      active=null;idle();
-      assistantStatus('Mikrofoni nuk dha audio ose ky browser nuk transkripton. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
-      assistantDiag('nuk u regjistrua audio · '+diagContext());
-    });
-  }
-
-  async function startDictation(){
-    if(active||assistantBusy)return;
-    if(cloud.role!=='owner'){toast('Vetëm pronari mund të përgatisë detyra','err');return;}
-    if(!navigator.mediaDevices?.getUserMedia){
-      assistantStatus('Ky browser nuk jep qasje te mikrofoni. Shkruaj kërkesën dhe shtyp ✨ AI.');
-      return;
-    }
-    const session={chunks:[],cancelled:false,stopped:false,released:false,audioDone:false,composerPrefix:$('#tTitle').value};
-    session.blobPromise=new Promise(resolve=>{session.resolveBlob=resolve;});
-    /* On a phone the microphone is shared: the recorder and the live recogniser can
-     * both be opened, but never at the same instant (the recorder goes first, the
-     * recogniser follows RECOGNITION_DELAY_MS later) and the audio stays the final
-     * source of the text — the live words are only what the owner sees while talking. */
-    const mobile=isTouchOrMobile();
-    session.mobile=mobile;
-    session.useRecognition=!!Recognition;                       // live text while speaking
-    session.recordAudio=!!window.MediaRecorder;                 // full audio for Whisper
-    const engine=VoiceDictation.create({
-      now:()=>Date.now(),
-      timers:{set:(fn,ms)=>setTimeout(fn,ms),clear:id=>clearTimeout(id)},
-      onStatus:status=>{
-        livePanel.classList[status.state==='stopping'?'add':'remove']('stopping');
-        if(status.state==='starting')liveState('Po hap mikrofonin… prit një çast');
-        if(status.state==='listening')liveState('Po dëgjoj…');
-        if(status.state==='stopping')liveState('Po përfundoj regjistrimin…');
-      },
-      onTranscript:text=>liveComposer(session,text),
-      onResult:result=>handleResult(session,result),
-      onCancel:()=>{
-        if(active===session)active=null;
-        setVoiceComposer(session.composerPrefix);
-        stopUi();idle();
-        assistantStatus('Regjistrimi u anulua. Asnjë detyrë nuk u ruajt dhe asnjë njoftim nuk u dërgua.');
-      },
-      onError:message=>{
-        if(active===session)active=null;
-        setVoiceComposer(session.composerPrefix);
-        stopUi();idle();
-        assistantStatus(message||'Mikrofoni nuk u hap.');
-      },
-      onStop:()=>stopCapture(session),
-      onRelease:()=>releaseCapture(session),
-    });
-    session.engine=engine;
-    active=session;
-    button.disabled=true;ai.disabled=true;
-    liveShow(true);meter(0);
-    liveState('Po hap mikrofonin… prit një çast');
-    liveHint('Fol lirshëm — regjistrimi ndalon vetë pas 3 sekondash heshtjeje.');
-    $('#voiceLiveCount').textContent='';
-    assistantStatus('Po hap mikrofonin… prit një çast. Escape për anulim.');
-    engine.start();
-    let stream;
-    try{
-      try{
-        stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
-      }catch(first){
-        // Some Android browsers reject the constraint object but accept plain audio.
-        if(!/Overconstrained|Type|NotSupported|Constraint/i.test(String(first&&first.name)))throw first;
-        stream=await navigator.mediaDevices.getUserMedia({audio:true});
-      }
-    }catch(e){
-      const message=(e&&/NotAllowed|Security/i.test(String(e.name||e.message)))
-        ?'Leja e mikrofonit u refuzua. Aktivizoje te cilësimet e browserit ose shkruaj kërkesën.'
-        :'Mikrofoni nuk u hap. Kontrollo lejen dhe lidhjen HTTPS, ose shkruaj kërkesën.';
-      if(active===session)active=null;
-      engine.fail(message);
-      return;
-    }
-    if(active!==session||engine.state!=='starting'){
-      try{stream.getTracks().forEach(t=>t.stop());}catch(e){}
-      return;
-    }
-    session.stream=stream;
-    /* 1) record the full audio (never a cut sentence) — the recorder always gets the
-     * microphone before the recogniser, so the first syllables are captured cleanly */
-    if(session.recordAudio)startRecorder(session,stream);
-    /* 2) live voice-activity detection on the same stream */
-    const monitor=createLevelMonitor(stream);
-    session.monitor=monitor;
-    if(monitor.supported){
-      let lastUi=0;
-      session.monitorActive=monitor.start(level=>{
-        engine.noteLevel(level);
-        const stamp=Date.now();
-        if(stamp-lastUi<80)return;
-        lastUi=stamp;meter(level);liveCountdown();
-      })===true;
-    }
-    session.energyVad=monitor.supported&&session.monitorActive===true;
-    /* 3) live transcription for the panel. On a phone, where the recorder and the
-     * recogniser share one microphone, the recogniser waits RECOGNITION_DELAY_MS so
-     * the recording starts cleanly; everywhere else it starts at once, so the usual
-     * case never adds a pause that could swallow a syllable. */
-    if(session.useRecognition){
-      startRecognitionSoon(session,session.mobile&&session.recordAudio?RECOGNITION_DELAY_MS:0);
-    }
-    if(!Recognition){
-      liveHint('Ky browser nuk transkripton drejtpërdrejt. Audioja do të transkriptohet pasi të ndalosh (3 sekonda heshtjeje ose klikim).');
-    }else if(session.useRecognition&&session.recordAudio){
-      liveHint('Teksti shfaqet live ndërsa flet. Audioja regjistrohet e plotë dhe teksti final merret prej saj pasi të ndalosh (3 sekonda heshtjeje ose klikim).');
-    }else if(session.recordAudio){
-      liveHint('Audioja regjistrohet e plotë dhe transkriptohet pasi të ndalosh (3 sekonda heshtjeje ose klikim).');
-    }
-    if(!session.energyVad){
-      liveHint(session.useRecognition
-        ?'Ky browser nuk mat zërin; ndalimi bazohet te rezultatet e transkriptimit. Kliko mikrofonin për të ndaluar.'
-        :'Ky browser nuk mat zërin; regjistrimi ndalon pas 60 sekondash ose kur klikon mikrofonin.');
-    }
-    /* 4) only now is the microphone really ready: claim "listening" */
-    const recorderOk=!session.recordAudio||session.recorder?.state==='recording';
-    if(!recorderOk){
-      session.recordAudio=false;                  // the recorder failed: no audio to send
-      if(session.useRecognition&&Recognition&&!session.recognition){
-        // the recogniser takes over now instead of waiting for its delayed start
-        cancelDelayedRecognition(session);
-        startRecognition(session);                // best remaining text source
-      }
-      if(!session.recognition){
-        if(active===session)active=null;
-        try{stream.getTracks().forEach(t=>t.stop());}catch(e){}
-        session.stream=null;                       // already freed: do not stop the tracks twice
-        engine.fail('Regjistrimi i audios nuk nisi dot. Provo përsëri ose shkruaj kërkesën.');
-        return;
-      }
-      liveHint('Regjistrimi i audios nuk nisi; përdoret transkriptimi i drejtpërdrejtë.');
-    }
-    button.disabled=false;
-    button.classList.add('listening');button.setAttribute('aria-pressed','true');
-    button.title='Përfundo regjistrimin';
-    engine.begin();
-    assistantStatus(session.recordAudio&&!session.useRecognition
-      ?'Po dëgjoj… Audioja regjistrohet e plotë dhe transkriptohet pas ndalimit. Ndalon vetë pas 3 sekondash heshtjeje; kliko mikrofonin për ta ndalur tani. Escape për anulim.'
-      :session.recordAudio&&session.useRecognition
-      ?'Po dëgjoj… Teksti shfaqet live ndërsa flet; teksti final vjen nga audioja e plotë pas ndalimit. Ndalon vetë pas 3 sekondash heshtjeje; kliko mikrofonin për ta ndalur tani. Escape për anulim.'
-      :'Po dëgjoj… Ndalon vetë pas 3 sekondash heshtjeje; kliko mikrofonin për ta ndalur tani. Escape për anulim.');
-  }
-
-  button.onclick=()=>{
-    if(active){
-      if(active.engine&&active.engine.state==='listening'){active.engine.stop('manual');return;}
-      if(active.engine&&active.engine.state==='starting'){assistantCancel();return;}
-      return;
-    }
-    return startDictation();
+(function setupVoiceTask(){
+  const button=$('#voiceTaskBtn');
+  if(!button)return;
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  let transcript=''; let silenceTimer=null; let recorder=null; let chunks=[]; let stopping=false; let stream=null;
+  const showProfessional=(data)=>{
+    const draft=data?.draft||{};
+    voiceDraft={original:data?.transcript||transcript,title:draft.title||data?.transcript||transcript,assignee:draft.assignee||'',due:draft.due||'',priority:draft.priority||'Mesme'};
+    $('#voiceDraftTitle').value=voiceDraft.title; $('#voiceDraftDesc').value=voiceDraft.original;
+    $('#voiceDraftAssignee').value=voiceDraft.assignee; $('#voiceDraftDue').value=voiceDraft.due;
+    $('#voiceDraftPriority').value=voiceDraft.priority; $('#voiceConfirmOverlay').classList.add('show');
+    assistantSpeak('E përgatita detyrën. Kontrolloje dhe më thuaj nëse ta ruaj dhe ta dërgoj.');
   };
-  ai.onclick=()=>{
-    if(assistantBusy||active)return;
-    if(cloud.role!=='owner'){toast('Vetëm pronari mund të përgatisë detyra','err');return;}
-    const raw=$('#tTitle').value.trim();
-    if(!raw){assistantStatus('Shkruaj p.sh. “Cakto Arben Kola të përgatisë raportin nesër, urgjent”.');$('#tTitle').focus();return;}
-    if(raw.length>6000){toast('Kërkesa duhet të jetë deri në 6000 karaktere','err');return;}
-    liveShow(false);
-    process(raw);
+  const processAudio=async(blob)=>{
+    assistantStatus('Po e kuptoj detyrën...',true); toast('Po e transkriptoj dhe po e kuptoj detyrën...','ok');
+    if(!blob||!blob.size){showVoiceDraft(transcript);return;}
+    const form=new FormData(); form.append('audio',blob,'task.webm'); form.append('liveTranscript',transcript);
+    const {data,error}=await authClient.functions.invoke('transcribe-task',{body:form});
+    if(error||data?.error){toast('Transkriptimi profesional dështoi.','err');showVoiceDraft(transcript);return;}
+    showProfessional(data);
   };
-  $('#voiceLiveCancel').onclick=()=>assistantCancel();
-
-  assistantCancel=()=>{
-    const session=active;
-    requestId++;                                        // any late AI answer is now worthless
-    try{session?.controller?.abort?.();}catch(e){}
-    if(session)session.cancelled=true;
-    if(session?.engine&&session.engine.state!=='idle'){
-      session.engine.cancel();                          // releases the mic and resets the UI
-      return;
-    }
-    active=null;
-    const dictation=session?.dictation||(session?.engine?session:null);
-    if(dictation)setVoiceComposer(dictation.composerPrefix);
-    if(session)releaseCapture(session);
-    stopUi();idle();
-    assistantStatus('Veprimi u anulua. Asnjë detyrë nuk u ruajt dhe asnjë njoftim nuk u dërgua.');
+  const stopRecorder=()=>{
+    if(stopping)return; stopping=true; clearTimeout(silenceTimer); button.classList.remove('listening');
+    if(recorder&&recorder.state!=='inactive') recorder.stop();
+    else processAudio(null);
   };
-  window.addEventListener('pagehide',()=>{
-    const session=active;
-    requestId++;
-    if(voiceDraft)cancelVoiceDraft(false);
-    if(session){
-      session.cancelled=true;
-      try{session.controller?.abort?.();}catch(e){}
-      if(session.engine&&session.engine.state!=='idle')session.engine.cancel();
-      else{
-        const dictation=session.dictation||(session.engine?session:null);
-        if(dictation)setVoiceComposer(dictation.composerPrefix);
-        releaseCapture(session);
-      }
-      active=null;
-    }
-    stopUi();idle();
-  });
+  if(!SpeechRecognition){
+    button.title='Foli dhe kliko përsëri për ta përfunduar';
+    button.onclick=async()=>{
+      if(button.classList.contains('listening')){toast('Po e përfundoj regjistrimin...','ok');assistantStatus('Po përgatis detyrën...',true);setTimeout(stopRecorder,3000);return;}
+      if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){toast('Samsung Browser nuk e mbështet mikrofonin. Përdor Chrome.','err');return;}
+      try{
+        stream=await navigator.mediaDevices.getUserMedia({audio:true}); chunks=[]; stopping=false; button.classList.add('listening');
+        recorder=new MediaRecorder(stream); recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
+        recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());processAudio(new Blob(chunks,{type:recorder.mimeType||'audio/webm'}));};
+        recorder.start(); assistantStatus('Po dëgjoj pronarin...',true); toast('Po regjistroj. Kur të mbarosh, kliko përsëri mikrofonin.','ok');
+      }catch(e){toast('Lejo përdorimin e mikrofonit në browser.','err');}
+    };
+    return;
+  }
+  const recognition=new SpeechRecognition(); recognition.lang='sq-AL'; recognition.interimResults=true; recognition.continuous=true;
+  const finish=()=>{if(stopping)return;stopping=true;clearTimeout(silenceTimer);button.classList.remove('listening');try{recognition.stop();}catch(e){}if(recorder&&recorder.state!=='inactive')recorder.stop();else processAudio(null);};
+  recognition.onstart=async()=>{
+    transcript='';chunks=[];stopping=false;button.classList.add('listening');toast('Po dëgjoj... teksti shfaqet ndërsa flet.','ok');
+    if(window.MediaRecorder&&navigator.mediaDevices?.getUserMedia){try{stream=await navigator.mediaDevices.getUserMedia({audio:true});recorder=new MediaRecorder(stream);recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};recorder.onstop=()=>{stream.getTracks().forEach(t=>t.stop());processAudio(new Blob(chunks,{type:recorder.mimeType||'audio/webm'}));};recorder.start();}catch(e){recorder=null;}}
+  };
+  recognition.onresult=event=>{transcript=[...event.results].map(r=>r[0].transcript).join(' ');$('#tTitle').value=transcript;clearTimeout(silenceTimer);silenceTimer=setTimeout(finish,3000);};
+  recognition.onend=()=>{button.classList.remove('listening');if(!recorder&&!stopping&&transcript.trim())processAudio(null);};
+  recognition.onerror=()=>{button.classList.remove('listening');clearTimeout(silenceTimer);toast('Mikrofoni nuk u dëgjua. Kontrollo lejen.','err');};
+  button.onclick=()=>{if(button.classList.contains('listening'))finish();else{try{recognition.start();}catch(e){}}};
 })();
 
 /* ADD TASK */
@@ -1942,7 +1272,6 @@ async function notifyTaskChannels(task){
   toast('Njoftimet për '+results.length+' punonjës: Chat '+countStatus('chat','sent')+' të dërguara, SMS '+countStatus('sms','sent')+' të dërguara, Email '+countStatus('email','sent')+' të dërguara','ok');
 }
 function addTask(){
-  if(cloud.role!=='owner'){toast('Vetëm pronari mund të shtojë detyra','err');return;}
   const title=$('#tTitle').value.trim();
   if(!title){toast('Shkruaj një detyrë','err');return;}
   const task={
