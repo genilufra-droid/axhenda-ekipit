@@ -1155,13 +1155,22 @@ function assistantStatus(text,talking=false){
   if(s)s.textContent=text;
   if(a)a.classList.toggle('talking',!!talking);
 }
-function assistantSpeak(text){
+function pcmToWav(base64,sampleRate=24000){
+  const raw=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+  const buffer=new ArrayBuffer(44+raw.length), view=new DataView(buffer);
+  const put=(o,s)=>[...s].forEach((c,i)=>view.setUint8(o+i,c.charCodeAt(0)));
+  put(0,'RIFF');view.setUint32(4,36+raw.length,true);put(8,'WAVE');put(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,sampleRate,true);view.setUint32(28,sampleRate*2,true);view.setUint16(32,2,true);view.setUint16(34,16,true);put(36,'data');view.setUint32(40,raw.length,true);new Uint8Array(buffer,44).set(raw);return new Blob([buffer],{type:'audio/wav'});
+}
+async function assistantSpeak(text){
   assistantStatus(text,true);
+  try{
+    if(authClient){
+      const {data,error}=await authClient.functions.invoke('assistant-speak',{body:{text}});
+      if(!error&&!data?.error&&data?.audioBase64){const audio=new Audio(URL.createObjectURL(pcmToWav(data.audioBase64)));audio.onended=()=>assistantStatus('Gati për detyrën',false);audio.onerror=()=>assistantStatus('Gati për detyrën',false);await audio.play();return;}
+    }
+  }catch(e){}
   if(!('speechSynthesis' in window)){setTimeout(()=>assistantStatus('Gati për detyrën',false),2400);return;}
-  speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(text); u.lang='sq-AL'; u.rate=.95; u.pitch=1.05;
-  u.onend=()=>assistantStatus('Gati për detyrën',false); u.onerror=()=>assistantStatus('Gati për detyrën',false);
-  speechSynthesis.speak(u);
+  speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='sq-AL';u.rate=.95;u.pitch=1.05;u.onend=()=>assistantStatus('Gati për detyrën',false);u.onerror=()=>assistantStatus('Gati për detyrën',false);speechSynthesis.speak(u);
 }
 function parseVoiceTask(raw){
   const original=String(raw||'').trim();
