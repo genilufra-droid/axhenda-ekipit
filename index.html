@@ -1206,6 +1206,10 @@ function assistantLiveText(text){
   const title=$('#tTitle');
   if(title&&text)title.value=text;
 }
+let assistantAudioContext=null;
+function unlockAssistantAudio(){
+  try{const C=window.AudioContext||window.webkitAudioContext;if(!assistantAudioContext)assistantAudioContext=new C();if(assistantAudioContext.state==='suspended')assistantAudioContext.resume();const o=assistantAudioContext.createOscillator(),g=assistantAudioContext.createGain();g.gain.value=0.00001;o.connect(g);g.connect(assistantAudioContext.destination);o.start();o.stop(assistantAudioContext.currentTime+0.03);}catch(e){}
+}
 function pcmToWav(base64,sampleRate=24000){
   const raw=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
   const buffer=new ArrayBuffer(44+raw.length), view=new DataView(buffer);
@@ -1217,7 +1221,12 @@ async function assistantSpeak(text){
   try{
     if(authClient){
       const {data,error}=await authClient.functions.invoke('assistant-speak',{body:{text}});
-      if(!error&&!data?.error&&data?.audioBase64){const audio=new Audio(URL.createObjectURL(pcmToWav(data.audioBase64)));audio.onended=()=>assistantStatus('Gati për detyrën',false);audio.onerror=()=>assistantStatus('Gati për detyrën',false);await audio.play();return;}
+      if(!error&&!data?.error&&data?.audioBase64){
+        unlockAssistantAudio();
+        const bytes=Uint8Array.from(atob(data.audioBase64),c=>c.charCodeAt(0));
+        const decoded=await assistantAudioContext.decodeAudioData(pcmToWav(data.audioBase64).arrayBuffer ? await pcmToWav(data.audioBase64).arrayBuffer() : bytes.buffer);
+        const source=assistantAudioContext.createBufferSource(); source.buffer=decoded; source.connect(assistantAudioContext.destination); source.onended=()=>assistantStatus('Gati për detyrën',false); source.start(); return;
+      }
     }
   }catch(e){}
   if(!('speechSynthesis' in window)){setTimeout(()=>assistantStatus('Gati për detyrën',false),2400);return;}
@@ -1277,7 +1286,7 @@ $('#voiceConfirm').onclick=()=>{
 (function setupAssistantStage(){
   const stage=$('#assistantStage'), openButton=$('#voiceTaskBtn'), stageMic=$('#assistantStageMic'), closeButton=$('#assistantStageClose'), muteButton=$('#assistantMute');
   if(!stage||!openButton)return;
-  openButton.addEventListener('click',()=>stage.classList.add('show'));
+  openButton.addEventListener('click',()=>{stage.classList.add('show');unlockAssistantAudio();});
   stageMic&&stageMic.addEventListener('click',()=>openButton.click());
   closeButton&&closeButton.addEventListener('click',()=>stage.classList.remove('show'));
   muteButton&&muteButton.addEventListener('click',()=>{speechSynthesis.cancel();assistantStatus('Zëri u hesht. Kliko mikrofonin për pyetje.',false);});
