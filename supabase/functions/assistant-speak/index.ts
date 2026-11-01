@@ -11,6 +11,8 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
   headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
 });
 const fail = (message: string, status: number) => json({ error: message }, status);
+const timed = (target: string, init: RequestInit = {}, ms = 15000) => fetch(target, { ...init, signal: AbortSignal.timeout(ms) });
+const timedOut = (error: unknown) => error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError');
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -23,10 +25,10 @@ Deno.serve(async (req: Request) => {
 
     const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
     if (!token) return fail('Hyr përsëri në aplikacion.', 401);
-    const who = await fetch(url + '/auth/v1/user', { headers: { apikey: serviceKey, Authorization: 'Bearer ' + token } });
+    const who = await timed(url + '/auth/v1/user', { headers: { apikey: serviceKey, Authorization: 'Bearer ' + token } });
     if (!who.ok) return fail('Hyr përsëri në aplikacion.', 401);
     const user = await who.json();
-    const roleRes = await fetch(url + '/rest/v1/profiles?select=role&id=eq.' + encodeURIComponent(user.id),
+    const roleRes = await timed(url + '/rest/v1/profiles?select=role&id=eq.' + encodeURIComponent(user.id),
       { headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } });
     if (!roleRes.ok) return fail('Nuk u verifikua roli.', 502);
     const role = String((await roleRes.json())?.[0]?.role || '').trim().toLowerCase();
@@ -37,14 +39,14 @@ Deno.serve(async (req: Request) => {
     const text = String(body?.text || '').trim().slice(0, 600);
     if (!text) return fail('Teksti mungon.', 400);
 
-    const ai = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+    const ai = await timed(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey },
       body: JSON.stringify({
         contents: [{ parts: [{ text: 'Lexoje qartë dhe natyrshëm në shqip, me zë të ngrohtë e profesional, pa shtuar fjalë: ' + text }] }],
         generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } } },
       }),
-    });
+    }, 40000);
     const raw = await ai.text();
     if (!ai.ok) {
       console.error('GEMINI_TTS_ERROR', ai.status, raw.slice(0, 500));
@@ -56,6 +58,7 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true, audioBase64: inline.data, mimeType: inline.mimeType || 'audio/pcm;rate=24000' });
   } catch (error) {
     console.error('ASSISTANT_SPEAK_FATAL', String(error));
+    if (timedOut(error)) return fail('Zëri u vonua.', 504);
     return fail('Zëri nuk u gjenerua.', 502);
   }
 });

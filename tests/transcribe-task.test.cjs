@@ -22,7 +22,7 @@ function endpoint(name, { role = 'owner', badSession = false, provider = null, e
   };
   vm.runInNewContext(load(name), {
     Deno: { env: { get: (k) => vars[k] }, serve: (fn) => { handler = fn; } },
-    fetch, Request, Response, File, FormData, Uint8Array, btoa, JSON, String, Date, Set, console: { error() {} },
+    fetch, Request, Response, File, FormData, Uint8Array, btoa, JSON, String, Date, Set, AbortSignal, DOMException, setTimeout, console: { error() {}, log() {} },
   });
   const geminiCalls = () => calls.filter((c) => c.url.includes('generativelanguage'));
   return { handler, calls, geminiCalls };
@@ -90,4 +90,20 @@ test('speak: provider failure is generic and the text is capped', async () => {
   assert.equal(res.status, 502);
   assert.ok(!text.includes('RAW') && !text.includes(SECRET));
   assert.ok(e.geminiCalls()[0].options.body.length < 1500, 'long text is cut');
+});
+test('a provider that hangs ends with a short timeout message instead of hanging', async () => {
+  const hang = (url, options) => new Promise((_, reject) => {
+    options.signal.addEventListener('abort', () => reject(options.signal.reason));
+  });
+  const e = endpoint('assistant-speak', { provider: hang });
+  const realTimeout = AbortSignal.timeout;
+  AbortSignal.timeout = () => {
+    const c = new AbortController();
+    setTimeout(() => c.abort(new DOMException('t', 'TimeoutError')), 20);
+    return c.signal;
+  };
+  try {
+    const res = await e.handler(post(JSON.stringify({ text: 'a' })));
+    assert.equal(res.status, 504);
+  } finally { AbortSignal.timeout = realTimeout; }
 });

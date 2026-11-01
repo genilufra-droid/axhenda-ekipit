@@ -14,6 +14,8 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
   headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
 });
 const fail = (message: string, status: number) => json({ error: message }, status);
+const timed = (target: string, init: RequestInit = {}, ms = 15000) => fetch(target, { ...init, signal: AbortSignal.timeout(ms) });
+const timedOut = (error: unknown) => error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError');
 
 function bytesToBase64(bytes: Uint8Array) {
   let binary = '';
@@ -49,9 +51,9 @@ Deno.serve(async (req: Request) => {
 
     const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
     if (!token) return fail('Hyr përsëri në aplikacion.', 401);
-    const rest = (path: string, bearer = serviceKey) => fetch(url + path, { headers: { apikey: serviceKey, Authorization: 'Bearer ' + bearer } });
+    const rest = (path: string, bearer = serviceKey) => timed(url + path, { headers: { apikey: serviceKey, Authorization: 'Bearer ' + bearer } });
 
-    const who = await fetch(url + '/auth/v1/user', { headers: { apikey: serviceKey, Authorization: 'Bearer ' + token } });
+    const who = await timed(url + '/auth/v1/user', { headers: { apikey: serviceKey, Authorization: 'Bearer ' + token } });
     if (!who.ok) return fail('Hyr përsëri në aplikacion.', 401);
     const user = await who.json();
     const roleRes = await rest('/rest/v1/profiles?select=role&id=eq.' + encodeURIComponent(user.id));
@@ -59,6 +61,7 @@ Deno.serve(async (req: Request) => {
     const role = String((await roleRes.json())?.[0]?.role || '').trim().toLowerCase();
     if (!['owner', 'pronar'].includes(role)) return fail('Vetëm Pronari mund të përdorë asistentin.', 403);
 
+    console.log('STAGE owner ok');
     const form = await req.formData();
     const audio = form.get('audio');
     const liveTranscript = String(form.get('liveTranscript') || '').trim().slice(0, 4000);
@@ -88,11 +91,13 @@ Data e sotme: ${today}
 Drafti ekzistues: ${JSON.stringify(currentDraft || {})}
 Teksti live: ${liveTranscript}` });
 
-    const ai = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+    console.log('STAGE calling gemini', parts.length);
+    const ai = await timed(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey },
       body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1 } }),
-    });
+    }, 50000);
+    console.log('STAGE gemini answered', ai.status);
     const aiBody = await ai.text();
     if (!ai.ok) {
       console.error('GEMINI_ERROR', ai.status, aiBody.slice(0, 500));
@@ -125,6 +130,7 @@ Teksti live: ${liveTranscript}` });
     });
   } catch (error) {
     console.error('TRANSCRIBE_TASK_FATAL', String(error));
+    if (timedOut(error)) return fail('Serveri u vonua. Provo përsëri.', 504);
     return fail('Ndodhi një gabim. Provo përsëri.', 502);
   }
 });
