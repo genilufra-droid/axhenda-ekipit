@@ -111,7 +111,7 @@ test('an unknown or hanging first model falls through to the next one', async ()
   const seen = [];
   const provider = (url) => {
     seen.push(url);
-    if (!url.includes('gemini-2.5-flash:')) return new Response('no such model', { status: 404 });
+    if (seen.length < 2) return new Response('no such model', { status: 404 });
     return json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ transcript: 'x', title: 'T' }) }] } }] });
   };
   const e = endpoint('transcribe-task', { provider });
