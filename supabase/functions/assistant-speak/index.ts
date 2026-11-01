@@ -1,6 +1,7 @@
 // Axhenda: reads a short text aloud in Albanian with Gemini TTS. Only the owner may call it.
 // Returns { ok, audioBase64, mimeType } (raw PCM, 24 kHz). Errors are short Albanian messages.
-const MODEL = 'gemini-3.8-flash-tts';
+// Optional secret GEMINI_TTS_MODEL is tried first, then the names below.
+const MODELS = ['gemini-2.5-flash-preview-tts', 'gemini-2.5-flash-tts'];
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -13,6 +14,29 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
 const fail = (message: string, status: number) => json({ error: message }, status);
 const timed = (target: string, init: RequestInit = {}, ms = 15000) => fetch(target, { ...init, signal: AbortSignal.timeout(ms) });
 const timedOut = (error: unknown) => error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError');
+
+// Tries each model in turn; a model that is unknown, slow or failing is skipped, a quota error stops.
+async function askGemini(models: string[], key: string, payload: unknown, perModelMs: number) {
+  let last: Response | null = null;
+  let lastBody = '';
+  for (const model of models) {
+    try {
+      const res = await timed(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify(payload),
+      }, perModelMs);
+      const body = await res.text();
+      console.log('STAGE gemini', model, res.status);
+      if (res.ok || res.status === 429) return { res, body };
+      console.error('GEMINI_MODEL_FAILED', model, res.status, body.slice(0, 300));
+      last = res; lastBody = body;
+    } catch (error) {
+      console.error('GEMINI_MODEL_TIMEOUT', model, String(error));
+    }
+  }
+  return { res: last, body: lastBody };
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -39,19 +63,13 @@ Deno.serve(async (req: Request) => {
     const text = String(body?.text || '').trim().slice(0, 600);
     if (!text) return fail('Teksti mungon.', 400);
 
-    const ai = await timed(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: 'Lexoje qartë dhe natyrshëm në shqip, me zë të ngrohtë e profesional, pa shtuar fjalë: ' + text }] }],
-        generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } } },
-      }),
-    }, 40000);
-    const raw = await ai.text();
-    if (!ai.ok) {
-      console.error('GEMINI_TTS_ERROR', ai.status, raw.slice(0, 500));
-      return fail('Zëri nuk u gjenerua.', ai.status === 429 ? 429 : 502);
-    }
+    const custom = (Deno.env.get('GEMINI_TTS_MODEL') || '').trim();
+    const { res: ai, body: raw } = await askGemini([...new Set([custom, ...MODELS].filter(Boolean))], geminiKey, {
+      contents: [{ parts: [{ text: 'Lexoje qartë dhe natyrshëm në shqip, me zë të ngrohtë e profesional, pa shtuar fjalë: ' + text }] }],
+      generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } } },
+    }, 20000);
+    if (!ai) return fail('Zëri u vonua.', 504);
+    if (!ai.ok) return fail('Zëri nuk u gjenerua.', ai.status === 429 ? 429 : 502);
     let inline: any = null;
     try { inline = JSON.parse(raw)?.candidates?.[0]?.content?.parts?.find((p: any) => p.inlineData)?.inlineData; } catch { inline = null; }
     if (!inline?.data) return fail('Zëri nuk u gjenerua.', 502);

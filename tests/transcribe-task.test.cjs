@@ -22,7 +22,7 @@ function endpoint(name, { role = 'owner', badSession = false, provider = null, e
   };
   vm.runInNewContext(load(name), {
     Deno: { env: { get: (k) => vars[k] }, serve: (fn) => { handler = fn; } },
-    fetch, Request, Response, File, FormData, Uint8Array, btoa, JSON, String, Date, Set, AbortSignal, DOMException, setTimeout, console: { error() {}, log() {} },
+    fetch, Request, Response, File, FormData, Uint8Array, btoa, JSON, String, Date, Set, Promise, AbortSignal, DOMException, setTimeout, console: { error() {}, log() {} },
   });
   const geminiCalls = () => calls.filter((c) => c.url.includes('generativelanguage'));
   return { handler, calls, geminiCalls };
@@ -106,4 +106,16 @@ test('a provider that hangs ends with a short timeout message instead of hanging
     const res = await e.handler(post(JSON.stringify({ text: 'a' })));
     assert.equal(res.status, 504);
   } finally { AbortSignal.timeout = realTimeout; }
+});
+test('an unknown or hanging first model falls through to the next one', async () => {
+  const seen = [];
+  const provider = (url) => {
+    seen.push(url);
+    if (!url.includes('gemini-2.5-flash:')) return new Response('no such model', { status: 404 });
+    return json({ candidates: [{ content: { parts: [{ text: JSON.stringify({ transcript: 'x', title: 'T' }) }] } }] });
+  };
+  const e = endpoint('transcribe-task', { provider });
+  const res = await e.handler(post(form({ liveTranscript: 'a' })));
+  assert.equal(res.status, 200);
+  assert.equal(seen.length, 2);
 });

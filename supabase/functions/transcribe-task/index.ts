@@ -2,7 +2,8 @@
 // Contract: multipart `audio` (optional), `liveTranscript` (optional), `today`, `vocabulary`, `currentDraft`.
 // Returns { ok, transcript, draft:{title,description,assignee,due,priority} }.
 // Errors are short Albanian messages; provider details stay in the function logs.
-const MODEL = 'gemini-3.8-flash';
+// Optional secret GEMINI_MODEL is tried first, then the aliases below.
+const MODELS = ['gemini-flash-latest', 'gemini-2.5-flash'];
 const MAX_AUDIO = 10 * 1024 * 1024;
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -16,6 +17,29 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
 const fail = (message: string, status: number) => json({ error: message }, status);
 const timed = (target: string, init: RequestInit = {}, ms = 15000) => fetch(target, { ...init, signal: AbortSignal.timeout(ms) });
 const timedOut = (error: unknown) => error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError');
+
+// Tries each model in turn; a model that is unknown, slow or failing is skipped, a quota error stops.
+async function askGemini(models: string[], key: string, payload: unknown, perModelMs: number) {
+  let last: Response | null = null;
+  let lastBody = '';
+  for (const model of models) {
+    try {
+      const res = await timed(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify(payload),
+      }, perModelMs);
+      const body = await res.text();
+      console.log('STAGE gemini', model, res.status);
+      if (res.ok || res.status === 429) return { res, body };
+      console.error('GEMINI_MODEL_FAILED', model, res.status, body.slice(0, 300));
+      last = res; lastBody = body;
+    } catch (error) {
+      console.error('GEMINI_MODEL_TIMEOUT', model, String(error));
+    }
+  }
+  return { res: last, body: lastBody };
+}
 
 function bytesToBase64(bytes: Uint8Array) {
   let binary = '';
@@ -92,15 +116,11 @@ Drafti ekzistues: ${JSON.stringify(currentDraft || {})}
 Teksti live: ${liveTranscript}` });
 
     console.log('STAGE calling gemini', parts.length);
-    const ai = await timed(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey },
-      body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1 } }),
-    }, 50000);
-    console.log('STAGE gemini answered', ai.status);
-    const aiBody = await ai.text();
+    const custom = (Deno.env.get('GEMINI_MODEL') || '').trim();
+    const { res: ai, body: aiBody } = await askGemini([...new Set([custom, ...MODELS].filter(Boolean))], geminiKey,
+      { contents: [{ parts }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1 } }, 22000);
+    if (!ai) return fail('Serveri u vonua. Provo përsëri.', 504);
     if (!ai.ok) {
-      console.error('GEMINI_ERROR', ai.status, aiBody.slice(0, 500));
       if (ai.status === 429) return fail('Kufiri falas i AI u arrit. Provo pas pak ose përdor përpunimin lokal.', 429);
       return fail('AI nuk u përgjigj. Provo përsëri.', 502);
     }
