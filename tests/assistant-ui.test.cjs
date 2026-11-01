@@ -1214,3 +1214,28 @@ test('assistantStageMic cancels dictation even while voiceTaskBtn is disabled du
   assert.equal(app.stopped,1,'late stream was immediately released because stage mic cancelled startup');
 });
 
+test('sq-AL N-best live recognition sends both wideband audio and liveTranscript to transcribe-task',async()=>{
+  let sent=null;
+  const app=setup({
+    SpeechRecognition:true,MediaRecorder:recorderClass(),
+    invoke:async(name,options)=>{
+      if(name==='transcribe-task')sent=options.body;
+      return {data:draft};
+    },
+  });
+  await app.$('#voiceTaskBtn').onclick();
+  app.advance(200);
+  assert.equal(app.recognizer.lang,'sq-AL');
+  assert.equal(app.recognizer.maxAlternatives,5);
+  app.speak(500);
+  app.recognizer.result([{text:'Cakto Arben Kola raportin nesër',final:true}],0);
+  app.quiet(3100);
+  await tick();await tick();
+  assert.ok(sent instanceof FormData);
+  assert.ok(sent.get('audio').size>0);
+  assert.equal(sent.get('vocabulary'),'Arben Kola');
+  assert.equal(sent.get('liveTranscript'),'Cakto Arben Kola raportin nesër');
+  app.$('#voiceCancel').onclick();
+});
+
+

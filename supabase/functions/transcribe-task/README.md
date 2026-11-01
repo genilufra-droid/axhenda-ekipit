@@ -1,23 +1,28 @@
-# transcribe-task and assistant-speak (Gemini + Groq backup)
+# `transcribe-task` dhe `assistant-speak`
 
-Two Supabase Edge Functions for the Axhenda voice assistant. Both accept only a signed-in **owner** (`profiles.role` = `owner`/`pronar`).
+Dy Supabase Edge Functions të vogla që punojnë vetëm për Pronarin e identifikuar:
 
-## transcribe-task
-Multipart request: `audio` (optional, max 10 MB), `liveTranscript` (optional text), `today` (YYYY-MM-DD), `vocabulary`, `currentDraft` (JSON).
-Response: `{ ok, transcript, draft: { title, description, assignee, due, priority } }`.
-Names not in the staff list and impossible dates are dropped; priority is `Ulet`, `Mesme` or `Lart`.
-Models: `GEMINI_MODEL` (optional secret), then `gemini-3.5-flash-lite`, `gemini-flash-lite-latest`, and `gemini-3.1-flash-lite`, with automatic fallback to Groq (`whisper-large-v3-turbo` + `llama-3.3-70b-versatile`) when `GROQ_API_KEY` is configured. The function only prepares a draft; saving and notifying stay with the owner in the app.
+- **`transcribe-task`** — merr audion (`audio`) dhe/ose tekstin live (`liveTranscript`), datën (`today`), fjalorin (`vocabulary`) dhe draftin aktual (`currentDraft`). Kombinon në paralel **3 motorë të njohjes së gjuhës shqipe**:
+  1. **Whisper Large v3 (`language=sq`, `temperature=0`)** në Groq për transkriptim akustik të shqipes + emrave të ekipit,
+  2. **Google Web Speech (`sq-AL`)** nga browseri (`liveTranscript`, me 5 alternativa N-best),
+  3. **Google Gemini Multimodal Audio (`gemini-3.6-flash` low-thinking → `gemini-3-flash-preview` → `gemini-3.5-flash-lite`)** që dëgjon direkt audion origjinale dhe verifikon çdo rrokje, shkronjat `ë`/`ç` dhe lakimet e emrave të punonjësve (`profiles` + `punonjesit`), me rezervë automatike LLM në Groq (`openai/gpt-oss-120b` / `qwen/qwen3.8-27b`).
+  Kthen `{ ok: true, transcript, draft: { title, description, assignee, due, priority } }`. Nuk ruan asnjë detyrë dhe nuk dërgon asnjë njoftim.
+- **`assistant-speak`** — merr `{ text }` dhe kthen zërin në shqip nga **Gemini TTS** (`gemini-3.8-flash-lite-tts`, `gemini-3.8-flash-tts`, `gemini-3.1-flash-tts-preview`, `gemini-2.5-flash-preview-tts`): `{ ok: true, audioBase64, mimeType }`. Nëse ky shërbim mungon ose vonon, dritarja e asistentes kalon vetë në zërin shqip të telefonit ose vetëm në tekst.
 
-## assistant-speak
-JSON request `{ "text": "..." }` (cut at 600 characters). Response `{ ok, audioBase64, mimeType }` (raw PCM, 24 kHz).
-Models: `GEMINI_TTS_MODEL` (optional secret), then `gemini-3.8-flash-lite-tts`, `gemini-3.8-flash-tts`, `gemini-3.1-flash-tts-preview`, and `gemini-2.5-flash-preview-tts`, voice Kore.
-If it fails, the app falls back to the browser voice, then to text only.
+## Sekretet në Supabase
 
-## Secrets (Supabase → Edge Functions → Secrets)
-`GEMINI_API_KEY` (required; `GROQ_API_KEY` optional backup). `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided by Supabase. Never put keys in HTML or Git.
+```bash
+supabase secrets set GEMINI_API_KEY="AIza..."
+supabase secrets set GROQ_API_KEY="gsk_..."
+```
 
-## Errors
-Short Albanian messages only (401 sign in again, 403 owner only, 400 nothing heard, 413 audio too long, 429 free limit, 502 AI failed). Provider details stay in the function logs.
+Opsionale (vetëm nëse do të caktosh vetë modelin): `GEMINI_MODEL`, `GEMINI_TTS_MODEL`.
 
-## Deploy
-`supabase functions deploy transcribe-task assistant-speak --no-verify-jwt --project-ref ruwxxypntyhxdwegkmkl`
+## Publikimi
+
+```bash
+supabase functions deploy transcribe-task --no-verify-jwt
+supabase functions deploy assistant-speak --no-verify-jwt
+```
+
+Autentifikimi kontrollohet brenda funksioneve me `SUPABASE_SERVICE_ROLE_KEY` (`/auth/v1/user` + roli i pronarit te `public.profiles`).
