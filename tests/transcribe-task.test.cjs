@@ -17,12 +17,13 @@ function endpoint(name, { role = 'owner', badSession = false, provider = null, e
     calls.push({ url, options });
     if (url.endsWith('/auth/v1/user')) return json({ id: 'u1' }, badSession ? 401 : 200);
     if (url.includes('select=role')) return json([{ role }]);
-    if (url.includes('select=display_name')) return json([{ display_name: 'Arben Kola' }, { display_name: 'Ana Hoxha' }]);
+    if (url.includes('select=display_name')) return json([{ display_name: 'Arben Kola', username: 'arben' }, { display_name: 'Ana Hoxha', username: 'ana' }, { display_name: 'Mariglen Myftari', username: 'geni' }]);
+    if (url.includes('/rest/v1/punonjesit')) return json([{ emri: 'Dorjela', mbiemri: 'Daja', departamenti: 'Finance', aktiv: true }]);
     return provider ? provider(url, options) : json({});
   };
   vm.runInNewContext(load(name), {
     Deno: { env: { get: (k) => vars[k] }, serve: (fn) => { handler = fn; } },
-    fetch, Request, Response, File, FormData, Uint8Array, Array, btoa, JSON, String, Date, Set, Promise, AbortSignal, DOMException, setTimeout, console: { error() {}, log() {} },
+    fetch, Request, Response, File, FormData, Uint8Array, Array, Map, btoa, JSON, String, Date, Set, Promise, AbortSignal, DOMException, setTimeout, console: { error() {}, log() {} },
   });
   const geminiCalls = () => calls.filter((c) => c.url.includes('generativelanguage'));
   return { handler, calls, geminiCalls };
@@ -118,7 +119,54 @@ test('an unknown or hanging first model falls through to the next one', async ()
   const res = await e.handler(post(form({ liveTranscript: 'a' })));
   assert.equal(res.status, 200);
   assert.equal(seen.length, 2);
-  assert.match(seen[0], /gemini-3\.5-flash-lite/, 'fast live-verified model is first');
+  assert.match(seen[0], /gemini-3\.6-flash/, 'high-accuracy Albanian multimodal model is first');
+  assert.match(seen[1], /gemini-3-flash-preview/, 'second high-accuracy model follows immediately');
+});
+
+test('transcribe: runs Whisper Large v3 (sq) in parallel with Gemini 3.6 Flash, skips thought parts, and resolves inflected Albanian names & aliases', async () => {
+  const seenUrls = [];
+  let geminiBody = '';
+  const ensembleProvider = (url, options) => {
+    seenUrls.push(url);
+    if (url.includes('audio/transcriptions')) {
+      return json({ text: 'Thuaj Genit dhe Dorgjela Dajes të kontrollojnë qatin nesër urgjent' });
+    }
+    if (url.includes('generativelanguage')) {
+      geminiBody = String(options.body || '');
+      return json({
+        candidates: [{
+          content: {
+            parts: [
+              { thought: true, text: 'Duke verifikuar audion me shqipen standarde...' },
+              {
+                text: JSON.stringify({
+                  transcript: 'Thuaji Genit dhe Dorjela Dajës të kontrollojnë çatinë nesër urgjent.',
+                  title: 'Kontrollo çatinë',
+                  description: 'Thuaji Genit dhe Dorjela Dajës të kontrollojnë çatinë nesër urgjent.',
+                  assignee: ['Genit', 'Dorjelës', 'Person imagjinar'],
+                  due: '2026-11-02',
+                  priority: 'Lart',
+                }),
+              },
+            ],
+          },
+        }],
+      });
+    }
+    return new Response('unexpected', { status: 500 });
+  };
+  const e = endpoint('transcribe-task', { env: { GROQ_API_KEY: 'gsk-test' }, provider: ensembleProvider });
+  const f = form({ today: '2026-11-01', vocabulary: 'Mariglen Myftari, Dorjela Daja', liveTranscript: 'thuaji genit dorgjela qatin neser' });
+  f.append('audio', new File([new Uint8Array([9, 8, 7, 6])], 'task.webm', { type: 'audio/webm' }));
+  const res = await e.handler(post(f));
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.ok, true);
+  assert.equal(data.transcript, 'Thuaji Genit dhe Dorjela Dajës të kontrollojnë çatinë nesër urgjent.');
+  assert.equal(data.draft.assignee, 'Mariglen Myftari, Dorjela Daja', 'resolves alias Genit -> Mariglen Myftari and inflected Dorjelës -> Dorjela Daja while dropping hallucinated names');
+  assert.ok(seenUrls.some((u) => u.includes('audio/transcriptions')), 'Whisper sq ran in parallel');
+  assert.ok(geminiBody.includes('Dorgjela Dajes'), 'Whisper acoustic anchor was supplied to Gemini');
+  assert.ok(geminiBody.includes('thuaji genit dorgjela qatin neser'), 'Browser Google sq-AL preview was also supplied to Gemini');
 });
 
 test('transcribe: unwraps array JSON and falls back to Groq Whisper + Llama when Gemini fails', async () => {

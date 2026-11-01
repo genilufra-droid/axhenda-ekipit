@@ -408,3 +408,18 @@ test('the preview and the final transcript can be compared word by word',()=>{
   const missing=compareTranscripts('Dërgo faturat nesër','Dërgo faturat');
   assert.deepEqual(missing.onlyLive,['neser'],'a word the final transcript never heard');
 });
+
+test('N-best Google sq-AL alternatives select genuine Albanian orthography and known employee names',()=>{
+  const Voice=require('../voice-dictation.js');
+  Voice.setHintWords(['Kledis Doga','Jorgo Toshkollari','Dorjela Daja']);
+  const multiAlt={
+    0:{transcript:'Qa këto Kledis Doken të kontrollojë qatin nesër urgent',confidence:0.78},
+    1:{transcript:'Cakto Kledis Dogën të kontrollojë çatinë nesër urgjent',confidence:0.76},
+    length:2,
+    isFinal:true,
+  };
+  const out=readResults({resultIndex:0,results:[multiAlt]},-1);
+  assert.equal(out.finalText,'Cakto Kledis Dogën të kontrollojë çatinë nesër urgjent');
+  Voice.setHintWords([]);
+});
+

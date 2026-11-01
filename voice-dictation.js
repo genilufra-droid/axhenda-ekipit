@@ -85,6 +85,63 @@
     return (prev + ' ' + next).trim();
   }
 
+  /* Common Albanian task & time stems + team vocabulary used ONLY to pick the
+   * most accurate candidate when Google SpeechRecognition (sq-AL) returns
+   * multiple ranked alternatives (maxAlternatives > 1). A single-alternative
+   * result is never rewritten. */
+  const ALBANIAN_TASK_KEYS = [
+    'cakto', 'thuaji', 'thuaj', 'pergatit', 'pergatise', 'pergatisin', 'dergo', 'dergoje', 'dergojne',
+    'kontrollo', 'kontrolloje', 'kontrollojne', 'verifiko', 'rregullo', 'mbaro', 'perfundo', 'shiko',
+    'fature', 'faturen', 'faturat', 'pasqyren', 'raportin', 'shpenzimeve', 'mirembajtjen', 'mirembajtje',
+    'furnitoreve', 'klientit', 'pagesen', 'kontraten', 'preventivin', 'magazinen', 'detyren', 'detyre',
+    'neser', 'pasneser', 'sot', 'urgjent', 'prioritet', 'larte', 'ulet', 'mesem', 'mengjes', 'pasdite',
+    'darke', 'oren', 'afat', 'vonese', 'catine', 'zyren', 'projektin', 'dokumentet', 'llogarine',
+  ];
+  let hintWordKeys = [];
+
+  function setHintWords(words) {
+    const keys = new Set();
+    for (const item of Array.isArray(words) ? words : []) {
+      for (const token of clean(item).split(' ')) {
+        const k = wordKey(token);
+        if (k && k.length >= 3) keys.add(k);
+      }
+    }
+    hintWordKeys = [...keys];
+  }
+
+  function scoreAlbanianAlternative(text, confidence, index) {
+    const base = typeof confidence === 'number' && confidence > 0
+      ? confidence
+      : Math.max(0.45, 0.88 - index * 0.07);
+    let score = base - index * 0.025;
+    const words = clean(text).split(' ');
+    for (const raw of words) {
+      const k = wordKey(raw);
+      if (!k) continue;
+      if (hintWordKeys.some(hk => sameKey(k, hk))) score += 0.20;
+      else if (ALBANIAN_TASK_KEYS.some(tk => sameKey(k, tk))) score += 0.08;
+    }
+    const diacritics = (text.match(/[ëçËÇ]/g) || []).length;
+    score += Math.min(0.12, diacritics * 0.03);
+    return score;
+  }
+
+  function bestAlternative(result) {
+    if (!result) return '';
+    const count = typeof result.length === 'number' ? result.length : 1;
+    if (count <= 1) return clean(result[0] && result[0].transcript);
+    let bestText = '', bestScore = -Infinity;
+    for (let k = 0; k < count; k++) {
+      const alt = result[k];
+      const text = clean(alt && alt.transcript);
+      if (!text) continue;
+      const s = scoreAlbanianAlternative(text, alt && alt.confidence, k);
+      if (s > bestScore) { bestScore = s; bestText = text; }
+    }
+    return bestText;
+  }
+
   /* Read one SpeechRecognition event without losing words.
    *
    * Chrome starts a new result index for every phrase and only reports the
@@ -103,8 +160,7 @@
     const interim = [], finals = [];
     for (let i = 0; i < results.length; i++) {
       const result = results[i];
-      const alternative = result && result[0];
-      const text = clean(alternative && alternative.transcript);
+      const text = bestAlternative(result);
       if (!text) continue;
       if (!result.isFinal) { interim.push(text); continue; }
       if (i <= consumed) continue;
@@ -345,7 +401,7 @@
 
   const api = {
     create, mergeTranscript, clean, DEFAULTS,
-    readResults, wordCount, compareTranscripts, wordKey,
+    readResults, bestAlternative, setHintWords, wordCount, compareTranscripts, wordKey,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.VoiceDictation = api;
