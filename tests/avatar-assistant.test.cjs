@@ -242,11 +242,12 @@ test('greeting speaks aloud in Albanian with the owner name',async()=>{
   const p=w.win.greet();
   assert.ok(w.els.stage.classList.contains('show'));
   assert.equal(w.win.state,'speaking');
+  assert.equal(w.els.pill.textContent,'Po flas');
   assert.equal(w.els.chat.textContent,'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?');
   assert.equal(w.spoken[0],'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?');
   assert.equal(await p,'server');
   assert.equal(w.win.state,'idle');
-  assert.equal(w.els.pill.textContent,'Kliko mikrofonin për të folur');
+  assert.equal(w.els.pill.textContent,'Klikoni për të thënë një detyrë');
 });
 
 test('speaker prefers WAV media element when provided and falls back to AudioContext if WAV fails',async()=>{
@@ -274,11 +275,12 @@ test('opening shows the window with a greeting and unlocks audio',()=>{
 });
 test('listening, live words and thinking drive the status and the avatar',()=>{
   const w=windowFor();w.win.beforeListen();w.win.listening();
-  assert.equal(w.win.state,'listening');assert.equal(w.els.pill.textContent,'Po të dëgjoj…');
+  assert.equal(w.win.state,'listening');assert.equal(w.els.pill.textContent,'Po dëgjoj…');
   w.win.listeningCountdown(2100);assert.match(w.els.pill.textContent,/2\.1s/);
   assert.ok(w.els.body.classList.contains('listening'));assert.ok(w.els.mic.classList.contains('listening'));
   w.win.heard('Cakto Arben Kola');assert.equal(w.els.liveField.value,'Cakto Arben Kola');
   w.win.thinking();assert.equal(w.win.state,'thinking');assert.equal(w.els.pill.textContent,'Po e përgatis detyrën…');
+  assert.equal(w.els.chat.textContent,'Po e kuptoj çfarë the.');
   assert.ok(!w.els.body.classList.contains('listening'));
 });
 test('the avatar never talks over the microphone',()=>{
@@ -344,15 +346,93 @@ test('a closed window ignores every event',async()=>{
 
 test('index.html carries the avatar window, loads its script before use and ships no inline photo', () => {
   const fs = require('node:fs');
-  const html = fs.readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
+  const path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   for (const id of ['assistantOpenCard', 'assistantStage', 'assistantStageSub', 'assistantStageBody', 'assistantStagePill',
-    'assistantStageText', 'assistantLiveField', 'assistantStageAvatar', 'assistantStageMic', 'assistantMute', 'assistantStageClose']) {
+    'assistantStageText', 'assistantLiveField', 'assistantStageAvatar', 'assistantStageMic', 'assistantMute',
+    'assistantClearChat', 'assistantStopAudio', 'assistantSendBtn', 'assistantMsgCopy', 'assistantMsgLike',
+    'assistantMsgDislike', 'assistantMsgReplay', 'assistantStageClose']) {
     assert.ok(html.includes('id="' + id + '"'), id);
   }
   assert.ok(html.includes('#assistantStage.show ~ #voiceConfirmOverlay'), 'confirmation modal docks below visible avatar');
   assert.ok(html.includes("['owner','pronar']"), 'accepts both owner and pronar role values');
   assert.ok(html.indexOf('avatar-assistant.js') < html.indexOf('const assistantAvatar'));
   assert.ok(!/data:image\/(png|jpeg);base64,[A-Za-z0-9+/]{5000}/.test(html), 'photo must stay a separate file');
-  assert.ok(fs.existsSync(require('node:path').join(__dirname, '..', 'assistant-avatar.jpg')));
-  assert.ok(fs.existsSync(require('node:path').join(__dirname, '..', '.nojekyll')));
+  assert.ok(fs.existsSync(path.join(root, 'assistant-avatar.jpg')));
+  assert.ok(fs.existsSync(path.join(root, 'assets/avatar/assistant-cutout@2x.png')));
+  assert.ok(fs.existsSync(path.join(root, 'assets/avatar/assistant-cutout@3x.png')));
+  assert.ok(fs.existsSync(path.join(root, 'assets/avatar/assistant-head@2x.png')));
+  assert.ok(fs.existsSync(path.join(root, 'avatar-design.html')));
+  assert.ok(fs.existsSync(path.join(root, '.nojekyll')));
+  assert.doesNotMatch(html, /\bDiella\b/i, 'never uses reference character name');
+});
+
+test('all 7 avatar design states (Fillimi, Po dëgjoj, Po përgatis, Po flet, Heshtje, Gabim, Faqja bosh) behave per spec', async () => {
+  const els = {};
+  for (const k of ['stage', 'body', 'pill', 'chat', 'chatTime', 'bubble', 'clearBtn', 'stopAudio', 'liveField', 'avatar', 'mic', 'mute']) {
+    els[k] = element();
+  }
+  els.mic.disabled = false;
+  els.mute.dataset = { svgIcon: '1' };
+  els.mute.textContent = '';
+
+  let resolveSpeech;
+  const speaker = {
+    speak: () => new Promise(r => { resolveSpeech = r; }),
+    stop() {},
+    unlock() {},
+  };
+  const win = Avatar.create({ els, speaker, today: () => '2026-11-01', ownerName: () => 'Besnik Koci', clock: () => '10:58 PM' });
+
+  // 1. Fillimi
+  win.open();
+  assert.equal(els.pill.textContent, 'Klikoni për të thënë një detyrë');
+  assert.equal(els.chat.textContent, 'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?');
+  assert.equal(els.chatTime.textContent, '10:58 PM');
+  assert.equal(els.clearBtn.classList.contains('show'), false, 'trash hidden before conversation starts');
+
+  // 2. Po dëgjoj
+  win.listening();
+  assert.equal(els.pill.textContent, 'Po dëgjoj…');
+  assert.equal(els.mic.classList.contains('listening'), true);
+  assert.equal(els.mic.disabled, false);
+  assert.equal(els.clearBtn.classList.contains('show'), true, 'trash appears once conversation starts');
+
+  // 3. Po përgatis
+  win.thinking();
+  assert.equal(els.pill.textContent, 'Po e përgatis detyrën…');
+  assert.equal(els.chat.textContent, 'Po e kuptoj çfarë the.');
+  assert.equal(els.mic.disabled, true, 'mic disabled while preparing');
+
+  // 4. Po flet + Ndalo audion -> Kontrollo fushat te dritarja
+  const draftPromise = win.draft(draft);
+  assert.equal(win.state, 'speaking');
+  assert.equal(els.pill.textContent, 'Po flas');
+  assert.equal(els.stopAudio.classList.contains('show'), true, 'Ndalo audion visible while speaking');
+  assert.equal(els.mic.disabled, false);
+  resolveSpeech('server');
+  await draftPromise;
+  assert.equal(win.state, 'idle');
+  assert.equal(els.pill.textContent, 'Kontrollo fushat te dritarja');
+  assert.equal(els.stopAudio.classList.contains('show'), false, 'Ndalo audion hidden when done speaking');
+
+  // 5. Heshtje (SVG icon preserved, muted class toggled)
+  assert.equal(win.toggleMute(), true);
+  assert.equal(els.mute.classList.contains('muted'), true);
+  assert.equal(els.mute.textContent, '', 'SVG button children are never overwritten by emoji text');
+  assert.equal(win.toggleMute(), false);
+
+  // 6. Gabim
+  win.idle('Nuk u kap zë. Provo përsëri.');
+  assert.equal(els.pill.textContent, 'Klikoni për të thënë një detyrë');
+  assert.equal(els.bubble.classList.contains('error'), true);
+
+  // 7. Faqja bosh (trash clears history & resets to greeting)
+  win.heard('tekst i mbetur');
+  win.clear();
+  assert.equal(els.liveField.value, '');
+  assert.equal(els.bubble.classList.contains('error'), false);
+  assert.equal(els.clearBtn.classList.contains('show'), false);
+  assert.equal(els.chat.textContent, 'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?');
 });

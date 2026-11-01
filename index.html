@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Axhenda Online — Menaxhim Detyrash</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
 <style>
   :root{
     --bg:#f0f2f5; --panel:#ffffff; --panel2:#f6f8fa; --line:#e4e8ee;
@@ -357,51 +360,113 @@
   .voice-count{font-variant-numeric:tabular-nums}
   .voice-live-hint{margin:6px 0 0;font-size:11px;color:var(--muted)}
   /* Voice assistant window (avatar). Always light; sits under the confirmation window (z-index 80). */
-  .assistant-card{display:flex;align-items:center;gap:11px;padding:9px 13px;margin:8px 14px 4px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(135deg,rgba(19,167,130,.10),rgba(79,124,255,.10));cursor:pointer;text-align:left;transition:transform .14s,box-shadow .14s}
-  .assistant-card:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(19,167,130,.14)}
-  .assistant-card:focus-visible{outline:3px solid #4f7cff;outline-offset:2px}
-  .assistant-card-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;object-position:center 12%;border:2px solid #13a782;flex-shrink:0;background:#eef5f5}
+  .assistant-card{display:flex;align-items:center;gap:11px;padding:9px 13px;margin:8px 14px 4px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(135deg,rgba(217,45,45,.06),rgba(79,124,255,.07));cursor:pointer;text-align:left;transition:transform .14s,box-shadow .14s}
+  .assistant-card:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(24,37,44,.10)}
+  .assistant-card:focus-visible{outline:3px solid #D92D2D;outline-offset:2px}
+  .assistant-card-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;object-position:center 18%;box-shadow:0 2px 8px rgba(24,37,44,.12);flex-shrink:0;background:#f4f4f4}
   .assistant-card-info{min-width:0;flex:1}
   .assistant-card-name{font-weight:800;font-size:13.5px;color:var(--txt);line-height:1.25}
   .assistant-card-sub{font-size:11.5px;color:var(--muted);margin-top:2px}
-  .assistant-card-cta{border-radius:999px;padding:6px 12px;background:#13a782;color:#fff;font-weight:800;font-size:12px;white-space:nowrap;flex-shrink:0}
-  .assistant-stage{position:fixed;inset:0;z-index:75;display:none;flex-direction:column;background:linear-gradient(180deg,#fff 0%,#f8fbfb 58%,#eef5f5 100%);color:#18252c}
+  .assistant-card-cta{border-radius:999px;padding:7px 14px;background:#D92D2D;color:#fff;font-weight:700;font-size:12px;white-space:nowrap;flex-shrink:0;box-shadow:0 4px 12px rgba(217,45,45,.24)}
+
+  /* Full-screen mobile portrait Avatar Assistant Window (spec: prompt-avatar-design) */
+  .assistant-stage{position:fixed;inset:0;z-index:75;display:none;align-items:center;justify-content:center;background:rgba(24,37,44,.32);color:#18252C;font-family:Roboto,"Noto Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
   .assistant-stage.show{display:flex}
-  .assistant-stage-head{display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid #e2e9e9;background:rgba(255,255,255,.94)}
-  .assistant-stage-mini{width:46px;height:46px;border-radius:50%;object-fit:cover;object-position:center 12%;border:2px solid #13a782;flex-shrink:0}
-  .assistant-stage-name{font-weight:800;font-size:17px;line-height:1.2}
-  .assistant-stage-online{font-size:13px;color:#5b6b70}.assistant-stage-online b{color:#20a85a}
-  .assistant-stage-online.warn{color:#b45309;font-size:12px}
+  .assistant-stage-shell{width:100%;max-width:430px;height:100%;height:100dvh;display:flex;flex-direction:column;background:#FFFFFF;box-shadow:0 14px 36px rgba(24,37,44,.16);overflow:hidden}
+  @media(max-width:560px){
+    .assistant-stage{background:#FFFFFF}
+    .assistant-stage-shell{max-width:none;box-shadow:none}
+  }
+  .assistant-stage-head{display:flex;align-items:center;gap:10px;min-height:calc(64px + env(safe-area-inset-top));padding:calc(9px + env(safe-area-inset-top)) 12px 9px 14px;background:#FFFFFF;box-shadow:0 2px 12px rgba(24,37,44,.05);z-index:4;flex-shrink:0}
+  .assistant-stage-mini{width:46px;height:46px;border-radius:50%;object-fit:cover;object-position:center 18%;flex-shrink:0;background:#F4F4F4;box-shadow:0 2px 10px rgba(24,37,44,.09)}
+  .assistant-stage-titlewrap{min-width:0;flex:1}
+  .assistant-stage-name{font-weight:700;font-size:clamp(16px,4.4vw,18px);line-height:1.2;color:#18252C;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .assistant-stage-online{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:400;color:#4E5B61;margin-top:2px;line-height:1.2}
+  .assistant-stage-online::before{content:"";width:8px;height:8px;border-radius:50%;background:#2FB344;flex-shrink:0}
+  .assistant-stage-online.warn{color:#9A3412;font-size:12.5px}
+  .assistant-stage-online.warn::before{background:#D97706}
+  .assistant-stage-actions{margin-left:auto;display:flex;align-items:center;gap:0}
+  .assistant-stage-actions button{border:0;background:transparent;color:#18252C;width:44px;height:44px;min-width:44px;min-height:44px;margin-left:-4px;padding:0;display:inline-grid;place-items:center;cursor:pointer;border-radius:50%;transition:background-color .15s,color .15s}
+  .assistant-stage-actions button:hover{background:#F4F4F4}
+  .assistant-stage-actions button svg{width:23px;height:23px;display:block}
+  #assistantMute .ic-vol-off{display:none}
+  #assistantMute.muted .ic-vol-on{display:none}
+  #assistantMute.muted .ic-vol-off{display:block;color:#D92D2D}
+  .assistant-stage[data-state="speaking"]:not(.muted) #assistantMute .ic-vol-wave{animation:volWave .85s ease-in-out infinite;transform-origin:center}
+  @keyframes volWave{0%,100%{opacity:1}50%{opacity:.28}}
+  #assistantClearChat{display:none}
+  .assistant-stage.has-history #assistantClearChat,#assistantClearChat.show{display:inline-grid}
+  .assistant-stage-actions button:focus-visible,.assistant-stage-mic:focus-visible,.assistant-stop-audio:focus-visible,.assistant-send-btn:focus-visible,.assistant-msg-tools button:focus-visible{outline:2.5px solid #D92D2D;outline-offset:2px}
+
+  /* Upper Scene (~58% height, pure white background, standing knee-length cutout) */
+  .assistant-stage-body{position:relative;flex:58 1 0%;min-height:220px;width:100%;background:#FFFFFF;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;overflow:hidden;padding:4px 14px 0}
+  .assistant-stage-figure{position:relative;width:100%;height:100%;display:flex;align-items:flex-end;justify-content:center;pointer-events:none}
+  .assistant-stage-figure::after{content:"";position:absolute;left:0;right:0;bottom:0;height:46px;background:linear-gradient(180deg,rgba(255,255,255,0) 0%,#FFFFFF 94%);z-index:2;pointer-events:none}
+  .assistant-figure-stack{position:relative;height:100%;max-height:100%;aspect-ratio:540/899;max-width:96%;display:flex;align-items:flex-end;justify-content:center;filter:drop-shadow(0 10px 18px rgba(24,37,44,.09));animation:avatarIdle 5.4s ease-in-out infinite;transform-origin:center bottom}
+  @keyframes avatarIdle{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-2px) rotate(.28deg)}}
+  .assistant-stage-avatar,.assistant-avatar-layer{width:100%;height:100%;object-fit:contain;object-position:center bottom;display:block;user-select:none;-webkit-user-drag:none}
+  .assistant-avatar-layer{position:absolute;inset:0;pointer-events:none;opacity:0}
+  .assistant-avatar-blink{animation:avatarBlink 5.2s infinite}
+  @keyframes avatarBlink{0%,93%,98%,100%{opacity:0}95%,96.2%{opacity:1}}
+  #assistantStageBody.talking .assistant-figure-stack{animation:avatarTalk 1.05s ease-in-out infinite}
+  #assistantStageBody.talking .assistant-avatar-blink{animation:none;opacity:0}
+  #assistantStageBody.talking .assistant-avatar-speak{animation:avatarLips .34s ease-in-out infinite alternate}
+  @keyframes avatarTalk{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-2.5px) scale(1.008)}}
+  @keyframes avatarLips{0%{opacity:.12}45%{opacity:.95}100%{opacity:.35}}
+
+  /* Floating Status Capsule + Circular Red Mic over bottom of figure */
+  .assistant-stage-controls{position:absolute;left:14px;right:14px;bottom:10px;z-index:3;display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:none}
+  .assistant-pill-wrap{display:inline-flex;align-items:center;justify-content:center;gap:8px;max-width:100%;pointer-events:auto}
+  .assistant-stage-pill{background:#D92D2D;color:#FFFFFF;border-radius:999px;padding:9px 20px;font-weight:700;font-size:15px;line-height:1.25;box-shadow:0 6px 16px rgba(217,45,45,.26);text-align:center;max-width:calc(100vw - 56px)}
+  .assistant-eq{display:none;align-items:center;gap:3px;height:18px;padding:0 2px}
+  #assistantStageBody.talking .assistant-eq{display:inline-flex}
+  .assistant-eq i{width:3.5px;height:6px;border-radius:999px;background:#D92D2D;animation:eqBar .62s ease-in-out infinite}
+  .assistant-eq i:nth-child(2){animation-delay:.16s;height:14px}.assistant-eq i:nth-child(3){animation-delay:.32s;height:9px}
+  @keyframes eqBar{0%,100%{height:5px}50%{height:18px}}
+  .assistant-stage-mic{pointer-events:auto;width:64px;height:64px;min-width:64px;min-height:64px;border-radius:50%;border:0;background:#D92D2D;color:#FFFFFF;display:grid;place-items:center;cursor:pointer;box-shadow:0 8px 18px rgba(217,45,45,.30);flex-shrink:0;transition:background-color .15s,transform .15s,opacity .15s}
+  .assistant-stage-mic svg{width:24px;height:24px;display:block}
+  .assistant-stage-mic .ic-mic-off{display:none}
+  .assistant-stage-mic.listening .ic-mic-on{display:none}
+  .assistant-stage-mic.listening .ic-mic-off{display:block}
+  .assistant-stage-mic.listening{background:#D92D2D;animation:stagePulse .95s ease-in-out infinite alternate;box-shadow:0 8px 22px rgba(217,45,45,.38),0 0 0 6px rgba(217,45,45,.14)}
+  @keyframes stagePulse{from{transform:scale(1)}to{transform:scale(1.09)}}
+  .assistant-stage-mic:active{background:#B02222;transform:scale(.96)}
+  .assistant-stage-mic.disabled,.assistant-stage-mic:disabled{background:#A82424;opacity:.68;cursor:not-allowed;box-shadow:0 4px 10px rgba(24,37,44,.12);animation:none}
+
+  /* Lower Chat Zone (~42% height, white -> #F4F4F4 gradient with subtle texture) */
+  .assistant-stage-chat{flex:42 1 0%;min-height:190px;display:flex;flex-direction:column;gap:8px;padding:10px 14px calc(12px + env(safe-area-inset-bottom));background-color:#F4F4F4;background-image:radial-gradient(rgba(24,37,44,.035) 1px,transparent 1px),linear-gradient(180deg,#FFFFFF 0%,#F6F7F8 36%,#F4F4F4 100%);background-size:14px 14px,100% 100%;overflow:hidden}
+  .assistant-chat-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:2px 2px 4px}
+  .assistant-msg-time{font-size:11.5px;color:#8A9498;text-align:right;padding-right:4px;line-height:1.2}
+  .assistant-msg-row{display:flex;align-items:flex-start;gap:10px}
+  .assistant-msg-avatar{width:38px;height:38px;border-radius:50%;object-fit:cover;object-position:center 18%;flex-shrink:0;background:#FFFFFF;box-shadow:0 2px 8px rgba(24,37,44,.09)}
+  .assistant-msg-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+  .assistant-bubble{background:#FFFFFF;border-radius:14px;padding:12px 15px;box-shadow:0 4px 14px rgba(24,37,44,.08);color:#18252C;font-size:17px;font-weight:400;line-height:1.44;word-break:break-word}
+  .assistant-bubble.error{background:#FFF8F8;box-shadow:0 4px 14px rgba(217,45,45,.10),inset 3px 0 0 #D92D2D}
+  .assistant-msg-tools{display:flex;align-items:center;gap:0;margin:-4px 0 -4px -8px}
+  .assistant-msg-tools button{border:0;background:transparent;color:#8A9498;width:44px;height:44px;min-width:44px;min-height:44px;padding:0;display:inline-grid;place-items:center;border-radius:50%;cursor:pointer;transition:color .15s,background-color .15s}
+  .assistant-msg-tools button:hover{color:#18252C;background:rgba(24,37,44,.05)}
+  .assistant-msg-tools button[aria-pressed="true"],.assistant-msg-tools button.copied{color:#D92D2D}
+  .assistant-msg-tools button svg{width:17px;height:17px;display:block}
+  .assistant-stop-audio{align-self:center;display:none;align-items:center;justify-content:center;gap:7px;background:#FFFFFF;border:1px solid #D9DFE2;border-radius:999px;padding:8px 18px;min-height:44px;color:#D92D2D;font-size:14px;font-weight:700;font-family:inherit;box-shadow:0 4px 12px rgba(24,37,44,.07);cursor:pointer;margin-top:2px;flex-shrink:0}
+  .assistant-stop-audio svg{width:18px;height:18px;display:block}
+  .assistant-stop-audio.show,.assistant-stage[data-state="speaking"] .assistant-stop-audio{display:inline-flex}
+  .assistant-composer-bar{display:flex;align-items:center;gap:8px;background:#FFFFFF;border-radius:28px;padding:5px 6px 5px 18px;min-height:54px;box-shadow:0 4px 16px rgba(24,37,44,.09);flex-shrink:0;margin-top:auto}
+  .assistant-composer-bar input{border:0;outline:0;background:transparent;width:100%;min-width:0;font-size:16px;font-weight:400;color:#18252C;font-family:inherit;padding:6px 0}
+  .assistant-composer-bar input::placeholder{color:#8A9498}
+  .assistant-send-btn{width:44px;height:44px;min-width:44px;min-height:44px;border-radius:50%;border:0;background:#D92D2D;color:#FFFFFF;display:grid;place-items:center;cursor:pointer;flex-shrink:0;box-shadow:0 4px 12px rgba(217,45,45,.26);transition:background-color .15s,transform .12s}
+  .assistant-send-btn:hover{background:#C52626}
+  .assistant-send-btn:active{background:#AB2020;transform:scale(.95)}
+  .assistant-send-btn svg{width:19px;height:19px;display:block;transform:translate(-1px,1px)}
+
   #assistantStage.show ~ #voiceConfirmOverlay{align-items:flex-end;background:rgba(16,28,34,.28);backdrop-filter:none;padding:12px}
   #assistantStage.show ~ #voiceConfirmOverlay .modal{min-height:0;max-height:58vh;border-radius:20px}
   @media(max-width:560px){
     #assistantStage.show ~ #voiceConfirmOverlay{padding:0}
     #assistantStage.show ~ #voiceConfirmOverlay .modal{max-height:58vh;border-radius:20px 20px 0 0}
   }
-  .assistant-stage-actions{margin-left:auto;display:flex;gap:4px}
-  .assistant-stage-actions button{border:0;background:transparent;color:#34434a;font-size:22px;min-width:44px;min-height:44px;cursor:pointer;border-radius:12px}
-  .assistant-stage-actions button:focus-visible,.assistant-stage-mic:focus-visible{outline:3px solid #4f7cff;outline-offset:2px}
-  .assistant-stage-body{flex:1;display:flex;flex-direction:column;align-items:center;min-height:0;padding:12px 16px 8px;gap:8px}
-  .assistant-live-field{align-self:stretch;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #dce7e7;border-radius:14px;padding:10px 13px;box-shadow:0 4px 14px rgba(20,60,60,.08)}
-  .assistant-live-field input{border:0;outline:0;background:transparent;width:100%;min-width:0;font-size:15px;color:#1c2b33;font-family:inherit}
-  .assistant-live-field input::placeholder{color:#839195}
-  .assistant-stage-figure{flex:1;min-height:0;width:100%;display:flex;align-items:flex-end;justify-content:center}
-  .assistant-stage-avatar{max-height:100%;max-width:92vw;object-fit:contain;object-position:center bottom;border-radius:18px;filter:drop-shadow(0 16px 24px rgba(45,90,90,.16));transition:transform .25s,filter .25s}
-  .assistant-stage-avatar.listening{filter:drop-shadow(0 0 22px rgba(220,76,76,.38));transform:scale(1.015)}
-  #assistantStageBody.talking .assistant-stage-avatar{animation:avatarTalk 1.2s ease-in-out infinite}
-  @keyframes avatarTalk{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.012)}}
-  .assistant-eq{display:flex;align-items:flex-end;gap:3px;height:18px;visibility:hidden}
-  #assistantStageBody.talking .assistant-eq{visibility:visible}
-  .assistant-eq i{width:4px;height:5px;border-radius:2px;background:#13a782;animation:eqBar .7s ease-in-out infinite}
-  .assistant-eq i:nth-child(2){animation-delay:.15s}.assistant-eq i:nth-child(3){animation-delay:.3s}.assistant-eq i:nth-child(4){animation-delay:.45s}
-  @keyframes eqBar{0%,100%{height:5px}50%{height:18px}}
-  .assistant-stage-pill{background:#e24d4d;color:#fff;border-radius:24px;padding:10px 22px;font-weight:800;font-size:15px;box-shadow:0 5px 16px rgba(226,77,77,.28);text-align:center;max-width:92vw}
-  .assistant-stage-mic{width:68px;height:68px;border-radius:50%;border:0;background:#df3d3d;color:#fff;font-size:28px;cursor:pointer;box-shadow:0 8px 20px rgba(223,61,61,.35);flex-shrink:0}
-  .assistant-stage-mic.listening{background:#26343a;animation:stagePulse 1s infinite alternate}
-  @keyframes stagePulse{from{transform:scale(1)}to{transform:scale(1.08)}}
-  .assistant-stage-chat{min-height:92px;max-height:30vh;overflow:auto;padding:14px 20px calc(16px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #e2e9e9;font-size:16px;line-height:1.45}
-  .assistant-stage-chat strong{display:block;color:#118d73;font-size:12px;margin-bottom:4px}
-  @media(prefers-reduced-motion:reduce){#assistantStageBody.talking .assistant-stage-avatar,.assistant-eq i,.assistant-stage-mic.listening{animation:none}}
+  @media(prefers-reduced-motion:reduce){
+    .assistant-figure-stack,.assistant-avatar-blink,#assistantStageBody.talking .assistant-figure-stack,#assistantStageBody.talking .assistant-avatar-speak,.assistant-eq i,.assistant-stage-mic.listening,.assistant-stage[data-state="speaking"]:not(.muted) #assistantMute .ic-vol-wave{animation:none!important;transition:none!important}
+  }
   .assistant-diag{display:none;margin:2px 14px 8px;padding:8px 10px;border:1px dashed var(--line);border-radius:10px;background:var(--panel)}
   .assistant-diag.show{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
   .assistant-diag-text{margin:0;flex:1;min-width:180px;font-size:11px;line-height:1.45;color:var(--muted);word-break:break-word;user-select:all}
@@ -595,12 +660,12 @@
 
       <!-- Visible Avatar Assistant launcher (owner) -->
       <div class="assistant-card owner-only" id="assistantOpenCard" role="button" tabindex="0" aria-label="Hap Asistenten e Axhendës">
-        <img class="assistant-card-avatar" src="assistant-avatar.jpg" alt="" width="44" height="44" decoding="async" />
+        <img class="assistant-card-avatar" src="assets/avatar/assistant-head@2x.png" alt="" width="44" height="44" decoding="async" />
         <div class="assistant-card-info">
           <div class="assistant-card-name">Asistentja e Axhendës</div>
-          <div class="assistant-card-sub">Kliko për të hapur dritaren e asistentes me zë në shqip</div>
+          <div class="assistant-card-sub">Klikoni për të thënë një detyrë me zë në shqip</div>
         </div>
-        <span class="assistant-card-cta">🎙️ Asistentja</span>
+        <span class="assistant-card-cta">Asistentja</span>
       </div>
 
       <!-- WhatsApp-style composer (owner) -->
@@ -746,23 +811,86 @@
 </div>
 
 <!-- ===== VOICE ASSISTANT WINDOW (AVATAR) ===== -->
-<div class="assistant-stage" id="assistantStage" role="dialog" aria-modal="true" aria-labelledby="assistantStageName">
-  <div class="assistant-stage-head">
-    <img class="assistant-stage-mini" src="assistant-avatar.jpg" alt="" width="46" height="46" decoding="async" />
-    <div><div class="assistant-stage-name" id="assistantStageName">Asistentja e Axhendës</div><div class="assistant-stage-online" id="assistantStageSub"><b>●</b> Online</div></div>
-    <div class="assistant-stage-actions">
-      <button type="button" id="assistantMute" title="Hesht zërin" aria-label="Hesht zërin" aria-pressed="false">🔊</button>
-      <button type="button" id="assistantStageClose" title="Mbyll" aria-label="Mbyll">✕</button>
+<div class="assistant-stage" id="assistantStage" role="dialog" aria-modal="true" aria-labelledby="assistantStageName" data-state="closed">
+  <div class="assistant-stage-shell">
+    <div class="assistant-stage-head">
+      <img class="assistant-stage-mini" src="assets/avatar/assistant-head@2x.png" alt="Asistentja e Axhendës" width="46" height="46" decoding="async" />
+      <div class="assistant-stage-titlewrap">
+        <div class="assistant-stage-name" id="assistantStageName">Asistentja e Axhendës</div>
+        <div class="assistant-stage-online" id="assistantStageSub">Online</div>
+      </div>
+      <div class="assistant-stage-actions">
+        <button type="button" id="assistantMute" data-svg-icon="1" title="Hesht zërin" aria-label="Hesht zërin" aria-pressed="false">
+          <svg class="ic-vol-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path class="ic-vol-wave" d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path class="ic-vol-wave" d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+          <svg class="ic-vol-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>
+        </button>
+        <button type="button" id="assistantClearChat" title="Pastro bisedën" aria-label="Pastro bisedën">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </button>
+        <button type="button" id="assistantStageClose" title="Mbyll" aria-label="Mbyll">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="assistant-stage-body" id="assistantStageBody">
+      <div class="assistant-stage-figure">
+        <div class="assistant-figure-stack">
+          <img class="assistant-stage-avatar" id="assistantStageAvatar" src="assets/avatar/assistant-cutout@2x.png" srcset="assets/avatar/assistant-cutout@2x.png 2x, assets/avatar/assistant-cutout@3x.png 3x" alt="Asistentja e Axhendës" decoding="async" />
+          <img class="assistant-avatar-layer assistant-avatar-blink" src="assets/avatar/assistant-blink@2x.png" alt="" aria-hidden="true" decoding="async" />
+          <img class="assistant-avatar-layer assistant-avatar-speak" src="assets/avatar/assistant-speak@2x.png" alt="" aria-hidden="true" decoding="async" />
+        </div>
+      </div>
+      <div class="assistant-stage-controls">
+        <div class="assistant-pill-wrap">
+          <div class="assistant-stage-pill" id="assistantStagePill" role="status" aria-live="polite">Klikoni për të thënë një detyrë</div>
+          <span class="assistant-eq" aria-hidden="true"><i></i><i></i><i></i></span>
+        </div>
+        <button type="button" class="assistant-stage-mic" id="assistantStageMic" title="Fol ose ndalo regjistrimin" aria-label="Fol ose ndalo regjistrimin">
+          <svg class="ic-mic-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
+          <svg class="ic-mic-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="3" x2="21" y2="21"/><path d="M9 9v2a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M17 16.95A7 7 0 0 1 5 11v-1m14 0v1a7 7 0 0 1-.11 1.23"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="assistant-stage-chat">
+      <div class="assistant-chat-scroll">
+        <div class="assistant-msg-time" id="assistantMsgTime"></div>
+        <div class="assistant-msg-row">
+          <img class="assistant-msg-avatar" src="assets/avatar/assistant-head@2x.png" alt="" width="38" height="38" decoding="async" />
+          <div class="assistant-msg-col">
+            <div class="assistant-bubble" id="assistantBubble"><span id="assistantStageText">Përshëndetje! Çfarë detyre do të shkruajmë?</span></div>
+            <div class="assistant-msg-tools" role="group" aria-label="Veprime për mesazhin">
+              <button type="button" id="assistantMsgCopy" title="Kopjo" aria-label="Kopjo mesazhin">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+              <button type="button" id="assistantMsgLike" title="Pëlqej" aria-label="Pëlqej" aria-pressed="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+              </button>
+              <button type="button" id="assistantMsgDislike" title="Nuk pëlqej" aria-label="Nuk pëlqej" aria-pressed="false">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>
+              </button>
+              <button type="button" id="assistantMsgReplay" title="Dëgjo" aria-label="Dëgjo mesazhin">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" class="assistant-stop-audio" id="assistantStopAudio" aria-label="Ndalo audion">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>
+        <span>Ndalo audion</span>
+      </button>
+
+      <div class="assistant-composer-bar">
+        <input type="text" id="assistantLiveField" placeholder="Urdhëro, më trego detyrën…" aria-label="Urdhëro, më trego detyrën" autocomplete="off" />
+        <button type="button" class="assistant-send-btn" id="assistantSendBtn" title="Përgatit detyrën" aria-label="Përgatit detyrën">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
     </div>
   </div>
-  <div class="assistant-stage-body" id="assistantStageBody">
-    <div class="assistant-live-field"><span aria-hidden="true">✍️</span><input id="assistantLiveField" placeholder="Fjalët e tua shfaqen këtu…" readonly aria-label="Çfarë po thua" /></div>
-    <div class="assistant-stage-figure"><img class="assistant-stage-avatar" id="assistantStageAvatar" src="assistant-avatar.jpg" alt="Asistentja e Axhendës" decoding="async" /></div>
-    <span class="assistant-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-    <div class="assistant-stage-pill" id="assistantStagePill" role="status" aria-live="polite">Kliko mikrofonin për të folur</div>
-    <button type="button" class="assistant-stage-mic" id="assistantStageMic" title="Fol / ndalo" aria-label="Fol ose ndalo regjistrimin">🎙️</button>
-  </div>
-  <div class="assistant-stage-chat"><strong>Asistentja</strong><span id="assistantStageText">Përshëndetje! Kliko mikrofonin dhe më thuaj detyrën.</span></div>
 </div>
 
 <!-- ===== VOICE TASK CONFIRMATION MODAL ===== -->
@@ -1331,14 +1459,15 @@ const assistantAvatar=(function(){
         const started=p&&p.then?p.then(()=>{wavUnlocked=true;return true;},()=>{wavPlaying=false;clearWav();return false;}):Promise.resolve(true);
         return {started,stop(){wavPlaying=false;el.onended=null;el.onerror=null;try{el.pause();}catch(e){}clearWav();}};
       }:undefined,
-      onReady:()=>setSub('● Online',false),
-      onError:reason=>{if(reason&&reason!=='pa lidhje me serverin')setSub('🔇 Pa zë serveri ('+reason+')',true);},
+      onReady:()=>setSub('Online',false),
+      onError:reason=>{if(reason&&reason!=='pa lidhje me serverin')setSub('Pa zë serveri ('+reason+')',true);},
       speechSynthesis:window.speechSynthesis,
       Utterance:window.SpeechSynthesisUtterance,
     });
     try{window.speechSynthesis?.getVoices?.();}catch(e){}
     return AvatarAssistant.create({
       els:{stage:$('#assistantStage'),body:$('#assistantStageBody'),pill:$('#assistantStagePill'),chat:$('#assistantStageText'),
+        chatTime:$('#assistantMsgTime'),bubble:$('#assistantBubble'),clearBtn:$('#assistantClearChat'),stopAudio:$('#assistantStopAudio'),
         liveField:$('#assistantLiveField'),avatar:$('#assistantStageAvatar'),mic:$('#assistantStageMic'),mute:$('#assistantMute')},
       speaker,today:()=>TaskAssistant.dateKey(new Date()),ownerName:assistantOwnerName,
     });
@@ -1364,6 +1493,9 @@ function assistantEvent(type,data){
       case 'discarded':a.discarded();break;
       case 'idle':a.idle(data);break;
       case 'mute':a.toggleMute();break;
+      case 'stopSpeaking':a.stopSpeaking();break;
+      case 'clear':a.clear();break;
+      case 'replay':return a.replay();
       case 'close':a.close();break;
       case 'escape':return a.escape();
     }
@@ -1388,6 +1520,46 @@ $('#assistantOpenCard').addEventListener('keydown',e=>{
 });
 $('#assistantStageMic').onclick=()=>$('#voiceTaskBtn').click();
 $('#assistantMute').onclick=()=>assistantEvent('mute');
+$('#assistantStopAudio').onclick=()=>assistantEvent('stopSpeaking');
+$('#assistantClearChat').onclick=()=>{
+  const busy=assistantAvatar&&(assistantAvatar.state==='listening'||assistantAvatar.state==='thinking');
+  if(busy)assistantCancel();
+  assistantEvent('clear');
+  $('#assistantMsgLike').setAttribute('aria-pressed','false');
+  $('#assistantMsgDislike').setAttribute('aria-pressed','false');
+};
+$('#assistantMsgCopy').onclick=async()=>{
+  const text=($('#assistantStageText').textContent||'').trim();
+  if(!text)return;
+  try{
+    await navigator.clipboard.writeText(text);
+    $('#assistantMsgCopy').classList.add('copied');
+    setTimeout(()=>$('#assistantMsgCopy').classList.remove('copied'),1200);
+    toast('Mesazhi u kopjua','ok');
+  }catch(e){toast('Kopjo tekstin me dorë','err');}
+};
+$('#assistantMsgLike').onclick=()=>{
+  const next=$('#assistantMsgLike').getAttribute?.('aria-pressed')!=='true';
+  $('#assistantMsgLike').setAttribute('aria-pressed',next?'true':'false');
+  if(next)$('#assistantMsgDislike').setAttribute('aria-pressed','false');
+};
+$('#assistantMsgDislike').onclick=()=>{
+  const next=$('#assistantMsgDislike').getAttribute?.('aria-pressed')!=='true';
+  $('#assistantMsgDislike').setAttribute('aria-pressed',next?'true':'false');
+  if(next)$('#assistantMsgLike').setAttribute('aria-pressed','false');
+};
+$('#assistantMsgReplay').onclick=()=>assistantEvent('replay');
+$('#assistantSendBtn').onclick=()=>{
+  if(cloud.role!=='owner'){toast('Vetëm pronari mund të përgatisë detyra','err');return;}
+  if(assistantAvatar&&assistantAvatar.state==='listening'){$('#assistantStageMic').onclick();return;}
+  const typed=($('#assistantLiveField').value||'').trim();
+  if(!typed){try{$('#assistantLiveField').focus();}catch(e){}return;}
+  setVoiceComposer(typed);
+  $('#aiTaskBtn').onclick();
+};
+$('#assistantLiveField').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();$('#assistantSendBtn').onclick();}
+});
 $('#assistantStageClose').onclick=()=>{
   const busy=assistantAvatar&&(assistantAvatar.state==='listening'||assistantAvatar.state==='thinking');
   if(busy)assistantCancel();
@@ -1596,7 +1768,7 @@ $('#voiceConfirm').onclick=()=>{
   function stopUi(){
     liveShow(false);meter(0);
     const lf=$('#assistantLiveField');
-    if(lf)lf.placeholder='Fjalët e tua shfaqen këtu…';
+    if(lf)lf.placeholder='Urdhëro, më trego detyrën…';
   }
 
   /* ---------- microphone energy monitor (voice activity detection) ---------- */

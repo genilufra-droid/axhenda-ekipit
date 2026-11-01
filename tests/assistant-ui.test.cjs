@@ -1175,7 +1175,7 @@ test('full owner avatar flow: greets Besnik Koci aloud in Albanian, auto-listens
   // 2. Greeting finishes -> microphone opens automatically without needing another click
   app.audioEl.onended();
   await tick();await tick();await tick();await tick();
-  assert.equal(app.$('#assistantStagePill').textContent,'Po të dëgjoj…');
+  assert.equal(app.$('#assistantStagePill').textContent,'Po dëgjoj…');
 
   // 3. Owner dictates -> live words appear in #assistantLiveField and countdown updates pill
   app.speak(500);
@@ -1237,5 +1237,24 @@ test('sq-AL N-best live recognition sends both wideband audio and liveTranscript
   assert.equal(sent.get('liveTranscript'),'Cakto Arben Kola raportin nesër');
   app.$('#voiceCancel').onclick();
 });
+
+test('avatar bottom input send button prepares confirmation draft without auto-saving or auto-notifying',async()=>{
+  const AvatarModule=require('../avatar-assistant.js');
+  const app=setup({
+    AvatarAssistant:AvatarModule,
+    invoke:async(name)=>{
+      if(name==='transcribe-task')return {data:draft};
+      return {data:{audioBase64:''}};
+    },
+  });
+  app.$('#assistantLiveField').value='Cakto Arben Kola të përgatisë raportin nesër';
+  app.$('#assistantSendBtn').onclick();
+  await tick();await tick();await tick();
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'),'opens confirmation modal');
+  assert.equal(app.saved,0,'never saves automatically');
+  assert.equal(app.notified,0,'never notifies automatically');
+  app.$('#voiceCancel').onclick();
+});
+
 
 
