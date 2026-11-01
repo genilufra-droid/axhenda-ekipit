@@ -121,8 +121,78 @@ test('a slow voice service gives way to the fallback',async()=>{
   const c=clock(),a=audio();
   const speaker=Avatar.createSpeaker({timers:c.timers,now:c.now,getAudioContext:()=>a.ctx,invoke:()=>new Promise(()=>{})});
   let result=null;speaker.speak('Diçka').then(r=>{result=r;});
-  await tick();await c.advance(9100);await c.advance(7000);
+  await tick();await c.advance(16100);await c.advance(7000);
   assert.equal(result,'text');
+});
+test('a suspended AudioContext after microphone capture is resumed before playing',async()=>{
+  const a=audio();
+  assert.equal(a.ctx.state,'suspended');
+  const speaker=Avatar.createSpeaker({getAudioContext:()=>a.ctx,invoke:async()=>({data:{audioBase64:PCM,sampleRate:24000}})});
+  let result=null;speaker.speak('Përshëndetje').then(r=>{result=r;});
+  await tick();await tick();await tick();
+  assert.equal(a.ctx.resumed,1,'resumed before starting buffer source');
+  assert.equal(a.ctx.state,'running');
+  assert.equal(a.log.started,1);
+  a.finish();
+  await tick();
+  assert.equal(result,'server');
+});
+test('when AudioContext stays locked on mobile, server voice falls back to WAV audio element',async()=>{
+  const a=audio();
+  a.ctx.state='interrupted';
+  a.ctx.resume=async()=>{a.ctx.resumed++;/* mobile Safari keeps it interrupted */};
+  let wavHeader='',endWav=null;
+  const speaker=Avatar.createSpeaker({
+    getAudioContext:()=>a.ctx,
+    invoke:async()=>({data:{audioBase64:PCM,sampleRate:24000}}),
+    playWav:(bytes,onEnd)=>{
+      wavHeader=Buffer.from(bytes.buffer,bytes.byteOffset,12).toString('ascii');
+      endWav=onEnd;
+      return {started:Promise.resolve(true),stop(){}};
+    },
+  });
+  let result=null;speaker.speak('Përshëndetje').then(r=>{result=r;});
+  await tick();await tick();await tick();await tick();
+  assert.equal(wavHeader.slice(0,4),'RIFF');
+  assert.equal(wavHeader.slice(8,12),'WAVE');
+  assert.equal(result,null,'waiting for WAV audio to finish');
+  endWav();
+  await tick();
+  assert.equal(result,'server');
+});
+test('pcmToWav wraps 16-bit PCM into a valid mono RIFF WAVE file',()=>{
+  const wav=Avatar.pcmToWav(PCM,24000);
+  assert.equal(Buffer.from(wav.slice(0,4)).toString('ascii'),'RIFF');
+  assert.equal(Buffer.from(wav.slice(8,12)).toString('ascii'),'WAVE');
+  assert.equal(Buffer.from(wav.slice(12,16)).toString('ascii'),'fmt ');
+  assert.equal(Buffer.from(wav.slice(36,40)).toString('ascii'),'data');
+  const view=new DataView(wav.buffer,wav.byteOffset,wav.byteLength);
+  assert.equal(view.getUint16(22,true),1,'mono');
+  assert.equal(view.getUint32(24,true),24000,'24 kHz');
+  assert.equal(view.getUint16(34,true),16,'16-bit');
+  assert.equal(wav.byteLength,44+6);
+});
+test('status 0 does not poison backoff, while real HTTP failures report an Albanian reason',async()=>{
+  const c=clock(),a=audio(),errors=[];
+  let status=0,calls=0;
+  const speaker=Avatar.createSpeaker({
+    timers:c.timers,now:c.now,getAudioContext:()=>a.ctx,
+    onError:msg=>errors.push(msg),
+    invoke:async()=>{
+      calls++;
+      if(status===0)return {error:{context:{status:0}}};
+      if(status===404)return {error:{context:{status:404}}};
+      return {data:{audioBase64:PCM}};
+    },
+  });
+  const first=speaker.speak('Para hyrjes');await tick();await tick();await c.advance(7000);await first;
+  status=200;
+  const second=speaker.speak('Pas hyrjes');await tick();await tick();await tick();a.finish();
+  assert.equal(await second,'server','not blocked for 60s by initial status 0');
+  assert.equal(calls,2);
+  status=404;
+  const third=speaker.speak('Kur mungon funksioni');await tick();await tick();await c.advance(7000);await third;
+  assert.ok(errors.some(e=>e.includes('404')),'reports 404 deployment error to UI');
 });
 test('stop silences the voice, and a late answer from the service is not played',async()=>{
   const a=audio();let release;
@@ -242,11 +312,14 @@ test('a closed window ignores every event',async()=>{
 test('index.html carries the avatar window, loads its script before use and ships no inline photo', () => {
   const fs = require('node:fs');
   const html = fs.readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
-  for (const id of ['assistantStage', 'assistantStageBody', 'assistantStagePill', 'assistantStageText',
-    'assistantLiveField', 'assistantStageAvatar', 'assistantStageMic', 'assistantMute', 'assistantStageClose']) {
+  for (const id of ['assistantOpenCard', 'assistantStage', 'assistantStageSub', 'assistantStageBody', 'assistantStagePill',
+    'assistantStageText', 'assistantLiveField', 'assistantStageAvatar', 'assistantStageMic', 'assistantMute', 'assistantStageClose']) {
     assert.ok(html.includes('id="' + id + '"'), id);
   }
+  assert.ok(html.includes('#assistantStage.show ~ #voiceConfirmOverlay'), 'confirmation modal docks below visible avatar');
+  assert.ok(html.includes("['owner','pronar']"), 'accepts both owner and pronar role values');
   assert.ok(html.indexOf('avatar-assistant.js') < html.indexOf('const assistantAvatar'));
   assert.ok(!/data:image\/(png|jpeg);base64,[A-Za-z0-9+/]{5000}/.test(html), 'photo must stay a separate file');
   assert.ok(fs.existsSync(require('node:path').join(__dirname, '..', 'assistant-avatar.jpg')));
+  assert.ok(fs.existsSync(require('node:path').join(__dirname, '..', '.nojekyll')));
 });

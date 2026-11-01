@@ -1,5 +1,5 @@
 /* Voice assistant window ("avatar"): state machine, Albanian summary of a task draft
- * and a speaker with three fallbacks. Dependency-free; works in the browser and in
+ * and a speaker with fallbacks. Dependency-free; works in the browser and in
  * Node tests. Everything that touches the page or hardware is injected.
  *
  * The window is only a presentation layer around the dictation that already exists:
@@ -7,7 +7,7 @@
  * confirms in the confirmation window, and notifying stays his own click.
  *
  * Voice, best first:
- *   1. server voice  (Supabase function "assistant-speak", Gemini)
+ *   1. server voice  (Supabase function "assistant-speak", Gemini; WebAudio + WAV fallback)
  *   2. the browser's own Albanian voice, when the phone has one
  *   3. text only (the avatar still "talks" on screen, nothing is spoken)
  */
@@ -17,7 +17,7 @@
   const MONTHS = ['janar', 'shkurt', 'mars', 'prill', 'maj', 'qershor', 'korrik', 'gusht', 'shtator', 'tetor', 'nëntor', 'dhjetor'];
   const PRIORITY = { Ulet: 'e ulët', Mesme: 'e mesme', Lart: 'e lartë' };
   const MAX_SPOKEN = 600;          // longer texts are shown, never sent to the voice service
-  const SERVER_WAIT_MS = 9000;     // after this the browser voice / text takes over
+  const SERVER_WAIT_MS = 16000;    // after this the browser voice / text takes over
   const FAIL_BACKOFF_MS = 60000;   // do not retry a failing voice service on every sentence
   const AUTH_BACKOFF_MS = 600000;
 
@@ -64,8 +64,10 @@
   }
 
   /* ---------- speaker ---------- */
+  const decodeBase64 = base64 => (typeof atob === 'function' ? atob : s => Buffer.from(s, 'base64').toString('binary'))(base64);
+
   function pcmToFloat32(base64) {
-    const binary = (typeof atob === 'function' ? atob : s => Buffer.from(s, 'base64').toString('binary'))(base64);
+    const binary = decodeBase64(base64);
     const length = binary.length >> 1;
     const out = new Float32Array(length);
     for (let i = 0; i < length; i++) {
@@ -76,12 +78,69 @@
     return out;
   }
 
+  /* Wraps raw 16-bit mono little-endian PCM into a standard RIFF WAVE byte array. */
+  function pcmToWav(base64, sampleRate) {
+    const rate = Number(sampleRate) || 24000;
+    const binary = decodeBase64(base64);
+    const dataLen = binary.length & ~1;
+    const buf = new ArrayBuffer(44 + dataLen);
+    const view = new DataView(buf);
+    const out = new Uint8Array(buf);
+    const put = (offset, str) => { for (let i = 0; i < str.length; i++) out[offset + i] = str.charCodeAt(i); };
+    put(0, 'RIFF');
+    view.setUint32(4, 36 + dataLen, true);
+    put(8, 'WAVE');
+    put(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, rate, true);
+    view.setUint32(28, rate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    put(36, 'data');
+    view.setUint32(40, dataLen, true);
+    for (let i = 0; i < dataLen; i++) out[44 + i] = binary.charCodeAt(i) & 0xff;
+    return out;
+  }
+
+  async function explainVoiceError(result) {
+    const direct = result && result.data && typeof result.data.error === 'string' ? result.data.error.trim() : '';
+    if (direct) return direct.slice(0, 140);
+    const err = result && result.error;
+    const ctx = err && err.context;
+    if (ctx && typeof ctx === 'object') {
+      try {
+        const res = typeof ctx.clone === 'function' ? ctx.clone() : ctx;
+        if (typeof res.json === 'function') {
+          const body = await res.json();
+          if (body && typeof body.error === 'string' && body.error.trim()) return body.error.trim().slice(0, 140);
+        }
+      } catch (e) { /* ignore non-JSON body */ }
+      const status = Number(ctx.status) || 0;
+      if (status === 0) return 'pa lidhje me serverin';
+      if (status === 404) return 'funksioni assistant-speak nuk është publikuar (404)';
+      if (status === 401) return 'sesioni ka skaduar — hyr përsëri';
+      if (status === 403) return 'vetëm Pronari mund ta përdorë zërin';
+      if (status === 429) return 'kufiri falas i zërit u arrit';
+      if (status === 500) return 'zëri nuk është konfiguruar (GEMINI_API_KEY)';
+      if (status === 504) return 'zëri i serverit u vonua';
+      return 'zëri në server ktheu HTTP ' + status;
+    }
+    const msg = String((err && err.message) || '').trim();
+    return msg ? msg.slice(0, 140) : 'zëri në server dështoi';
+  }
+
   function createSpeaker(o) {
     o = o || {};
     const timers = o.timers || { set: (fn, ms) => setTimeout(fn, ms), clear: id => clearTimeout(id) };
     const now = o.now || (() => Date.now());
+    const waitMs = Number(o.serverWaitMs) > 0 ? Number(o.serverWaitMs) : SERVER_WAIT_MS;
     const cache = new Map();
     let token = 0, pending = null, downUntil = 0;
+
+    const reportError = reason => { try { o.onError && o.onError(reason); } catch (e) { /* ignore */ } };
+    const reportReady = () => { try { o.onReady && o.onReady(); } catch (e) { /* ignore */ } };
 
     function finish(result) {
       const p = pending;
@@ -104,48 +163,104 @@
       ]).finally(() => timers.clear(id));
     }
 
-    async function serverBuffer(text) {
+    async function serverAudio(text) {
       if (cache.has(text)) return cache.get(text);
       const ctx = o.getAudioContext && o.getAudioContext();
-      if (!o.invoke || !ctx) return null;
-      const result = await withTimeout(o.invoke('assistant-speak', { body: { text } }), SERVER_WAIT_MS);
-      if (result && result.error) {
-        const status = result.error.context && result.error.context.status;
-        downUntil = now() + (status === 401 || status === 403 ? AUTH_BACKOFF_MS : FAIL_BACKOFF_MS);
+      if (!o.invoke || (!ctx && !o.playWav)) return null;
+      const result = await withTimeout(o.invoke('assistant-speak', { body: { text } }), waitMs);
+      if (result && (result.error || (result.data && result.data.error))) {
+        const status = result.error && result.error.context && result.error.context.status;
+        if (status !== 0) {
+          downUntil = now() + (status === 401 || status === 403 ? AUTH_BACKOFF_MS : FAIL_BACKOFF_MS);
+        }
+        reportError(await explainVoiceError(result));
         return null;
       }
       const base64 = result && result.data && result.data.audioBase64;
-      if (!base64) { downUntil = now() + FAIL_BACKOFF_MS; return null; }
+      if (!base64) { downUntil = now() + FAIL_BACKOFF_MS; reportError('përgjigje pa audio nga serveri'); return null; }
       const match = /rate=(\d+)/.exec(String(result.data.mimeType || ''));
       const rate = match ? Number(match[1]) || 24000 : 24000;
       const samples = pcmToFloat32(base64);
-      if (!samples.length) { downUntil = now() + FAIL_BACKOFF_MS; return null; }
-      const buffer = ctx.createBuffer(1, samples.length, rate);
-      buffer.getChannelData(0).set(samples);
+      if (!samples.length) { downUntil = now() + FAIL_BACKOFF_MS; reportError('audio bosh nga serveri'); return null; }
+      let buffer = null;
+      if (ctx && ctx.createBuffer) {
+        buffer = ctx.createBuffer(1, samples.length, rate);
+        buffer.getChannelData(0).set(samples);
+      }
+      const entry = { buffer, base64, rate, length: samples.length };
       if (cache.size >= 20) cache.delete(cache.keys().next().value);
-      cache.set(text, buffer);
-      return buffer;
+      cache.set(text, entry);
+      return entry;
     }
 
-    function play(buffer, mine) {
+    /* Phones suspend/interrupt WebAudio while the microphone is open; resume it before playing. */
+    async function ensureRunning(ctx) {
+      if (!ctx) return false;
+      if (!ctx.state || ctx.state === 'running') return true;
+      if (typeof ctx.resume === 'function') {
+        try { await withTimeout(Promise.resolve(ctx.resume()), 800); } catch (e) { /* stayed locked */ }
+      }
+      return !ctx.state || ctx.state === 'running';
+    }
+
+    function playBuffer(ctx, entry, mine) {
       return new Promise(resolve => {
-        const ctx = o.getAudioContext();
+        let buffer = entry.buffer;
+        if (!buffer && ctx.createBuffer) {
+          const samples = pcmToFloat32(entry.base64);
+          buffer = ctx.createBuffer(1, samples.length, entry.rate);
+          buffer.getChannelData(0).set(samples);
+          entry.buffer = buffer;
+        }
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.connect(ctx.destination);
+        const maxMs = Math.max(2500, Math.ceil((entry.length / (entry.rate || 24000)) * 1000) + 1500);
+        let guardId = timers.set(() => { guardId = null; if (mine === token) finish('server'); }, maxMs);
         pending = {
           resolve,
-          cleanup() { source.onended = null; try { source.stop(); } catch (e) { /* already ended */ } },
+          cleanup() {
+            if (guardId != null) { timers.clear(guardId); guardId = null; }
+            source.onended = null;
+            try { source.stop(); } catch (e) { /* already ended */ }
+          },
         };
         source.onended = () => { if (mine === token) finish('server'); };
-        try { source.start(); } catch (e) { finish('failed'); }
+        try { source.start(); reportReady(); } catch (e) { finish('failed'); }
+      });
+    }
+
+    function playWavFallback(entry, mine) {
+      return new Promise(resolve => {
+        let stopWav = null;
+        const maxMs = Math.max(2500, Math.ceil((entry.length / (entry.rate || 24000)) * 1000) + 1500);
+        let guardId = timers.set(() => { guardId = null; if (mine === token) finish('server'); }, maxMs);
+        pending = {
+          resolve,
+          cleanup() {
+            if (guardId != null) { timers.clear(guardId); guardId = null; }
+            try { stopWav && stopWav(); } catch (e) { /* already stopped */ }
+          },
+        };
+        try {
+          const wav = entry.wav || (entry.wav = pcmToWav(entry.base64, entry.rate));
+          const ctl = o.playWav(wav, () => { if (mine === token) finish('server'); }, () => { if (mine === token) finish('failed'); });
+          if (ctl && typeof ctl.stop === 'function') stopWav = () => ctl.stop();
+          if (ctl && typeof ctl.started?.then === 'function') {
+            ctl.started.then(ok => {
+              if (mine !== token) return;
+              if (ok === false) finish('failed');
+              else reportReady();
+            }, () => { if (mine === token) finish('failed'); });
+          } else reportReady();
+        } catch (e) { finish('failed'); }
       });
     }
 
     function albanianVoice() {
       try {
         const voices = (o.speechSynthesis && o.speechSynthesis.getVoices && o.speechSynthesis.getVoices()) || [];
-        return voices.find(v => /^sq(\b|[-_])/i.test(String(v.lang || ''))) || null;
+        return voices.find(v => /^sq(\b|[-_])/i.test(String(v.lang || '')) || /albanian|shqip/i.test(String(v.name || ''))) || null;
       } catch (e) { return null; }
     }
 
@@ -176,16 +291,33 @@
       if (!value) return 'text';
       if (value.length <= MAX_SPOKEN && now() >= downUntil) {
         try {
-          const buffer = await serverBuffer(value);
+          const entry = await serverAudio(value);
           if (mine !== token) return 'stopped';
-          if (buffer) return await play(buffer, mine);
+          if (entry) {
+            const ctx = o.getAudioContext && o.getAudioContext();
+            if (ctx && await ensureRunning(ctx)) {
+              if (mine !== token) return 'stopped';
+              const played = await playBuffer(ctx, entry, mine);
+              if (played === 'server' || played === 'stopped') return played;
+            }
+            if (mine !== token) return 'stopped';
+            if (typeof o.playWav === 'function') {
+              const playedWav = await playWavFallback(entry, mine);
+              if (playedWav === 'server' || playedWav === 'stopped') return playedWav;
+            }
+            reportError('audioja u bllokua nga pajisja — prek ekranin ose rrit volumin');
+          }
         } catch (e) {
           downUntil = now() + FAIL_BACKOFF_MS;
+          reportError(e && e.message === 'timeout' ? 'zëri i serverit u vonua' : 'zëri në server dështoi');
           if (mine !== token) return 'stopped';
         }
       }
       const voice = o.Utterance && albanianVoice();
-      if (voice) return await browserSpeak(value, voice, mine);
+      if (voice) {
+        const res = await browserSpeak(value, voice, mine);
+        if (res === 'browser' || res === 'stopped') return res;
+      }
       return await silentSpeak(value, mine);
     }
 
@@ -193,8 +325,10 @@
     function unlock() {
       try {
         const ctx = o.getAudioContext && o.getAudioContext();
-        if (ctx && ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(() => {});
+        if (ctx && ctx.state && ctx.state !== 'running' && ctx.resume) ctx.resume().catch(() => {});
       } catch (e) { /* audio stays locked */ }
+      try { o.unlockAudio && o.unlockAudio(); } catch (e) { /* ignore */ }
+      try { o.speechSynthesis && o.speechSynthesis.getVoices && o.speechSynthesis.getVoices(); } catch (e) { /* ignore */ }
     }
 
     return { speak, stop, unlock, get cache() { return cache; } };
@@ -268,6 +402,9 @@
       get muted() { return muted; },
       isOpen() { return state !== 'closed'; },
 
+      unlock() {
+        try { speaker.unlock(); } catch (e) { /* audio stays locked */ }
+      },
       open() {
         const wasClosed = state === 'closed';
         toggle(els.stage, 'show', true);
@@ -336,7 +473,7 @@
     return api;
   }
 
-  const api = { create, createSpeaker, summarize, speakDate, pcmToFloat32, TEXT };
+  const api = { create, createSpeaker, summarize, speakDate, pcmToFloat32, pcmToWav, TEXT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AvatarAssistant = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

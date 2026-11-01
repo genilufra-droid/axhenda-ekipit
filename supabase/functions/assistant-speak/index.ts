@@ -1,7 +1,7 @@
 // Axhenda: reads a short text aloud in Albanian with Gemini TTS. Only the owner may call it.
 // Returns { ok, audioBase64, mimeType } (raw PCM, 24 kHz). Errors are short Albanian messages.
 // Optional secret GEMINI_TTS_MODEL is tried first, then the names below.
-const MODELS = ['gemini-3.8-flash-tts', 'gemini-2.5-flash-preview-tts'];
+const MODELS = ['gemini-2.5-flash-preview-tts', 'gemini-2.5-pro-preview-tts'];
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -68,7 +68,7 @@ Deno.serve(async (req: Request) => {
     const { res: ai, body: raw } = await askGemini([...new Set([custom, ...MODELS].filter(Boolean))].map((model) => ({ model })), geminiKey, {
       contents: [{ parts: [{ text: 'Lexoje qartë dhe natyrshëm në shqip, me zë të ngrohtë e profesional, pa shtuar fjalë: ' + text }] }],
       generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } } },
-    }, 20000);
+    }, 14000);
     if (!ai) return fail('Zëri u vonua.', 504);
     if (!ai.ok) return fail('Zëri nuk u gjenerua.', ai.status === 429 ? 429 : 502);
     let inline: any = null;

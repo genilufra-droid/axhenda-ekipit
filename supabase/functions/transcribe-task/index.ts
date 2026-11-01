@@ -3,7 +3,7 @@
 // Returns { ok, transcript, draft:{title,description,assignee,due,priority} }.
 // Errors are short Albanian messages; provider details stay in the function logs.
 // Optional secret GEMINI_MODEL is tried first, then the aliases below.
-const MODELS = ['gemini-3.8-flash'];
+const MODELS = ['gemini-2.5-flash', 'gemini-flash-latest'];
 const MAX_AUDIO = 10 * 1024 * 1024;
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -118,14 +118,14 @@ Teksti live: ${liveTranscript}` });
 
     console.log('STAGE calling gemini', parts.length);
     const custom = (Deno.env.get('GEMINI_MODEL') || '').trim();
-    // Gemini 3 "thinks" before answering, which is slow for a short transcription: ask for minimal thinking first, then plain.
-    const names3 = [...new Set([custom, ...MODELS].filter(Boolean))];
+    const candidates = [...new Set([custom, ...MODELS].filter(Boolean))];
+    // Disable thinking first for fast transcription; fall back to plain config if a model rejects thinkingConfig.
     const attempts = [
-      ...names3.map((model) => ({ model, config: { thinkingConfig: { thinkingLevel: 'minimal' } } })),
-      ...names3.map((model) => ({ model })),
+      ...candidates.map((model) => ({ model, config: { thinkingConfig: { thinkingBudget: 0 } } })),
+      ...candidates.map((model) => ({ model })),
     ];
     const { res: ai, body: aiBody } = await askGemini(attempts, geminiKey,
-      { contents: [{ parts }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1, maxOutputTokens: 1200 } }, 35000);
+      { contents: [{ parts }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1, maxOutputTokens: 1200 } }, 20000);
     if (!ai) return fail('Serveri u vonua. Provo përsëri.', 504);
     if (!ai.ok) {
       if (ai.status === 429) return fail('Kufiri falas i AI u arrit. Provo pas pak ose përdor përpunimin lokal.', 429);
