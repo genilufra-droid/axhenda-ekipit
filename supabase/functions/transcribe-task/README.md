@@ -6,10 +6,11 @@ Two Supabase Edge Functions for the Axhenda voice assistant. Both accept only a 
 Multipart request: `audio` (optional, max 10 MB), `liveTranscript` (optional text), `today` (YYYY-MM-DD), `vocabulary`, `currentDraft` (JSON).
 Response: `{ ok, transcript, draft: { title, description, assignee, due, priority } }`.
 Names not in the staff list and impossible dates are dropped; priority is `Ulet`, `Mesme` or `Lart`.
-Model: `gemini-3.8-flash`. The function only prepares a draft; saving and notifying stay with the owner in the app.
+Models: `GEMINI_MODEL` (optional secret), then `gemini-2.5-flash` and `gemini-flash-latest`. The function only prepares a draft; saving and notifying stay with the owner in the app.
 
 ## assistant-speak
-JSON request `{ "text": "..." }` (cut at 600 characters). Response `{ ok, audioBase64, mimeType }` (raw PCM, 24 kHz). Model `gemini-3.8-flash-tts`, voice Kore.
+JSON request `{ "text": "..." }` (cut at 600 characters). Response `{ ok, audioBase64, mimeType }` (raw PCM, 24 kHz).
+Models: `GEMINI_TTS_MODEL` (optional secret), then `gemini-2.5-flash-preview-tts` and `gemini-2.5-pro-preview-tts`, voice Kore.
 If it fails, the app falls back to the browser voice, then to text only.
 
 ## Secrets (Supabase → Edge Functions → Secrets)

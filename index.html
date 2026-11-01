@@ -357,12 +357,27 @@
   .voice-count{font-variant-numeric:tabular-nums}
   .voice-live-hint{margin:6px 0 0;font-size:11px;color:var(--muted)}
   /* Voice assistant window (avatar). Always light; sits under the confirmation window (z-index 80). */
+  .assistant-card{display:flex;align-items:center;gap:11px;padding:9px 13px;margin:8px 14px 4px;border:1px solid var(--line);border-radius:14px;background:linear-gradient(135deg,rgba(19,167,130,.10),rgba(79,124,255,.10));cursor:pointer;text-align:left;transition:transform .14s,box-shadow .14s}
+  .assistant-card:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(19,167,130,.14)}
+  .assistant-card:focus-visible{outline:3px solid #4f7cff;outline-offset:2px}
+  .assistant-card-avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;object-position:center 12%;border:2px solid #13a782;flex-shrink:0;background:#eef5f5}
+  .assistant-card-info{min-width:0;flex:1}
+  .assistant-card-name{font-weight:800;font-size:13.5px;color:var(--txt);line-height:1.25}
+  .assistant-card-sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .assistant-card-cta{border-radius:999px;padding:6px 12px;background:#13a782;color:#fff;font-weight:800;font-size:12px;white-space:nowrap;flex-shrink:0}
   .assistant-stage{position:fixed;inset:0;z-index:75;display:none;flex-direction:column;background:linear-gradient(180deg,#fff 0%,#f8fbfb 58%,#eef5f5 100%);color:#18252c}
   .assistant-stage.show{display:flex}
   .assistant-stage-head{display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;border-bottom:1px solid #e2e9e9;background:rgba(255,255,255,.94)}
   .assistant-stage-mini{width:46px;height:46px;border-radius:50%;object-fit:cover;object-position:center 12%;border:2px solid #13a782;flex-shrink:0}
   .assistant-stage-name{font-weight:800;font-size:17px;line-height:1.2}
   .assistant-stage-online{font-size:13px;color:#5b6b70}.assistant-stage-online b{color:#20a85a}
+  .assistant-stage-online.warn{color:#b45309;font-size:12px}
+  #assistantStage.show ~ #voiceConfirmOverlay{align-items:flex-end;background:rgba(16,28,34,.28);backdrop-filter:none;padding:12px}
+  #assistantStage.show ~ #voiceConfirmOverlay .modal{min-height:0;max-height:58vh;border-radius:20px}
+  @media(max-width:560px){
+    #assistantStage.show ~ #voiceConfirmOverlay{padding:0}
+    #assistantStage.show ~ #voiceConfirmOverlay .modal{max-height:58vh;border-radius:20px 20px 0 0}
+  }
   .assistant-stage-actions{margin-left:auto;display:flex;gap:4px}
   .assistant-stage-actions button{border:0;background:transparent;color:#34434a;font-size:22px;min-width:44px;min-height:44px;cursor:pointer;border-radius:12px}
   .assistant-stage-actions button:focus-visible,.assistant-stage-mic:focus-visible{outline:3px solid #4f7cff;outline-offset:2px}
@@ -578,6 +593,16 @@
 
       <div class="chat" id="taskList"></div>
 
+      <!-- Visible Avatar Assistant launcher (owner) -->
+      <div class="assistant-card owner-only" id="assistantOpenCard" role="button" tabindex="0" aria-label="Hap Asistenten e Axhendës">
+        <img class="assistant-card-avatar" src="assistant-avatar.jpg" alt="" width="44" height="44" decoding="async" />
+        <div class="assistant-card-info">
+          <div class="assistant-card-name">Asistentja e Axhendës</div>
+          <div class="assistant-card-sub">Kliko për të hapur dritaren e asistentes me zë në shqip</div>
+        </div>
+        <span class="assistant-card-cta">🎙️ Asistentja</span>
+      </div>
+
       <!-- WhatsApp-style composer (owner) -->
       <div class="composer owner-only block">
         <div class="pending-files" id="pendingFiles"></div>
@@ -724,7 +749,7 @@
 <div class="assistant-stage" id="assistantStage" role="dialog" aria-modal="true" aria-labelledby="assistantStageName">
   <div class="assistant-stage-head">
     <img class="assistant-stage-mini" src="assistant-avatar.jpg" alt="" width="46" height="46" decoding="async" />
-    <div><div class="assistant-stage-name" id="assistantStageName">Asistentja e Axhendës</div><div class="assistant-stage-online"><b>●</b> Online</div></div>
+    <div><div class="assistant-stage-name" id="assistantStageName">Asistentja e Axhendës</div><div class="assistant-stage-online" id="assistantStageSub"><b>●</b> Online</div></div>
     <div class="assistant-stage-actions">
       <button type="button" id="assistantMute" title="Hesht zërin" aria-label="Hesht zërin" aria-pressed="false">🔊</button>
       <button type="button" id="assistantStageClose" title="Mbyll" aria-label="Mbyll">✕</button>
@@ -1239,7 +1264,25 @@ function assistantStatus(text){$('#assistantStatus').textContent=text;}
 const assistantAvatar=(function(){
   try{
     if(typeof AvatarAssistant==='undefined'||!$('#assistantStage'))return null;
-    let audioContext=null;
+    let audioContext=null, wavAudio=null, wavUrl=null;
+    const clearWav=()=>{
+      if(wavUrl&&typeof URL!=='undefined'&&URL.revokeObjectURL){try{URL.revokeObjectURL(wavUrl);}catch(e){}}
+      wavUrl=null;
+    };
+    const ensureWavAudio=()=>{
+      if(!wavAudio&&typeof Audio==='function'){
+        wavAudio=new Audio();
+        wavAudio.playsInline=true;
+        if(wavAudio.setAttribute)wavAudio.setAttribute('playsinline','');
+      }
+      return wavAudio;
+    };
+    const setSub=(text,warn)=>{
+      const sub=$('#assistantStageSub');
+      if(!sub)return;
+      sub.textContent=text;
+      sub.classList[warn?'add':'remove']('warn');
+    };
     const speaker=AvatarAssistant.createSpeaker({
       invoke:(name,options)=>authClient?authClient.functions.invoke(name,options):Promise.resolve({error:{context:{status:0}}}),
       getAudioContext:()=>{
@@ -1249,9 +1292,34 @@ const assistantAvatar=(function(){
         }catch(e){audioContext=null;}
         return audioContext;
       },
+      unlockAudio:()=>{
+        const el=ensureWavAudio();
+        if(!el||typeof Blob==='undefined'||typeof URL==='undefined'||!URL.createObjectURL)return;
+        clearWav();
+        const silent=AvatarAssistant.pcmToWav('AAAA',24000);
+        wavUrl=URL.createObjectURL(new Blob([silent],{type:'audio/wav'}));
+        el.src=wavUrl;el.volume=0.01;
+        const p=el.play();
+        if(p&&p.then)p.then(()=>{try{el.pause();el.currentTime=0;el.volume=1;}catch(e){}clearWav();},()=>clearWav());
+      },
+      playWav:(wavBytes,onEnd,onFail)=>{
+        const el=ensureWavAudio();
+        if(!el||typeof Blob==='undefined'||typeof URL==='undefined'||!URL.createObjectURL){onFail();return null;}
+        clearWav();
+        wavUrl=URL.createObjectURL(new Blob([wavBytes],{type:'audio/wav'}));
+        el.volume=1;el.src=wavUrl;
+        el.onended=()=>{el.onended=null;el.onerror=null;clearWav();onEnd();};
+        el.onerror=()=>{el.onended=null;el.onerror=null;clearWav();onFail();};
+        const p=el.play();
+        const started=p&&p.then?p.then(()=>true,()=>{clearWav();return false;}):Promise.resolve(true);
+        return {started,stop(){el.onended=null;el.onerror=null;try{el.pause();}catch(e){}clearWav();}};
+      },
+      onReady:()=>setSub('● Online',false),
+      onError:reason=>{if(reason&&reason!=='pa lidhje me serverin')setSub('🔇 Pa zë serveri ('+reason+')',true);},
       speechSynthesis:window.speechSynthesis,
       Utterance:window.SpeechSynthesisUtterance,
     });
+    try{window.speechSynthesis?.getVoices?.();}catch(e){}
     return AvatarAssistant.create({
       els:{stage:$('#assistantStage'),body:$('#assistantStageBody'),pill:$('#assistantStagePill'),chat:$('#assistantStageText'),
         liveField:$('#assistantLiveField'),avatar:$('#assistantStageAvatar'),mic:$('#assistantStageMic'),mute:$('#assistantMute')},
@@ -1265,6 +1333,8 @@ function assistantEvent(type,data){
   if(!a)return false;
   try{
     switch(type){
+      case 'open':a.open();try{$('#assistantStageMic').focus();}catch(e){}break;
+      case 'unlock':a.unlock();break;
       case 'beforeListen':a.beforeListen();try{$('#assistantStageMic').focus();}catch(e){}break;
       case 'listening':a.listening();break;
       case 'heard':a.heard(data);break;
@@ -1281,6 +1351,13 @@ function assistantEvent(type,data){
   }catch(e){/* the window must never break the assistant */}
   return false;
 }
+$('#assistantOpenCard').onclick=()=>{
+  if(cloud.role!=='owner'){toast('Vetëm pronari mund të përgatisë detyra','err');return;}
+  assistantEvent('open');
+};
+$('#assistantOpenCard').addEventListener('keydown',e=>{
+  if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#assistantOpenCard').onclick();}
+});
 $('#assistantStageMic').onclick=()=>$('#voiceTaskBtn').click();
 $('#assistantMute').onclick=()=>assistantEvent('mute');
 $('#assistantStageClose').onclick=()=>{
@@ -1863,6 +1940,8 @@ $('#voiceConfirm').onclick=()=>{
     if(cloud.role!=='owner'){toast('Vetëm pronari mund të përgatisë detyra','err');return;}
     if(!navigator.mediaDevices?.getUserMedia){
       assistantStatus('Ky browser nuk jep qasje te mikrofoni. Shkruaj kërkesën dhe shtyp ✨ AI.');
+      assistantEvent('open');
+      assistantEvent('idle','Ky browser nuk jep qasje te mikrofoni (hap faqen me HTTPS ose shkruaj detyrën dhe shtyp ✨ AI).');
       return;
     }
     assistantEvent('beforeListen');
@@ -2000,7 +2079,7 @@ $('#voiceConfirm').onclick=()=>{
       :'Po dëgjoj… Ndalon vetë pas 3 sekondash heshtjeje; kliko mikrofonin për ta ndalur tani. Escape për anulim.');
   }
 
-  button.onclick=()=>{
+  const toggleVoiceTask=()=>{
     if(active){
       if(active.engine&&active.engine.state==='listening'){active.engine.stop('manual');return;}
       if(active.engine&&active.engine.state==='starting'){assistantCancel();return;}
@@ -2008,12 +2087,15 @@ $('#voiceConfirm').onclick=()=>{
     }
     return startDictation();
   };
+  button.onclick=toggleVoiceTask;
+  $('#assistantStageMic').onclick=toggleVoiceTask;
   ai.onclick=()=>{
     if(assistantBusy||active)return;
     if(cloud.role!=='owner'){toast('Vetëm pronari mund të përgatisë detyra','err');return;}
     const raw=$('#tTitle').value.trim();
     if(!raw){assistantStatus('Shkruaj p.sh. “Cakto Arben Kola të përgatisë raportin nesër, urgjent”.');$('#tTitle').focus();return;}
     if(raw.length>6000){toast('Kërkesa duhet të jetë deri në 6000 karaktere','err');return;}
+    assistantEvent('unlock');
     liveShow(false);
     process(raw);
   };
@@ -3084,7 +3166,7 @@ async function secureRefreshChat(){
     oversightContacts.forEach(c=>{if(!visibleContacts.some(x=>x.id===c.id)) visibleContacts.push(c);});
     state.chat.contacts=visibleContacts;
     if(cloud.role==='employee'){
-      const ownerProfile=(profiles||[]).find(p=>p.role==='owner');
+      const ownerProfile=(profiles||[]).find(p=>['owner','pronar'].includes(String(p.role||'').trim().toLowerCase()));
       if(ownerProfile){
         const oid=stableContactId(ownerProfile.display_name);
         if(!state.chat.contacts.some(c=>c.id===oid)) state.chat.contacts.push({id:oid,name:ownerProfile.display_name});
@@ -3151,7 +3233,7 @@ async function unlockApp(user){
   $('#authScreen').style.display='none';
   const {data:profile}=await authClient.from('profiles').select('display_name,username,role,must_change_password').eq('id',user.id).maybeSingle();
   cloud.userId=user.id;
-  cloud.role=profile?.role==='owner'?'owner':'employee';
+  cloud.role=['owner','pronar'].includes(String(profile?.role||'').trim().toLowerCase())?'owner':'employee';
   cloud.profileRole=profile?.role||'';
   cloud.userName=profile?.display_name||user.email.split('@')[0];
   state.chat.me=cloud.userName;

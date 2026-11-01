@@ -30,7 +30,7 @@ function clock(){
 }
 function analysers(){const list=[];return list;}
 
-function setup({invoke,mediaDevices,MediaRecorder,SpeechRecognition,role='owner',AudioContext=true,notify,userAgent='',maxTouchPoints=0}={}){
+function setup({invoke,mediaDevices,MediaRecorder,SpeechRecognition,role='owner',AudioContext=true,AvatarAssistant,notify,userAgent='',maxTouchPoints=0}={}){
   const els=new Map(),events={},windowEvents={};
   let saved=0,stopped=0,notified=0;
   const $=selector=>{
@@ -87,7 +87,7 @@ function setup({invoke,mediaDevices,MediaRecorder,SpeechRecognition,role='owner'
 
   const stream={getTracks:()=>[{stop(){stopped++;}}]};
   const context=vm.createContext({
-    $,$$:()=>[],document,state,cloud:{role},TaskAssistant,VoiceDictation,
+    $,$$:()=>[],document,state,cloud:{role},TaskAssistant,VoiceDictation,...(AvatarAssistant?{AvatarAssistant}:{}),
     authClient:invoke?{functions:{invoke}}:null,toast(){},addTask(){saved++;},
     async notifyTaskChannels(){notified++;},
     Date:FakeDate,setTimeout:time.setTimeout,clearTimeout:time.clearTimeout,
@@ -1118,3 +1118,34 @@ test('without any recording the live words are still used and no audio field is 
   assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
   app.$('#voiceCancel').onclick();
 });
+
+test('the visible avatar card opens the stage for the owner and blocks employees',()=>{
+  const AvatarModule=require('../avatar-assistant.js');
+  const ownerApp=setup({AvatarAssistant:AvatarModule,role:'owner'});
+  ownerApp.$('#assistantOpenCard').onclick();
+  assert.ok(ownerApp.$('#assistantStage').classList.contains('show'),'owner opens avatar window');
+
+  const empApp=setup({AvatarAssistant:AvatarModule,role:'employee'});
+  empApp.$('#assistantOpenCard').onclick();
+  assert.ok(!empApp.$('#assistantStage').classList.contains('show'),'employee cannot open task avatar');
+});
+
+test('assistantStageMic cancels dictation even while voiceTaskBtn is disabled during mic startup',async()=>{
+  const AvatarModule=require('../avatar-assistant.js');
+  let openStream;
+  const app=setup({
+    AvatarAssistant:AvatarModule,
+    SpeechRecognition:true,MediaRecorder:recorderClass(),
+    mediaDevices:{getUserMedia:()=>new Promise(resolve=>{openStream=resolve;})},
+    invoke:async()=>({data:draft}),
+  });
+  const pending=app.$('#voiceTaskBtn').onclick();
+  assert.equal(app.$('#voiceTaskBtn').disabled,true,'composer mic button is disabled while starting');
+  assert.ok(app.$('#assistantStage').classList.contains('show'),'avatar stage is open');
+  app.$('#assistantStageMic').onclick();
+  openStream(app.stream);
+  await pending;
+  await tick();
+  assert.equal(app.stopped,1,'late stream was immediately released because stage mic cancelled startup');
+});
+
