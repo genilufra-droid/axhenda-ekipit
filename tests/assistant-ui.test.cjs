@@ -30,7 +30,7 @@ function clock(){
 }
 function analysers(){const list=[];return list;}
 
-function setup({invoke,mediaDevices,MediaRecorder,SpeechRecognition,role='owner',AudioContext=true,AvatarAssistant,notify,userAgent='',maxTouchPoints=0}={}){
+function setup({invoke,mediaDevices,MediaRecorder,SpeechRecognition,role='owner',userName='',AudioContext=true,AudioElement=false,AvatarAssistant,notify,userAgent='',maxTouchPoints=0}={}){
   const els=new Map(),events={},windowEvents={};
   let saved=0,stopped=0,notified=0;
   const $=selector=>{
@@ -85,13 +85,22 @@ function setup({invoke,mediaDevices,MediaRecorder,SpeechRecognition,role='owner'
     close(){this.closed=true;return Promise.resolve();}
   }
 
+  let lastAudioEl=null;
+  class FakeAudioElement{
+    constructor(){lastAudioEl=this;this.src='';this.volume=1;this.playsInline=false;}
+    setAttribute(){}
+    play(){return Promise.resolve();}
+    pause(){}
+  }
+
   const stream={getTracks:()=>[{stop(){stopped++;}}]};
   const context=vm.createContext({
-    $,$$:()=>[],document,state,cloud:{role},TaskAssistant,VoiceDictation,...(AvatarAssistant?{AvatarAssistant}:{}),
+    $,$$:()=>[],document,state,cloud:{role,...(userName?{userName}:{})},TaskAssistant,VoiceDictation,...(AvatarAssistant?{AvatarAssistant}:{}),
     authClient:invoke?{functions:{invoke}}:null,toast(){},addTask(){saved++;},
     async notifyTaskChannels(){notified++;},
     Date:FakeDate,setTimeout:time.setTimeout,clearTimeout:time.clearTimeout,
     requestAnimationFrame,cancelAnimationFrame,
+    ...(AudioElement?{Audio:FakeAudioElement,URL:{createObjectURL:()=>'blob:wav',revokeObjectURL(){}}}:{}),
     window:{MediaRecorder,...(AudioContext?{AudioContext:FakeAudioContext}:{}),...(SpeechRecognition?{SpeechRecognition:FakeRecognition}:{}),
       addEventListener(name,fn){windowEvents[name]=fn;}},
     navigator:{mediaDevices:mediaDevices||{getUserMedia:async()=>stream},userAgent,maxTouchPoints},
@@ -106,6 +115,7 @@ function setup({invoke,mediaDevices,MediaRecorder,SpeechRecognition,role='owner'
     get stopped(){return stopped;},
     get notified(){return notified;},
     get recognizer(){return lastRecognizer;},
+    get audioEl(){return lastAudioEl;},
     advance:time.advance,
     /* feed the microphone energy in 16 ms animation frames */
     feed(ms,level){
@@ -1121,13 +1131,68 @@ test('without any recording the live words are still used and no audio field is 
 
 test('the visible avatar card opens the stage for the owner and blocks employees',()=>{
   const AvatarModule=require('../avatar-assistant.js');
-  const ownerApp=setup({AvatarAssistant:AvatarModule,role:'owner'});
+  const ownerApp=setup({AvatarAssistant:AvatarModule,role:'owner',userName:'Besnik Koci'});
   ownerApp.$('#assistantOpenCard').onclick();
   assert.ok(ownerApp.$('#assistantStage').classList.contains('show'),'owner opens avatar window');
+  assert.equal(ownerApp.$('#assistantStageText').textContent,'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?');
 
   const empApp=setup({AvatarAssistant:AvatarModule,role:'employee'});
   empApp.$('#assistantOpenCard').onclick();
   assert.ok(!empApp.$('#assistantStage').classList.contains('show'),'employee cannot open task avatar');
+});
+
+test('full owner avatar flow: greets Besnik Koci aloud in Albanian, auto-listens, writes live words, prepares draft and speaks summary',async()=>{
+  const AvatarModule=require('../avatar-assistant.js');
+  const PCM=Buffer.from(new Int16Array([0,16384,-16384]).buffer).toString('base64');
+  const spokenCalls=[];
+  let transcribeCalls=0;
+  const app=setup({
+    AvatarAssistant:AvatarModule,
+    AudioElement:true,
+    SpeechRecognition:true,
+    MediaRecorder:recorderClass(),
+    role:'owner',
+    userName:'Besnik Koci',
+    invoke:async(name,options)=>{
+      if(name==='assistant-speak'){
+        spokenCalls.push(options.body.text);
+        return {data:{audioBase64:PCM,mimeType:'audio/pcm;rate=24000'}};
+      }
+      if(name==='transcribe-task'){
+        transcribeCalls++;
+        return {data:draft};
+      }
+      throw new Error('unexpected function: '+name);
+    },
+  });
+
+  // 1. Owner taps the visible avatar card -> greets Besnik Koci aloud via assistant-speak
+  app.$('#assistantOpenCard').onclick();
+  await tick();await tick();await tick();await tick();
+  assert.equal(spokenCalls[0],'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?');
+  assert.ok(app.audioEl&&typeof app.audioEl.onended==='function','WAV audio is playing greeting');
+
+  // 2. Greeting finishes -> microphone opens automatically without needing another click
+  app.audioEl.onended();
+  await tick();await tick();await tick();await tick();
+  assert.equal(app.$('#assistantStagePill').textContent,'Po të dëgjoj…');
+
+  // 3. Owner dictates -> live words appear in #assistantLiveField and countdown updates pill
+  app.speak(500);
+  app.recognizer.result([{text:'Cakto Arben Kola raportin',final:false}],0);
+  assert.equal(app.$('#assistantLiveField').value,'Cakto Arben Kola raportin');
+  app.quiet(1200);
+  assert.match(app.$('#assistantStagePill').textContent,/ndalon pas/);
+
+  // 4. Silence completes -> transcribe-task runs immediately, confirmation opens, avatar reads summary aloud
+  app.quiet(2000);
+  await tick();await tick();await tick();await tick();
+  assert.equal(transcribeCalls,1);
+  assert.equal(app.$('#assistantLiveField').value,draft.transcript,'authoritative transcript shown in avatar live field');
+  assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'),'confirmation modal opened without hanging');
+  assert.equal(spokenCalls.length,2,'avatar speaks prepared task summary aloud');
+  assert.match(spokenCalls[1],/E përgatita detyrën: Përgatit raportin\./);
+  assert.match(spokenCalls[1],/Për Arben Kola\./);
 });
 
 test('assistantStageMic cancels dictation even while voiceTaskBtn is disabled during mic startup',async()=>{

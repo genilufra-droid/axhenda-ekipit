@@ -1253,9 +1253,17 @@ function renderPending(){
 /* TASK ASSISTANT: text, live voice dictation with real voice-activity detection,
    safe local fallback and explicit confirmation. Nothing is saved or sent before
    the owner presses "Konfirmo dhe dërgo". */
-let voiceDraft=null, voiceDraftComposerPrefix=null, assistantCancel=()=>{}, assistantBusy=false, assistantReturnFocus=null, voiceSaving=false;
+let voiceDraft=null, voiceDraftComposerPrefix=null, assistantCancel=()=>{}, assistantStartListening=null, assistantBusy=false, assistantReturnFocus=null, voiceSaving=false;
 let voiceNotifyReminded=false;   // the owner is reminded once that notifying is his own choice
 const assistantPeople=()=>[...new Set((state.chat?.contacts||[]).filter(c=>!c.readonly).map(c=>c.name).filter(Boolean))];
+const assistantOwnerName=()=>{
+  const fromCloud=String(cloud?.userName||'').trim();
+  if(fromCloud)return fromCloud;
+  const fromLbl=String($('#lblOwn')?.textContent||'').trim();
+  if(fromLbl)return fromLbl;
+  const fromChat=String(state?.chat?.me||'').trim();
+  return fromChat;
+};
 function parseVoiceTask(raw){return TaskAssistant.parse(raw,assistantPeople());}
 function assistantStatus(text){$('#assistantStatus').textContent=text;}
 
@@ -1264,7 +1272,8 @@ function assistantStatus(text){$('#assistantStatus').textContent=text;}
 const assistantAvatar=(function(){
   try{
     if(typeof AvatarAssistant==='undefined'||!$('#assistantStage'))return null;
-    let audioContext=null, wavAudio=null, wavUrl=null;
+    let audioContext=null, wavAudio=null, wavUrl=null, wavUnlocked=false, wavPlaying=false;
+    const setPlaybackSession=()=>{try{if(navigator&&navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}};
     const clearWav=()=>{
       if(wavUrl&&typeof URL!=='undefined'&&URL.revokeObjectURL){try{URL.revokeObjectURL(wavUrl);}catch(e){}}
       wavUrl=null;
@@ -1273,6 +1282,7 @@ const assistantAvatar=(function(){
       if(!wavAudio&&typeof Audio==='function'){
         wavAudio=new Audio();
         wavAudio.playsInline=true;
+        wavAudio.preload='auto';
         if(wavAudio.setAttribute)wavAudio.setAttribute('playsinline','');
       }
       return wavAudio;
@@ -1284,6 +1294,8 @@ const assistantAvatar=(function(){
       sub.classList[warn?'add':'remove']('warn');
     };
     const speaker=AvatarAssistant.createSpeaker({
+      timers:{set:(fn,ms)=>setTimeout(fn,ms),clear:id=>clearTimeout(id)},
+      now:()=>Date.now(),
       invoke:(name,options)=>authClient?authClient.functions.invoke(name,options):Promise.resolve({error:{context:{status:0}}}),
       getAudioContext:()=>{
         try{
@@ -1293,27 +1305,32 @@ const assistantAvatar=(function(){
         return audioContext;
       },
       unlockAudio:()=>{
+        setPlaybackSession();
+        if(wavUnlocked||wavPlaying)return;
         const el=ensureWavAudio();
         if(!el||typeof Blob==='undefined'||typeof URL==='undefined'||!URL.createObjectURL)return;
+        wavUnlocked=true;
         clearWav();
         const silent=AvatarAssistant.pcmToWav('AAAA',24000);
         wavUrl=URL.createObjectURL(new Blob([silent],{type:'audio/wav'}));
         el.src=wavUrl;el.volume=0.01;
         const p=el.play();
-        if(p&&p.then)p.then(()=>{try{el.pause();el.currentTime=0;el.volume=1;}catch(e){}clearWav();},()=>clearWav());
+        if(p&&p.then)p.then(()=>{if(!wavPlaying){try{el.pause();el.currentTime=0;el.volume=1;}catch(e){}clearWav();}},()=>{wavUnlocked=false;clearWav();});
       },
-      playWav:(wavBytes,onEnd,onFail)=>{
+      playWav:typeof Audio==='function'?(wavBytes,onEnd,onFail)=>{
         const el=ensureWavAudio();
         if(!el||typeof Blob==='undefined'||typeof URL==='undefined'||!URL.createObjectURL){onFail();return null;}
+        setPlaybackSession();
         clearWav();
+        wavPlaying=true;
         wavUrl=URL.createObjectURL(new Blob([wavBytes],{type:'audio/wav'}));
         el.volume=1;el.src=wavUrl;
-        el.onended=()=>{el.onended=null;el.onerror=null;clearWav();onEnd();};
-        el.onerror=()=>{el.onended=null;el.onerror=null;clearWav();onFail();};
+        el.onended=()=>{wavPlaying=false;el.onended=null;el.onerror=null;clearWav();onEnd();};
+        el.onerror=()=>{wavPlaying=false;el.onended=null;el.onerror=null;clearWav();onFail();};
         const p=el.play();
-        const started=p&&p.then?p.then(()=>true,()=>{clearWav();return false;}):Promise.resolve(true);
-        return {started,stop(){el.onended=null;el.onerror=null;try{el.pause();}catch(e){}clearWav();}};
-      },
+        const started=p&&p.then?p.then(()=>{wavUnlocked=true;return true;},()=>{wavPlaying=false;clearWav();return false;}):Promise.resolve(true);
+        return {started,stop(){wavPlaying=false;el.onended=null;el.onerror=null;try{el.pause();}catch(e){}clearWav();}};
+      }:undefined,
       onReady:()=>setSub('● Online',false),
       onError:reason=>{if(reason&&reason!=='pa lidhje me serverin')setSub('🔇 Pa zë serveri ('+reason+')',true);},
       speechSynthesis:window.speechSynthesis,
@@ -1323,7 +1340,7 @@ const assistantAvatar=(function(){
     return AvatarAssistant.create({
       els:{stage:$('#assistantStage'),body:$('#assistantStageBody'),pill:$('#assistantStagePill'),chat:$('#assistantStageText'),
         liveField:$('#assistantLiveField'),avatar:$('#assistantStageAvatar'),mic:$('#assistantStageMic'),mute:$('#assistantMute')},
-      speaker,today:()=>TaskAssistant.dateKey(new Date()),
+      speaker,today:()=>TaskAssistant.dateKey(new Date()),ownerName:assistantOwnerName,
     });
   }catch(e){return null;}
 })();
@@ -1334,9 +1351,11 @@ function assistantEvent(type,data){
   try{
     switch(type){
       case 'open':a.open();try{$('#assistantStageMic').focus();}catch(e){}break;
+      case 'greet':return a.greet(data);
       case 'unlock':a.unlock();break;
       case 'beforeListen':a.beforeListen();try{$('#assistantStageMic').focus();}catch(e){}break;
       case 'listening':a.listening();break;
+      case 'countdown':a.listeningCountdown(data);break;
       case 'heard':a.heard(data);break;
       case 'thinking':a.thinking();break;
       case 'draft':a.draft(data);break;
@@ -1353,7 +1372,16 @@ function assistantEvent(type,data){
 }
 $('#assistantOpenCard').onclick=()=>{
   if(cloud.role!=='owner'){toast('Vetëm pronari mund të përgatisë detyra','err');return;}
-  assistantEvent('open');
+  const greeted=assistantEvent('greet');
+  try{$('#assistantStageMic').focus();}catch(e){}
+  if(greeted&&typeof greeted.then==='function'){
+    greeted.then(res=>{
+      if(res==='stopped'||res==='closed')return;
+      if(assistantAvatar&&assistantAvatar.state==='idle'&&!assistantBusy&&typeof assistantStartListening==='function'){
+        assistantStartListening();
+      }
+    });
+  }
 };
 $('#assistantOpenCard').addEventListener('keydown',e=>{
   if(e.key==='Enter'||e.key===' '){e.preventDefault();$('#assistantOpenCard').onclick();}
@@ -1458,6 +1486,7 @@ function showVoiceDraft(raw,data=null,source='Përpunim lokal — AI nuk u përd
   $('#voiceDraftSource').textContent=source;
   $('#voiceConfirmOverlay').classList.add('show');
   $('#voiceDraftTitle').focus();
+  assistantEvent('heard',transcript);
   assistantEvent('draft',voiceDraft);
   return true;
 }
@@ -1549,6 +1578,11 @@ $('#voiceConfirm').onclick=()=>{
   function liveCountdown(){
     const left=active?.engine?.remaining?.();
     $('#voiceLiveCount').textContent=left==null?'':(left/1000).toFixed(1)+'s';
+    assistantEvent('countdown',left);
+    const lf=$('#assistantLiveField');
+    if(lf&&active?.engine?.heardSpeech&&!lf.value){
+      lf.placeholder='🎙️ Po regjistrohet zëri yt… fjalët shkruhen sapo të mbarosh';
+    }
   }
   function meter(level){
     const bar=$('#voiceLiveMeterBar');
@@ -1559,7 +1593,11 @@ $('#voiceConfirm').onclick=()=>{
     button.classList.remove('listening');button.setAttribute('aria-pressed','false');
     button.title='Fol detyrën në shqip';
   }
-  function stopUi(){liveShow(false);meter(0);}
+  function stopUi(){
+    liveShow(false);meter(0);
+    const lf=$('#assistantLiveField');
+    if(lf)lf.placeholder='Fjalët e tua shfaqen këtu…';
+  }
 
   /* ---------- microphone energy monitor (voice activity detection) ---------- */
   function createLevelMonitor(stream){
@@ -1842,7 +1880,7 @@ $('#voiceConfirm').onclick=()=>{
     const session={controller:new AbortController(),dictation:dictationSession};active=session;
     liveState('Po përgatis detyrën…');
     assistantEvent('thinking');
-    assistantStatus('Po përgatis detyrën… (deri në 90 s) Escape për anulim.');
+    assistantStatus('Po përgatis detyrën… (deri në 28 s) Escape për anulim.');
     assistantDiag('');
     let timer, serverTranscript='';
     return (async()=>{
@@ -1860,7 +1898,7 @@ $('#voiceConfirm').onclick=()=>{
         }else body.append('liveTranscript',text);
         const result=await Promise.race([
           authClient.functions.invoke('transcribe-task',{body,signal:session.controller.signal}),
-          new Promise((_,reject)=>{timer=setTimeout(()=>{session.controller.abort();const error=new Error('timeout');error.assistantMessage='serveri nuk u përgjigj brenda 90 sekondash';reject(error);},90000);})
+          new Promise((_,reject)=>{timer=setTimeout(()=>{session.controller.abort();const error=new Error('timeout');error.assistantMessage='serveri nuk u përgjigj brenda 28 sekondash';reject(error);},28000);})
         ]);
         if(id!==requestId)return;
         if(result.error)throw result.error;
@@ -2087,6 +2125,7 @@ $('#voiceConfirm').onclick=()=>{
     }
     return startDictation();
   };
+  assistantStartListening=()=>startDictation();
   button.onclick=toggleVoiceTask;
   $('#assistantStageMic').onclick=toggleVoiceTask;
   ai.onclick=()=>{

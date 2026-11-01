@@ -22,7 +22,7 @@ function endpoint(name, { role = 'owner', badSession = false, provider = null, e
   };
   vm.runInNewContext(load(name), {
     Deno: { env: { get: (k) => vars[k] }, serve: (fn) => { handler = fn; } },
-    fetch, Request, Response, File, FormData, Uint8Array, btoa, JSON, String, Date, Set, Promise, AbortSignal, DOMException, setTimeout, console: { error() {}, log() {} },
+    fetch, Request, Response, File, FormData, Uint8Array, Array, btoa, JSON, String, Date, Set, Promise, AbortSignal, DOMException, setTimeout, console: { error() {}, log() {} },
   });
   const geminiCalls = () => calls.filter((c) => c.url.includes('generativelanguage'));
   return { handler, calls, geminiCalls };
@@ -118,4 +118,65 @@ test('an unknown or hanging first model falls through to the next one', async ()
   const res = await e.handler(post(form({ liveTranscript: 'a' })));
   assert.equal(res.status, 200);
   assert.equal(seen.length, 2);
+  assert.match(seen[0], /gemini-3\.5-flash-lite/, 'fast live-verified model is first');
 });
+
+test('transcribe: unwraps array JSON and falls back to Groq Whisper + Llama when Gemini fails', async () => {
+  const arrayProvider = () => json({ candidates: [{ content: { parts: [{ text: JSON.stringify([{ transcript: 'Cakto Arben Kola raportin', title: 'Raporti', assignee: 'Arben Kola', priority: 'Lart' }]) }] } }] });
+  const r1 = await endpoint('transcribe-task', { provider: arrayProvider }).handler(post(form({ liveTranscript: 'x', today: '2026-11-01' })));
+  assert.equal(r1.status, 200);
+  const d1 = await r1.json();
+  assert.equal(d1.draft.title, 'Raporti');
+  assert.equal(d1.draft.assignee, 'Arben Kola');
+
+  const seenUrls = [];
+  const groqFallbackProvider = (url) => {
+    seenUrls.push(url);
+    if (url.includes('generativelanguage')) return new Response('unavailable', { status: 503 });
+    if (url.includes('audio/transcriptions')) return json({ text: 'Cakto Arben Kola të dërgojë faturën nesër urgjent' });
+    if (url.includes('chat/completions')) {
+      return json({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              transcript: 'Cakto Arben Kola të dërgojë faturën nesër urgjent',
+              title: 'Dërgo faturën',
+              description: 'Cakto Arben Kola të dërgojë faturën nesër urgjent',
+              assignee: 'Arben Kola',
+              due: '2026-11-02',
+              priority: 'Lart',
+            }),
+          },
+        }],
+      });
+    }
+    return new Response('unexpected', { status: 500 });
+  };
+  const e2 = endpoint('transcribe-task', { env: { GROQ_API_KEY: 'gsk-test' }, provider: groqFallbackProvider });
+  const f = form({ today: '2026-11-01', vocabulary: 'Arben Kola' });
+  f.append('audio', new File([new Uint8Array([1, 2, 3, 4])], 'task.webm', { type: 'audio/webm' }));
+  const r2 = await e2.handler(post(f));
+  assert.equal(r2.status, 200);
+  const d2 = await r2.json();
+  assert.equal(d2.ok, true);
+  assert.equal(d2.transcript, 'Cakto Arben Kola të dërgojë faturën nesër urgjent');
+  assert.equal(d2.draft.title, 'Dërgo faturën');
+  assert.equal(d2.draft.assignee, 'Arben Kola');
+  assert.equal(d2.draft.due, '2026-11-02');
+  assert.equal(d2.draft.priority, 'Lart');
+  assert.ok(seenUrls.some((u) => u.includes('api.groq.com/openai/v1/audio/transcriptions')));
+  assert.ok(seenUrls.some((u) => u.includes('api.groq.com/openai/v1/chat/completions')));
+});
+
+test('speak: uses gemini-3.8-flash-lite-tts with raw text and zero instruction prefix bleed', async () => {
+  const ok = () => json({ candidates: [{ content: { parts: [{ inlineData: { data: 'QUJD', mimeType: 'audio/pcm;rate=24000' } }] } }] });
+  const phrase = 'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?';
+  const e = endpoint('assistant-speak', { provider: ok });
+  const res = await e.handler(post(JSON.stringify({ text: phrase })));
+  assert.equal(res.status, 200);
+  const call = e.geminiCalls()[0];
+  assert.match(call.url, /gemini-3\.8-flash-lite-tts/);
+  const sent = JSON.parse(call.options.body);
+  assert.equal(sent.contents[0].parts[0].text, phrase, 'raw phrase only so TTS never speaks an instruction prefix');
+});
+

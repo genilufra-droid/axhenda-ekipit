@@ -223,17 +223,49 @@ function element(){
   return {textContent:'',value:'',title:'',classList:{add:c=>classes.add(c),remove:c=>classes.delete(c),contains:c=>classes.has(c)},
     setAttribute(k,v){attrs[k]=v;},getAttribute(k){return attrs[k];}};
 }
-function windowFor(speakImpl){
+function windowFor(speakImpl,name=''){
   const els={};for(const k of ['stage','body','pill','chat','liveField','avatar','mic','mute'])els[k]=element();
   const spoken=[];let stops=0,unlocks=0,resolvers=[];
   const speaker={
     speak:text=>{spoken.push(text);return speakImpl?speakImpl(text):new Promise(r=>resolvers.push(r));},
     stop(){stops++;},unlock(){unlocks++;},
   };
-  const win=Avatar.create({els,speaker,today:()=>'2026-10-29'});
+  const win=Avatar.create({els,speaker,today:()=>'2026-10-29',ownerName:()=>name});
   return {win,els,spoken,resolvers,get stops(){return stops;},get unlocks(){return unlocks;}};
 }
 const draft={title:'Përgatit raportin',assignee:'Arben Kola',due:'2026-10-30',priority:'Lart'};
+
+test('greeting speaks aloud in Albanian with the owner name',async()=>{
+  assert.equal(Avatar.greeting('Besnik Koci'),'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?');
+  assert.equal(Avatar.greeting(''),'Përshëndetje! Çfarë detyre do të shkruajmë?');
+  const w=windowFor(()=>Promise.resolve('server'),'Besnik Koci');
+  const p=w.win.greet();
+  assert.ok(w.els.stage.classList.contains('show'));
+  assert.equal(w.win.state,'speaking');
+  assert.equal(w.els.chat.textContent,'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?');
+  assert.equal(w.spoken[0],'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?');
+  assert.equal(await p,'server');
+  assert.equal(w.win.state,'idle');
+  assert.equal(w.els.pill.textContent,'Kliko mikrofonin për të folur');
+});
+
+test('speaker prefers WAV media element when provided and falls back to AudioContext if WAV fails',async()=>{
+  const a=audio();
+  let wavTried=0;
+  const speaker=Avatar.createSpeaker({
+    getAudioContext:()=>a.ctx,
+    invoke:async()=>({data:{audioBase64:PCM,mimeType:'audio/pcm;rate=24000'}}),
+    playWav:(_bytes,_onEnd,onFail)=>{wavTried++;onFail();return {started:Promise.resolve(false),stop(){}};},
+  });
+  let result=null;
+  speaker.speak('Përshëndetje Besnik Koci!').then(r=>{result=r;});
+  await tick();await tick();await tick();await tick();
+  assert.equal(wavTried,1,'WAV media channel was tried first');
+  assert.equal(a.ctx.resumed,1,'fell back to WebAudio context after WAV failure');
+  a.finish();
+  await tick();
+  assert.equal(result,'server');
+});
 
 test('opening shows the window with a greeting and unlocks audio',()=>{
   const w=windowFor();w.win.open();
@@ -243,6 +275,7 @@ test('opening shows the window with a greeting and unlocks audio',()=>{
 test('listening, live words and thinking drive the status and the avatar',()=>{
   const w=windowFor();w.win.beforeListen();w.win.listening();
   assert.equal(w.win.state,'listening');assert.equal(w.els.pill.textContent,'Po të dëgjoj…');
+  w.win.listeningCountdown(2100);assert.match(w.els.pill.textContent,/2\.1s/);
   assert.ok(w.els.body.classList.contains('listening'));assert.ok(w.els.mic.classList.contains('listening'));
   w.win.heard('Cakto Arben Kola');assert.equal(w.els.liveField.value,'Cakto Arben Kola');
   w.win.thinking();assert.equal(w.win.state,'thinking');assert.equal(w.els.pill.textContent,'Po e përgatis detyrën…');
