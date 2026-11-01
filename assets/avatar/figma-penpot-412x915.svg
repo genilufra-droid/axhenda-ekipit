@@ -1,0 +1,222 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="3236" height="1025" viewBox="0 0 3236 1025" font-family="Roboto, Noto Sans, sans-serif">
+  <defs>
+    <linearGradient id="chatGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="38%" stop-color="#F6F7F8"/>
+      <stop offset="100%" stop-color="#F4F4F4"/>
+    </linearGradient>
+    <clipPath id="headClip"><circle cx="35" cy="32" r="23"/></clipPath>
+    <clipPath id="msgClip"><circle cx="33" cy="604" r="19"/></clipPath>
+  </defs>
+  <rect width="3236" height="1025" fill="#E9EDF0"/>
+  <g id="Artboard-1-Fillimi" transform="translate(44,62)">
+    <text x="4" y="-16" font-size="16" font-weight="700" fill="#18252C">1. Fillimi (412×915)</text>
+    <rect width="412" height="915" rx="24" fill="#FFFFFF"/>
+    <rect width="412" height="64" fill="#FFFFFF"/>
+    <line x1="0" y1="64" x2="412" y2="64" stroke="#ECEFF1" stroke-width="1"/>
+    <image href="assistant-head@2x.png" x="12" y="9" width="46" height="46" clip-path="url(#headClip)"/>
+    <text x="67" y="29" font-size="18" font-weight="700" fill="#18252C">Asistentja e Axhendës</text>
+    <circle cx="71" cy="44" r="4" fill="#2FB344"/>
+    <text x="81" y="48" font-size="13.5" font-weight="400" fill="#4E5B61">Online</text>
+    <image href="icons/volume-on.svg" x="338" y="20" width="22" height="22"/>
+    
+    <image href="icons/close.svg" x="374" y="20" width="22" height="22"/>
+    <rect y="64" width="412" height="494" fill="#FFFFFF"/>
+    <image href="assistant-cutout@2x.png" x="59" y="70" width="293" height="488"/>
+    <rect x="61" y="436" width="290" height="38" rx="19" fill="#D92D2D"/>
+    <text x="206" y="460" text-anchor="middle" font-size="15" font-weight="700" fill="#FFFFFF">Klikoni për të thënë një detyrë</text>
+    <circle cx="206" cy="516" r="32" fill="#D92D2D" opacity="1"/>
+    <image href="icons/mic.svg" x="194" y="504" width="24" height="24"/>
+    <rect y="558" width="412" height="357" fill="url(#chatGrad)"/>
+    <text x="394" y="578" text-anchor="end" font-size="11.5" fill="#8A9498">10:58 PM</text>
+    <image href="assistant-head@2x.png" x="14" y="585" width="38" height="38" clip-path="url(#msgClip)"/>
+    <rect x="62" y="584" width="336" height="86" rx="14" fill="#FFFFFF" />
+    <text x="76" y="610" font-size="15.5" fill="#18252C">Përshëndetje Besnik Koci! Çfarë detyre do </text>
+    <text x="76" y="632" font-size="15.5" fill="#18252C">të shkruajmë?</text>
+    
+    <rect x="14" y="849" width="384" height="52" rx="26" fill="#FFFFFF"/>
+    <text x="32" y="880" font-size="15" fill="#8A9498">Urdhëro, më trego detyrën…</text>
+    <circle cx="372" cy="875" r="22" fill="#D92D2D"/>
+    <image href="icons/send.svg" x="362" y="865" width="20" height="20"/>
+  </g>
+  <g id="Artboard-2-Po-dëgjoj" transform="translate(500,62)">
+    <text x="4" y="-16" font-size="16" font-weight="700" fill="#18252C">2. Po dëgjoj (412×915)</text>
+    <rect width="412" height="915" rx="24" fill="#FFFFFF"/>
+    <rect width="412" height="64" fill="#FFFFFF"/>
+    <line x1="0" y1="64" x2="412" y2="64" stroke="#ECEFF1" stroke-width="1"/>
+    <image href="assistant-head@2x.png" x="12" y="9" width="46" height="46" clip-path="url(#headClip)"/>
+    <text x="67" y="29" font-size="18" font-weight="700" fill="#18252C">Asistentja e Axhendës</text>
+    <circle cx="71" cy="44" r="4" fill="#2FB344"/>
+    <text x="81" y="48" font-size="13.5" font-weight="400" fill="#4E5B61">Online</text>
+    <image href="icons/volume-on.svg" x="302" y="20" width="22" height="22"/>
+    <image href="icons/trash.svg" x="338" y="20" width="22" height="22"/>
+    <image href="icons/close.svg" x="374" y="20" width="22" height="22"/>
+    <rect y="64" width="412" height="494" fill="#FFFFFF"/>
+    <image href="assistant-cutout@2x.png" x="59" y="70" width="293" height="488"/>
+    <rect x="145" y="436" width="122" height="38" rx="19" fill="#D92D2D"/>
+    <text x="206" y="460" text-anchor="middle" font-size="15" font-weight="700" fill="#FFFFFF">Po dëgjoj…</text>
+    <circle cx="206" cy="516" r="32" fill="#D92D2D" opacity="1"/>
+    <image href="icons/mic-off.svg" x="194" y="504" width="24" height="24"/>
+    <rect y="558" width="412" height="357" fill="url(#chatGrad)"/>
+    <text x="394" y="578" text-anchor="end" font-size="11.5" fill="#8A9498">10:58 PM</text>
+    <image href="assistant-head@2x.png" x="14" y="585" width="38" height="38" clip-path="url(#msgClip)"/>
+    <rect x="62" y="584" width="336" height="86" rx="14" fill="#FFFFFF" />
+    <text x="76" y="610" font-size="15.5" fill="#18252C">Fol lirshëm. Ndalon vetë pas 3 sekondash h</text>
+    <text x="76" y="632" font-size="15.5" fill="#18252C">eshtjeje.</text>
+    
+    <rect x="14" y="849" width="384" height="52" rx="26" fill="#FFFFFF"/>
+    <text x="32" y="880" font-size="15" fill="#18252C">Cakto Kledis Dogën të përgatisë pasqyrën…</text>
+    <circle cx="372" cy="875" r="22" fill="#D92D2D"/>
+    <image href="icons/send.svg" x="362" y="865" width="20" height="20"/>
+  </g>
+  <g id="Artboard-3-Po-përgatis" transform="translate(956,62)">
+    <text x="4" y="-16" font-size="16" font-weight="700" fill="#18252C">3. Po përgatis (412×915)</text>
+    <rect width="412" height="915" rx="24" fill="#FFFFFF"/>
+    <rect width="412" height="64" fill="#FFFFFF"/>
+    <line x1="0" y1="64" x2="412" y2="64" stroke="#ECEFF1" stroke-width="1"/>
+    <image href="assistant-head@2x.png" x="12" y="9" width="46" height="46" clip-path="url(#headClip)"/>
+    <text x="67" y="29" font-size="18" font-weight="700" fill="#18252C">Asistentja e Axhendës</text>
+    <circle cx="71" cy="44" r="4" fill="#2FB344"/>
+    <text x="81" y="48" font-size="13.5" font-weight="400" fill="#4E5B61">Online</text>
+    <image href="icons/volume-on.svg" x="302" y="20" width="22" height="22"/>
+    <image href="icons/trash.svg" x="338" y="20" width="22" height="22"/>
+    <image href="icons/close.svg" x="374" y="20" width="22" height="22"/>
+    <rect y="64" width="412" height="494" fill="#FFFFFF"/>
+    <image href="assistant-cutout@2x.png" x="59" y="70" width="293" height="488"/>
+    <rect x="97" y="436" width="218" height="38" rx="19" fill="#D92D2D"/>
+    <text x="206" y="460" text-anchor="middle" font-size="15" font-weight="700" fill="#FFFFFF">Po e përgatis detyrën…</text>
+    <circle cx="206" cy="516" r="32" fill="#A82424" opacity="0.68"/>
+    <image href="icons/mic.svg" x="194" y="504" width="24" height="24"/>
+    <rect y="558" width="412" height="357" fill="url(#chatGrad)"/>
+    <text x="394" y="578" text-anchor="end" font-size="11.5" fill="#8A9498">10:58 PM</text>
+    <image href="assistant-head@2x.png" x="14" y="585" width="38" height="38" clip-path="url(#msgClip)"/>
+    <rect x="62" y="584" width="336" height="86" rx="14" fill="#FFFFFF" />
+    <text x="76" y="610" font-size="15.5" fill="#18252C">Po e kuptoj çfarë the.</text>
+    <text x="76" y="632" font-size="15.5" fill="#18252C"></text>
+    
+    <rect x="14" y="849" width="384" height="52" rx="26" fill="#FFFFFF"/>
+    <text x="32" y="880" font-size="15" fill="#18252C">Cakto Kledis Dogën të përgatisë pasqyrën…</text>
+    <circle cx="372" cy="875" r="22" fill="#D92D2D"/>
+    <image href="icons/send.svg" x="362" y="865" width="20" height="20"/>
+  </g>
+  <g id="Artboard-4-Po-flet" transform="translate(1412,62)">
+    <text x="4" y="-16" font-size="16" font-weight="700" fill="#18252C">4. Po flet (412×915)</text>
+    <rect width="412" height="915" rx="24" fill="#FFFFFF"/>
+    <rect width="412" height="64" fill="#FFFFFF"/>
+    <line x1="0" y1="64" x2="412" y2="64" stroke="#ECEFF1" stroke-width="1"/>
+    <image href="assistant-head@2x.png" x="12" y="9" width="46" height="46" clip-path="url(#headClip)"/>
+    <text x="67" y="29" font-size="18" font-weight="700" fill="#18252C">Asistentja e Axhendës</text>
+    <circle cx="71" cy="44" r="4" fill="#2FB344"/>
+    <text x="81" y="48" font-size="13.5" font-weight="400" fill="#4E5B61">Online</text>
+    <image href="icons/volume-on.svg" x="302" y="20" width="22" height="22"/>
+    <image href="icons/trash.svg" x="338" y="20" width="22" height="22"/>
+    <image href="icons/close.svg" x="374" y="20" width="22" height="22"/>
+    <rect y="64" width="412" height="494" fill="#FFFFFF"/>
+    <image href="assistant-cutout@2x.png" x="59" y="70" width="293" height="488"/>
+    <rect x="148" y="436" width="116" height="38" rx="19" fill="#D92D2D"/>
+    <text x="206" y="460" text-anchor="middle" font-size="15" font-weight="700" fill="#FFFFFF">Po flas</text>
+    <circle cx="206" cy="516" r="32" fill="#D92D2D" opacity="1"/>
+    <image href="icons/mic.svg" x="194" y="504" width="24" height="24"/>
+    <rect y="558" width="412" height="357" fill="url(#chatGrad)"/>
+    <text x="394" y="578" text-anchor="end" font-size="11.5" fill="#8A9498">10:59 PM</text>
+    <image href="assistant-head@2x.png" x="14" y="585" width="38" height="38" clip-path="url(#msgClip)"/>
+    <rect x="62" y="584" width="336" height="86" rx="14" fill="#FFFFFF" />
+    <text x="76" y="610" font-size="15.5" fill="#18252C">E përgatita detyrën: Përgatit pasqyrën e s</text>
+    <text x="76" y="632" font-size="15.5" fill="#18252C">hpenzimeve. Për Kledis Doga. Afati: nesër.</text>
+    <rect x="133" y="801" width="146" height="38" rx="19" fill="#FFFFFF" stroke="#D9DFE2"/><text x="206" y="825" text-anchor="middle" font-size="14" font-weight="700" fill="#D92D2D">Ndalo audion</text>
+    <rect x="14" y="849" width="384" height="52" rx="26" fill="#FFFFFF"/>
+    <text x="32" y="880" font-size="15" fill="#8A9498">Urdhëro, më trego detyrën…</text>
+    <circle cx="372" cy="875" r="22" fill="#D92D2D"/>
+    <image href="icons/send.svg" x="362" y="865" width="20" height="20"/>
+  </g>
+  <g id="Artboard-5-Heshtje" transform="translate(1868,62)">
+    <text x="4" y="-16" font-size="16" font-weight="700" fill="#18252C">5. Heshtje (412×915)</text>
+    <rect width="412" height="915" rx="24" fill="#FFFFFF"/>
+    <rect width="412" height="64" fill="#FFFFFF"/>
+    <line x1="0" y1="64" x2="412" y2="64" stroke="#ECEFF1" stroke-width="1"/>
+    <image href="assistant-head@2x.png" x="12" y="9" width="46" height="46" clip-path="url(#headClip)"/>
+    <text x="67" y="29" font-size="18" font-weight="700" fill="#18252C">Asistentja e Axhendës</text>
+    <circle cx="71" cy="44" r="4" fill="#2FB344"/>
+    <text x="81" y="48" font-size="13.5" font-weight="400" fill="#4E5B61">Online</text>
+    <image href="icons/volume-off.svg" x="302" y="20" width="22" height="22"/>
+    <image href="icons/trash.svg" x="338" y="20" width="22" height="22"/>
+    <image href="icons/close.svg" x="374" y="20" width="22" height="22"/>
+    <rect y="64" width="412" height="494" fill="#FFFFFF"/>
+    <image href="assistant-cutout@2x.png" x="59" y="70" width="293" height="488"/>
+    <rect x="61" y="436" width="290" height="38" rx="19" fill="#D92D2D"/>
+    <text x="206" y="460" text-anchor="middle" font-size="15" font-weight="700" fill="#FFFFFF">Klikoni për të thënë një detyrë</text>
+    <circle cx="206" cy="516" r="32" fill="#D92D2D" opacity="1"/>
+    <image href="icons/mic.svg" x="194" y="504" width="24" height="24"/>
+    <rect y="558" width="412" height="357" fill="url(#chatGrad)"/>
+    <text x="394" y="578" text-anchor="end" font-size="11.5" fill="#8A9498">10:59 PM</text>
+    <image href="assistant-head@2x.png" x="14" y="585" width="38" height="38" clip-path="url(#msgClip)"/>
+    <rect x="62" y="584" width="336" height="86" rx="14" fill="#FFFFFF" />
+    <text x="76" y="610" font-size="15.5" fill="#18252C">Zëri është ndalur. Mund të vazhdosh me mik</text>
+    <text x="76" y="632" font-size="15.5" fill="#18252C">rofon ose me shkrim.</text>
+    
+    <rect x="14" y="849" width="384" height="52" rx="26" fill="#FFFFFF"/>
+    <text x="32" y="880" font-size="15" fill="#8A9498">Urdhëro, më trego detyrën…</text>
+    <circle cx="372" cy="875" r="22" fill="#D92D2D"/>
+    <image href="icons/send.svg" x="362" y="865" width="20" height="20"/>
+  </g>
+  <g id="Artboard-6-Gabim" transform="translate(2324,62)">
+    <text x="4" y="-16" font-size="16" font-weight="700" fill="#18252C">6. Gabim (412×915)</text>
+    <rect width="412" height="915" rx="24" fill="#FFFFFF"/>
+    <rect width="412" height="64" fill="#FFFFFF"/>
+    <line x1="0" y1="64" x2="412" y2="64" stroke="#ECEFF1" stroke-width="1"/>
+    <image href="assistant-head@2x.png" x="12" y="9" width="46" height="46" clip-path="url(#headClip)"/>
+    <text x="67" y="29" font-size="18" font-weight="700" fill="#18252C">Asistentja e Axhendës</text>
+    <circle cx="71" cy="44" r="4" fill="#2FB344"/>
+    <text x="81" y="48" font-size="13.5" font-weight="400" fill="#4E5B61">Online</text>
+    <image href="icons/volume-on.svg" x="302" y="20" width="22" height="22"/>
+    <image href="icons/trash.svg" x="338" y="20" width="22" height="22"/>
+    <image href="icons/close.svg" x="374" y="20" width="22" height="22"/>
+    <rect y="64" width="412" height="494" fill="#FFFFFF"/>
+    <image href="assistant-cutout@2x.png" x="59" y="70" width="293" height="488"/>
+    <rect x="61" y="436" width="290" height="38" rx="19" fill="#D92D2D"/>
+    <text x="206" y="460" text-anchor="middle" font-size="15" font-weight="700" fill="#FFFFFF">Klikoni për të thënë një detyrë</text>
+    <circle cx="206" cy="516" r="32" fill="#D92D2D" opacity="1"/>
+    <image href="icons/mic.svg" x="194" y="504" width="24" height="24"/>
+    <rect y="558" width="412" height="357" fill="url(#chatGrad)"/>
+    <text x="394" y="578" text-anchor="end" font-size="11.5" fill="#8A9498">11:00 PM</text>
+    <image href="assistant-head@2x.png" x="14" y="585" width="38" height="38" clip-path="url(#msgClip)"/>
+    <rect x="62" y="584" width="336" height="86" rx="14" fill="#FFF8F8" stroke="#D92D2D" stroke-width="1.2"/>
+    <text x="76" y="610" font-size="15.5" fill="#18252C">Nuk u kap zë i qartë. Kontrollo mikrofonin</text>
+    <text x="76" y="632" font-size="15.5" fill="#18252C"> dhe provo përsëri.</text>
+    
+    <rect x="14" y="849" width="384" height="52" rx="26" fill="#FFFFFF"/>
+    <text x="32" y="880" font-size="15" fill="#8A9498">Urdhëro, më trego detyrën…</text>
+    <circle cx="372" cy="875" r="22" fill="#D92D2D"/>
+    <image href="icons/send.svg" x="362" y="865" width="20" height="20"/>
+  </g>
+  <g id="Artboard-7-Faqja-bosh" transform="translate(2780,62)">
+    <text x="4" y="-16" font-size="16" font-weight="700" fill="#18252C">7. Faqja bosh (412×915)</text>
+    <rect width="412" height="915" rx="24" fill="#FFFFFF"/>
+    <rect width="412" height="64" fill="#FFFFFF"/>
+    <line x1="0" y1="64" x2="412" y2="64" stroke="#ECEFF1" stroke-width="1"/>
+    <image href="assistant-head@2x.png" x="12" y="9" width="46" height="46" clip-path="url(#headClip)"/>
+    <text x="67" y="29" font-size="18" font-weight="700" fill="#18252C">Asistentja e Axhendës</text>
+    <circle cx="71" cy="44" r="4" fill="#2FB344"/>
+    <text x="81" y="48" font-size="13.5" font-weight="400" fill="#4E5B61">Online</text>
+    <image href="icons/volume-on.svg" x="338" y="20" width="22" height="22"/>
+    
+    <image href="icons/close.svg" x="374" y="20" width="22" height="22"/>
+    <rect y="64" width="412" height="494" fill="#FFFFFF"/>
+    <image href="assistant-cutout@2x.png" x="59" y="70" width="293" height="488"/>
+    <rect x="61" y="436" width="290" height="38" rx="19" fill="#D92D2D"/>
+    <text x="206" y="460" text-anchor="middle" font-size="15" font-weight="700" fill="#FFFFFF">Klikoni për të thënë një detyrë</text>
+    <circle cx="206" cy="516" r="32" fill="#D92D2D" opacity="1"/>
+    <image href="icons/mic.svg" x="194" y="504" width="24" height="24"/>
+    <rect y="558" width="412" height="357" fill="url(#chatGrad)"/>
+    <text x="394" y="578" text-anchor="end" font-size="11.5" fill="#8A9498">11:00 PM</text>
+    <image href="assistant-head@2x.png" x="14" y="585" width="38" height="38" clip-path="url(#msgClip)"/>
+    <rect x="62" y="584" width="336" height="86" rx="14" fill="#FFFFFF" />
+    <text x="76" y="610" font-size="15.5" fill="#18252C">Përshëndetje! Çfarë detyre do të shkruajmë</text>
+    <text x="76" y="632" font-size="15.5" fill="#18252C">?</text>
+    
+    <rect x="14" y="849" width="384" height="52" rx="26" fill="#FFFFFF"/>
+    <text x="32" y="880" font-size="15" fill="#8A9498">Urdhëro, më trego detyrën…</text>
+    <circle cx="372" cy="875" r="22" fill="#D92D2D"/>
+    <image href="icons/send.svg" x="362" y="865" width="20" height="20"/>
+  </g>
+</svg>

@@ -359,20 +359,30 @@
   /* ---------- window controller ---------- */
   const TEXT = {
     greeting: 'Përshëndetje! Çfarë detyre do të shkruajmë?',
-    greetingPill: 'Po ju përshëndes…',
-    ready: 'Kliko mikrofonin për të folur',
-    opening: 'Po hap mikrofonin… prit një çast',
+    greetingPill: 'Po flas',
+    speaking: 'Po flas',
+    ready: 'Klikoni për të thënë një detyrë',
+    opening: 'Po hap mikrofonin…',
     openingHint: 'Lejo mikrofonin nëse të kërkohet.',
-    listening: 'Po të dëgjoj…',
+    listening: 'Po dëgjoj…',
     listeningHint: 'Fol lirshëm. Ndalon vetë pas 3 sekondash heshtjeje.',
     thinking: 'Po e përgatis detyrën…',
-    thinkingHint: 'Po nxjerr detyrën nga fjalët e tua…',
+    thinkingHint: 'Po e kuptoj çfarë the.',
     review: 'Kontrollo fushat te dritarja',
     reminder: 'Punonjësi NUK do të njoftohet. Kliko katrorin “Njofto punonjësit” nëse do ta njoftosh, ose shtyp “Konfirmo dhe dërgo” sërish për ta ruajtur pa njoftim.',
     savedNotified: 'Detyra u ruajt dhe punonjësit e zgjedhur u njoftuan.',
     saved: 'Detyra u ruajt. Asnjë njoftim nuk u dërgua.',
-    discarded: 'Asgjë nuk u ruajt. Kliko mikrofonin për një detyrë tjetër.',
+    discarded: 'Asgjë nuk u ruajt. Klikoni mikrofonin për një detyrë tjetër.',
   };
+
+  function formatClock(date) {
+    const d = date instanceof Date && !isNaN(date) ? date : new Date();
+    let h = d.getHours();
+    const m = String(d.getMinutes()).padStart(2, '0');
+    const ap = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return h + ':' + m + ' ' + ap;
+  }
 
   function create(o) {
     o = o || {};
@@ -380,43 +390,59 @@
     const speaker = o.speaker || { speak: () => Promise.resolve('text'), stop() {}, unlock() {} };
     const today = o.today || (() => '');
     const ownerName = o.ownerName || (() => '');
-    let state = 'closed', muted = false, speechToken = 0;
+    const clockNow = o.clock || (() => formatClock(new Date()));
+    let state = 'closed', muted = false, speechToken = 0, hasHistory = false, afterSpeakPill = TEXT.ready;
 
     const setText = (el, text) => { if (el) el.textContent = text; };
     const toggle = (el, name, on) => { if (el && el.classList) el.classList[on ? 'add' : 'remove'](name); };
+    const markHistory = on => {
+      hasHistory = !!on;
+      toggle(els.stage, 'has-history', hasHistory);
+      toggle(els.clearBtn, 'show', hasHistory);
+    };
 
-    function paint(next, pill, chat) {
+    function paint(next, pill, chat, isError) {
       state = next;
       if (pill != null) setText(els.pill, pill);
-      if (chat != null) setText(els.chat, chat);
+      if (chat != null) {
+        setText(els.chat, chat);
+        setText(els.chatTime, clockNow());
+        toggle(els.bubble, 'error', !!isError);
+      }
       toggle(els.body, 'listening', next === 'listening');
       toggle(els.body, 'talking', next === 'speaking');
+      toggle(els.body, 'thinking', next === 'thinking');
       toggle(els.avatar, 'listening', next === 'listening');
       toggle(els.mic, 'listening', next === 'listening');
+      toggle(els.mic, 'disabled', next === 'thinking');
+      if (els.mic && 'disabled' in els.mic) els.mic.disabled = next === 'thinking';
+      toggle(els.stopAudio, 'show', next === 'speaking');
       if (els.stage && els.stage.setAttribute) els.stage.setAttribute('data-state', next);
     }
 
     function stopSpeaking() {
       speechToken++;
       try { speaker.stop(); } catch (e) { /* nothing was playing */ }
-      if (state === 'speaking') paint('idle', TEXT.ready, null);
+      if (state === 'speaking') paint('idle', afterSpeakPill || TEXT.ready, null);
     }
 
     function say(text, options) {
       const opts = options || {};
       const mine = ++speechToken;
       try { speaker.stop(); } catch (e) { /* nothing was playing */ }
-      const pill = opts.pill != null ? opts.pill : TEXT.review;
+      const pill = opts.pill != null ? opts.pill : TEXT.speaking;
+      const after = opts.after != null ? opts.after : TEXT.ready;
+      afterSpeakPill = after;
       if (muted) {
-        paint('idle', opts.after != null ? opts.after : pill, text);
+        paint('idle', after, text, false);
         return Promise.resolve('muted');
       }
-      paint('speaking', pill, text);
+      paint('speaking', pill, text, false);
       return Promise.resolve(speaker.speak(text)).then(result => {
-        if (mine === speechToken && state === 'speaking') paint('idle', opts.after != null ? opts.after : pill, null);
+        if (mine === speechToken && state === 'speaking') paint('idle', after, null);
         return result;
       }, () => {
-        if (mine === speechToken && state === 'speaking') paint('idle', opts.after != null ? opts.after : pill, null);
+        if (mine === speechToken && state === 'speaking') paint('idle', after, null);
         return 'failed';
       });
     }
@@ -424,6 +450,7 @@
     const api = {
       get state() { return state; },
       get muted() { return muted; },
+      get hasHistory() { return hasHistory; },
       isOpen() { return state !== 'closed'; },
 
       unlock() {
@@ -434,7 +461,8 @@
         toggle(els.stage, 'show', true);
         try { speaker.unlock(); } catch (e) { /* audio stays locked */ }
         if (wasClosed) {
-          paint('idle', TEXT.ready, greeting(ownerName()));
+          markHistory(false);
+          paint('idle', TEXT.ready, greeting(ownerName()), false);
           if (els.liveField) els.liveField.value = '';
         }
       },
@@ -442,15 +470,31 @@
       greet(customName) {
         toggle(els.stage, 'show', true);
         try { speaker.unlock(); } catch (e) { /* audio stays locked */ }
+        markHistory(false);
         if (els.liveField) els.liveField.value = '';
         const hi = greeting(customName != null ? customName : ownerName());
         return say(hi, { pill: TEXT.greetingPill, after: TEXT.ready });
+      },
+      /* Clears conversation back to initial greeting ("Faqja bosh" / trash action). */
+      clear() {
+        if (state === 'closed') return;
+        stopSpeaking();
+        markHistory(false);
+        if (els.liveField) els.liveField.value = '';
+        paint('idle', TEXT.ready, greeting(ownerName()), false);
+      },
+      /* Replays the current bubble text aloud ("dëgjo" button below bubble). */
+      replay() {
+        if (state === 'closed' || state === 'listening' || state === 'thinking') return Promise.resolve('busy');
+        const current = els.chat && els.chat.textContent ? String(els.chat.textContent).trim() : '';
+        if (!current) return Promise.resolve('empty');
+        return say(current, { pill: TEXT.speaking, after: afterSpeakPill || TEXT.ready });
       },
       close() {
         speechToken++;
         try { speaker.stop(); } catch (e) { /* nothing was playing */ }
         toggle(els.stage, 'show', false);
-        paint('closed', null, null);
+        paint('closed', null, null, false);
         toggle(els.body, 'talking', false);
       },
       /* Escape: true when the window itself handled it (closing it). While the
@@ -465,55 +509,85 @@
       beforeListen() {                                      // the microphone must never hear the avatar
         api.open(); stopSpeaking();
         const who = clip(ownerName(), 60);
-        paint('idle', TEXT.opening, who ? 'Përshëndetje ' + who + '! ' + TEXT.openingHint : TEXT.openingHint);
+        paint('idle', TEXT.opening, who ? 'Përshëndetje ' + who + '! ' + TEXT.openingHint : TEXT.openingHint, false);
       },
       listening() {
         if (state === 'closed') return;
         stopSpeaking();
+        markHistory(true);
         if (els.liveField) els.liveField.value = '';
-        paint('listening', TEXT.listening, TEXT.listeningHint);
+        paint('listening', TEXT.listening, TEXT.listeningHint, false);
       },
       listeningCountdown(msLeft) {
         if (state !== 'listening') return;
         if (msLeft != null && msLeft > 0 && msLeft < 2800) {
-          setText(els.pill, 'Po të dëgjoj… ndalon pas ' + (msLeft / 1000).toFixed(1) + 's');
+          setText(els.pill, 'Po dëgjoj… ndalon pas ' + (msLeft / 1000).toFixed(1) + 's');
         } else {
           setText(els.pill, TEXT.listening);
         }
       },
       heard(text) {
         if (els.liveField && state !== 'closed') {
+          if (text) markHistory(true);
           els.liveField.value = String(text || '');
           try { els.liveField.scrollLeft = els.liveField.scrollWidth; } catch (e) { /* ignore */ }
         }
       },
-      thinking() { if (state !== 'closed') paint('thinking', TEXT.thinking, TEXT.thinkingHint); },
+      thinking() {
+        if (state !== 'closed') {
+          markHistory(true);
+          paint('thinking', TEXT.thinking, TEXT.thinkingHint, false);
+        }
+      },
 
       draft(draft) {
         if (state === 'closed') return Promise.resolve('closed');
-        return say(summarize(draft, { today: today() }));
+        markHistory(true);
+        return say(summarize(draft, { today: today() }), { pill: TEXT.speaking, after: TEXT.review });
       },
-      reminder() { return state === 'closed' ? Promise.resolve('closed') : say(TEXT.reminder, { pill: 'Njoftimi është zgjedhja jote' }); },
+      reminder() {
+        if (state === 'closed') return Promise.resolve('closed');
+        markHistory(true);
+        return say(TEXT.reminder, { pill: TEXT.speaking, after: TEXT.review });
+      },
       saved(info) {
         if (state === 'closed') return Promise.resolve('closed');
+        markHistory(true);
         if (els.liveField) els.liveField.value = '';
         const notified = !!(info && info.notified);
-        return say(notified ? TEXT.savedNotified : TEXT.saved, { pill: 'U ruajt', after: TEXT.ready });
+        return say(notified ? TEXT.savedNotified : TEXT.saved, { pill: TEXT.speaking, after: TEXT.ready });
       },
-      discarded() { if (state !== 'closed') { stopSpeaking(); paint('idle', TEXT.ready, TEXT.discarded); } },
+      discarded() {
+        if (state !== 'closed') {
+          stopSpeaking();
+          markHistory(true);
+          afterSpeakPill = TEXT.ready;
+          paint('idle', TEXT.ready, TEXT.discarded, false);
+        }
+      },
       /* Dictation ended without a proposal (cancelled, no voice, failure). */
       idle(message) {
         if (state === 'closed') return;
         stopSpeaking();
-        paint('idle', TEXT.ready, message || greeting(ownerName()));
+        afterSpeakPill = TEXT.ready;
+        if (message) markHistory(true);
+        paint('idle', TEXT.ready, message || greeting(ownerName()), !!message);
       },
 
       toggleMute() {
         muted = !muted;
         if (muted) stopSpeaking();
+        toggle(els.stage, 'muted', muted);
         if (els.mute) {
-          els.mute.textContent = muted ? '🔇' : '🔊';
-          if (els.mute.setAttribute) { els.mute.setAttribute('aria-pressed', muted ? 'true' : 'false'); els.mute.title = muted ? 'Ndiz zërin' : 'Hesht zërin'; }
+          toggle(els.mute, 'muted', muted);
+          if (!els.mute.dataset || !els.mute.dataset.svgIcon) {
+            els.mute.textContent = muted ? '🔇' : '🔊';
+          }
+          if (els.mute.setAttribute) {
+            els.mute.setAttribute('aria-pressed', muted ? 'true' : 'false');
+            els.mute.setAttribute('aria-label', muted ? 'Ndiz zërin' : 'Hesht zërin');
+            els.mute.title = muted ? 'Ndiz zërin' : 'Hesht zërin';
+          }
         }
         return muted;
       },
@@ -522,7 +596,7 @@
     return api;
   }
 
-  const api = { create, createSpeaker, summarize, greeting, speakDate, pcmToFloat32, pcmToWav, TEXT };
+  const api = { create, createSpeaker, summarize, greeting, speakDate, pcmToFloat32, pcmToWav, formatClock, TEXT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AvatarAssistant = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

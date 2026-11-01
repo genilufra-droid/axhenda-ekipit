@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Asistentja e Axhendës — Dizajni, Gjendjet (360×800 &amp; 412×915) dhe Prototipi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --red: #D92D2D;
+    --red-dark: #AD2222;
+    --white: #FFFFFF;
+    --bg-grey: #F4F4F4;
+    --txt: #18252C;
+    --muted: #8A9498;
+    --sub-dark: #4E5B61;
+    --online: #2FB344;
+    --frame-w: 360px;
+    --frame-h: 800px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #EAEEF1;
+    color: var(--txt);
+    font-family: Roboto, "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Top Design Showcase Bar */
+  .doc-nav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid #DCE2E6;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .doc-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .doc-brand img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 2px 8px rgba(24, 37, 44, 0.12);
+  }
+  .doc-brand h1 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--txt);
+  }
+  .doc-brand p {
+    margin: 2px 0 0;
+    font-size: 12.5px;
+    color: var(--sub-dark);
+  }
+  .doc-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .seg {
+    display: inline-flex;
+    background: #F0F3F5;
+    padding: 3px;
+    border-radius: 999px;
+    gap: 2px;
+  }
+  .seg button, .doc-link {
+    border: 0;
+    background: transparent;
+    color: var(--sub-dark);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 7px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color 0.15s, color 0.15s;
+  }
+  .seg button.active {
+    background: var(--red);
+    color: var(--white);
+    box-shadow: 0 3px 10px rgba(217, 45, 45, 0.25);
+  }
+  .doc-link {
+    background: var(--txt);
+    color: var(--white);
+  }
+
+  .container {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 28px 20px 64px;
+  }
+  .section-head {
+    margin: 32px 0 18px;
+  }
+  .section-head:first-child {
+    margin-top: 4px;
+  }
+  .section-head h2 {
+    margin: 0 0 6px;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--txt);
+  }
+  .section-head p {
+    margin: 0;
+    font-size: 14.5px;
+    color: var(--sub-dark);
+    max-width: 820px;
+    line-height: 1.5;
+  }
+
+  /* Interactive Prototype Hero Layout */
+  .proto-grid {
+    display: grid;
+    grid-template-columns: auto minmax(280px, 460px);
+    gap: 28px;
+    align-items: start;
+    justify-content: center;
+    background: #F7F9FA;
+    border-radius: 24px;
+    padding: 28px;
+    box-shadow: 0 8px 28px rgba(24, 37, 44, 0.06);
+  }
+  @media (max-width: 900px) {
+    .proto-grid {
+      grid-template-columns: 1fr;
+      justify-items: center;
+      padding: 18px 12px;
+    }
+  }
+  .proto-panel {
+    background: var(--white);
+    border-radius: 18px;
+    padding: 20px;
+    box-shadow: 0 4px 16px rgba(24, 37, 44, 0.07);
+    width: 100%;
+  }
+  .proto-panel h3 {
+    margin: 0 0 10px;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .state-pills {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .state-pills button {
+    border: 1px solid #E1E6E9;
+    background: #FAFBFB;
+    color: var(--txt);
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+    min-height: 44px;
+    transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+  }
+  .state-pills button small {
+    display: block;
+    font-weight: 400;
+    font-size: 11.5px;
+    color: var(--sub-dark);
+    margin-top: 2px;
+  }
+  .state-pills button.active {
+    border-color: var(--red);
+    background: #FFF5F5;
+    color: var(--red);
+  }
+  .proto-note {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--sub-dark);
+    background: #F4F6F8;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin: 0;
+  }
+
+  /* =========================================================
+     EXACT MOBILE PORTRAIT ARTBOARD (360×800 or 412×915)
+     ========================================================= */
+  .phone-frame {
+    width: var(--frame-w);
+    height: var(--frame-h);
+    background: var(--white);
+    border-radius: 28px;
+    box-shadow: 0 16px 40px rgba(24, 37, 44, 0.14), 0 0 0 1px rgba(24, 37, 44, 0.08);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  /* 1. Koka (~64px, sfond i bardhë) */
+  .av-head {
+    height: 64px;
+    min-height: 64px;
+    background: var(--white);
+    padding: 0 12px 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 2px 12px rgba(24, 37, 44, 0.05);
+    z-index: 4;
+    flex-shrink: 0;
+  }
+  .av-head-photo {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    object-fit: cover;
+    object-position: center 18%;
+    flex-shrink: 0;
+    box-shadow: 0 2px 10px rgba(24, 37, 44, 0.09);
+  }
+  .av-head-meta {
+    min-width: 0;
+    flex: 1;
+  }
+  .av-head-name {
+    font-size: 16.5px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--txt);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .av-head-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--sub-dark);
+    margin-top: 2px;
+    line-height: 1.2;
+  }
+  .av-head-status i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--online);
+    display: inline-block;
+  }
+  .av-head-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+  .av-icon-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    margin-left: -4px;
+    border: 0;
+    background: transparent;
+    color: var(--txt);
+    border-radius: 50%;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+  }
+  .av-icon-btn:hover {
+    background: var(--bg-grey);
+  }
+  .av-icon-btn svg {
+    width: 23px;
+    height: 23px;
+    display: block;
+  }
+  .av-icon-btn:focus-visible,
+  .av-mic-btn:focus-visible,
+  .av-stop-btn:focus-visible,
+  .av-send-btn:focus-visible,
+  .av-bubble-tools button:focus-visible {
+    outline: 2.5px solid var(--red);
+    outline-offset: 2px;
+  }
+  .av-vol-off { display: none; }
+  .phone-frame[data-muted="true"] .av-vol-on { display: none; }
+  .phone-frame[data-muted="true"] .av-vol-off { display: block; color: var(--red); }
+  .phone-frame[data-state="speaking"]:not([data-muted="true"]) .av-vol-wave {
+    animation: avVolWave 0.85s ease-in-out infinite;
+  }
+  @keyframes avVolWave {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+  }
+  .av-trash-btn { display: none; }
+  .phone-frame[data-history="true"] .av-trash-btn { display: inline-grid; }
+
+  /* 2. Skena (~58% e lartësisë, sfond i bardhë, figura në këmbë deri te gjunjët) */
+  .av-scene {
+    position: relative;
+    flex: 58 1 0%;
+    min-height: 0;
+    background: var(--white);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 6px 14px 0;
+    overflow: hidden;
+  }
+  .av-figure-wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .av-figure-wrap::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 46px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, #FFFFFF 94%);
+    z-index: 2;
+  }
+  .av-figure-stack {
+    position: relative;
+    height: 100%;
+    max-height: 100%;
+    aspect-ratio: 540 / 899;
+    max-width: 96%;
+    filter: drop-shadow(0 10px 18px rgba(24, 37, 44, 0.09));
+    animation: avIdle 5.4s ease-in-out infinite;
+    transform-origin: center bottom;
+  }
+  @keyframes avIdle {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-2px) rotate(0.28deg); }
+  }
+  .av-figure-stack img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center bottom;
+    display: block;
+    user-select: none;
+  }
+  .av-figure-stack .av-layer {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+  }
+  .av-figure-stack .av-blink {
+    animation: avBlink 5.2s infinite;
+  }
+  @keyframes avBlink {
+    0%, 93%, 98%, 100% { opacity: 0; }
+    95%, 96.2% { opacity: 1; }
+  }
+  .phone-frame[data-state="speaking"] .av-figure-stack {
+    animation: avTalk 1.05s ease-in-out infinite;
+  }
+  .phone-frame[data-state="speaking"] .av-blink {
+    animation: none;
+    opacity: 0;
+  }
+  .phone-frame[data-state="speaking"] .av-speak {
+    animation: avLips 0.34s ease-in-out infinite alternate;
+  }
+  @keyframes avTalk {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-2.5px) scale(1.008); }
+  }
+  @keyframes avLips {
+    0% { opacity: 0.12; }
+    45% { opacity: 0.95; }
+    100% { opacity: 0.35; }
+  }
+
+  /* Kapsula e kuqe + Butoni rrethor 64px mbi figurë te fundi i skenës */
+  .av-overlay-controls {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 10px;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .av-capsule-row {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    max-width: 100%;
+  }
+  .av-capsule {
+    background: var(--red);
+    color: var(--white);
+    border-radius: 999px;
+    padding: 9px 20px;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.25;
+    box-shadow: 0 6px 16px rgba(217, 45, 45, 0.25);
+    text-align: center;
+  }
+  .av-sound-bars {
+    display: none;
+    align-items: center;
+    gap: 3px;
+    height: 18px;
+  }
+  .phone-frame[data-state="speaking"] .av-sound-bars {
+    display: inline-flex;
+  }
+  .av-sound-bars i {
+    width: 3.5px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--red);
+    animation: avEq 0.62s ease-in-out infinite;
+  }
+  .av-sound-bars i:nth-child(2) { animation-delay: 0.16s; height: 14px; }
+  .av-sound-bars i:nth-child(3) { animation-delay: 0.32s; height: 9px; }
+  @keyframes avEq {
+    0%, 100% { height: 5px; }
+    50% { height: 18px; }
+  }
+
+  .av-mic-btn {
+    width: 64px;
+    height: 64px;
+    min-width: 64px;
+    min-height: 64px;
+    border-radius: 50%;
+    border: 0;
+    background: var(--red);
+    color: var(--white);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    box-shadow: 0 8px 18px rgba(217, 45, 45, 0.30);
+    transition: background-color 0.15s, transform 0.15s, opacity 0.15s;
+  }
+  .av-mic-btn svg {
+    width: 24px;
+    height: 24px;
+    display: block;
+  }
+  .av-mic-off { display: none; }
+  .phone-frame[data-state="listening"] .av-mic-on { display: none; }
+  .phone-frame[data-state="listening"] .av-mic-off { display: block; }
+  .phone-frame[data-state="listening"] .av-mic-btn {
+    animation: avMicPulse 0.95s ease-in-out infinite alternate;
+    box-shadow: 0 8px 22px rgba(217, 45, 45, 0.38), 0 0 0 6px rgba(217, 45, 45, 0.14);
+  }
+  @keyframes avMicPulse {
+    from { transform: scale(1); }
+    to { transform: scale(1.09); }
+  }
+  .av-mic-btn:active {
+    background: var(--red-dark);
+    transform: scale(0.96);
+  }
+  .phone-frame[data-state="thinking"] .av-mic-btn,
+  .av-mic-btn:disabled {
+    background: #A82424;
+    opacity: 0.68;
+    cursor: not-allowed;
+    box-shadow: 0 4px 10px rgba(24, 37, 44, 0.12);
+    animation: none;
+  }
+
+  /* 3. Zona e bisedës (~42%, gradient i bardhë në #F4F4F4 me teksturë të lehtë) */
+  .av-chat {
+    flex: 42 1 0%;
+    min-height: 0;
+    padding: 10px 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background-color: var(--bg-grey);
+    background-image:
+      radial-gradient(rgba(24, 37, 44, 0.035) 1px, transparent 1px),
+      linear-gradient(180deg, #FFFFFF 0%, #F6F7F8 36%, #F4F4F4 100%);
+    background-size: 14px 14px, 100% 100%;
+    overflow: hidden;
+  }
+  .av-chat-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 2px 2px 4px;
+  }
+  .av-time {
+    font-size: 11.5px;
+    color: var(--muted);
+    text-align: right;
+    padding-right: 4px;
+    line-height: 1.2;
+  }
+  .av-msg-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .av-msg-photo {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    object-fit: cover;
+    object-position: center 18%;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(24, 37, 44, 0.09);
+  }
+  .av-msg-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .av-bubble {
+    background: var(--white);
+    border-radius: 14px;
+    padding: 12px 15px;
+    box-shadow: 0 4px 14px rgba(24, 37, 44, 0.08);
+    color: var(--txt);
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 1.44;
+  }
+  .phone-frame[data-error="true"] .av-bubble {
+    background: #FFF8F8;
+    box-shadow: 0 4px 14px rgba(217, 45, 45, 0.10), inset 3px 0 0 var(--red);
+  }
+  .av-bubble-tools {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: -4px 0 -4px -8px;
+  }
+  .av-bubble-tools button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    border-radius: 50%;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+    cursor: pointer;
+  }
+  .av-bubble-tools button:hover,
+  .av-bubble-tools button[aria-pressed="true"] {
+    color: var(--red);
+  }
+  .av-bubble-tools svg {
+    width: 17px;
+    height: 17px;
+    display: block;
+  }
+
+  /* Butoni "Ndalo audion" */
+  .av-stop-btn {
+    align-self: center;
+    display: none;
+    align-items: center;
+    gap: 7px;
+    background: var(--white);
+    border: 1px solid #D9DFE2;
+    border-radius: 999px;
+    padding: 8px 18px;
+    min-height: 44px;
+    color: var(--red);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(24, 37, 44, 0.07);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .av-stop-btn svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+  }
+  .phone-frame[data-state="speaking"] .av-stop-btn {
+    display: inline-flex;
+  }
+
+  /* Fusha e shkrimit (fundi): kapsulë e bardhë 28px + buton rrethor i kuq me aeroplan letre */
+  .av-input-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--white);
+    border-radius: 28px;
+    padding: 5px 6px 5px 18px;
+    min-height: 54px;
+    box-shadow: 0 4px 16px rgba(24, 37, 44, 0.09);
+    margin-top: auto;
+    flex-shrink: 0;
+  }
+  .av-input-bar input {
+    border: 0;
+    outline: 0;
+    background: transparent;
+    width: 100%;
+    min-width: 0;
+    font-family: inherit;
+    font-size: 16px;
+    color: var(--txt);
+  }
+  .av-input-bar input::placeholder {
+    color: var(--muted);
+  }
+  .av-send-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 50%;
+    border: 0;
+    background: var(--red);
+    color: var(--white);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(217, 45, 45, 0.26);
+  }
+  .av-send-btn svg {
+    width: 19px;
+    height: 19px;
+    display: block;
+    transform: translate(-1px, 1px);
+  }
+
+  /* All 7 States Gallery */
+  .artboards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(372px, 1fr));
+    gap: 28px;
+    justify-items: center;
+  }
+  .artboard-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .artboard-tag {
+    align-self: stretch;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 6px;
+  }
+  .artboard-tag strong {
+    font-size: 15px;
+    color: var(--txt);
+  }
+  .artboard-tag span {
+    font-size: 12px;
+    color: var(--sub-dark);
+  }
+
+  /* Assets & Spec Tables */
+  .spec-card {
+    background: var(--white);
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 6px 20px rgba(24, 37, 44, 0.06);
+    margin-bottom: 24px;
+    overflow-x: auto;
+  }
+  .asset-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    align-items: center;
+  }
+  .cutout-preview {
+    width: 170px;
+    height: 230px;
+    border-radius: 16px;
+    background-image:
+      linear-gradient(45deg, #E3E7EA 25%, transparent 25%),
+      linear-gradient(-45deg, #E3E7EA 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #E3E7EA 75%),
+      linear-gradient(-45deg, transparent 75%, #E3E7EA 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    overflow: hidden;
+    border: 1px solid #DCE2E6;
+  }
+  .cutout-preview img {
+    height: 96%;
+    width: auto;
+    object-fit: contain;
+  }
+  .icon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .icon-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: #F7F9FA;
+    border: 1px solid #E5EAED;
+    text-decoration: none;
+    color: var(--txt);
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  .icon-chip img {
+    width: 22px;
+    height: 22px;
+  }
+  table.spec-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  table.spec-table th,
+  table.spec-table td {
+    text-align: left;
+    padding: 11px 14px;
+    border-bottom: 1px solid #EAEEF1;
+  }
+  table.spec-table th {
+    font-weight: 700;
+    color: var(--sub-dark);
+    background: #F7F9FA;
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .swatch {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin-right: 7px;
+    border: 1px solid rgba(24, 37, 44, 0.14);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .av-figure-stack,
+    .av-blink,
+    .phone-frame[data-state="speaking"] .av-figure-stack,
+    .phone-frame[data-state="speaking"] .av-speak,
+    .av-sound-bars i,
+    .phone-frame[data-state="listening"] .av-mic-btn,
+    .phone-frame[data-state="speaking"]:not([data-muted="true"]) .av-vol-wave {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+</style>
+</head>
+<body>
+
+<nav class="doc-nav">
+  <div class="doc-brand">
+    <img src="assets/avatar/assistant-head@2x.png" alt="Asistentja e Axhendës" />
+    <div>
+      <h1>Asistentja e Axhendës — Paketa e Dizajnit &amp; Prototipi</h1>
+      <p>Personazh origjinal shqiptar • Modaliteti i çelët • 7 gjendjet e plota • SVG + PNG transparente 2x/3x</p>
+    </div>
+  </div>
+  <div class="doc-controls">
+    <div class="seg" role="group" aria-label="Përmasa e ekranit">
+      <button type="button" id="size360" class="active">360 × 800 px</button>
+      <button type="button" id="size412">412 × 915 px</button>
+    </div>
+    <a class="doc-link" href="index.html">Hap Aplikacionin Axhenda →</a>
+  </div>
+</nav>
+
+<main class="container">
+
+  <section class="section-head">
+    <h2>1. Prototip Interaktiv (Kliko gjendjet ose butonat në ekran)</h2>
+    <p>Koka 64 px në të bardhë, skena 58% me figurën origjinale deri te gjunjët (me pulitje natyrale të syve dhe lëvizje të buzëve kur flet), kapsula dhe mikrofoni 64 px #D92D2D mbi fundin e figurës, dhe zona e bisedës 42% pa asnjë njoftim automatik.</p>
+  </section>
+
+  <div class="proto-grid">
+    <div id="liveProtoMount"></div>
+
+    <div class="proto-panel">
+      <h3> Provo të 7 gjendjet e specifikimit</h3>
+      <div class="state-pills" id="protoStateBtns">
+        <button type="button" data-idx="0" class="active">1. Fillimi<small>Gati + Përshëndetja</small></button>
+        <button type="button" data-idx="1">2. Po dëgjoj<small>Mikrofon me vijë, pulson</small></button>
+        <button type="button" data-idx="2">3. Po përgatis<small>Mikrofon joaktiv</small></button>
+        <button type="button" data-idx="3">4. Po flet<small>Po flas + Ndalo audion</small></button>
+        <button type="button" data-idx="4">5. Heshtje<small>Altoparlanti i prerë</small></button>
+        <button type="button" data-idx="5">6. Gabim<small>Mesazh shqip pa kod</small></button>
+        <button type="button" data-idx="6">7. Faqja bosh<small>Pas koshit: përshëndetja</small></button>
+      </div>
+      <p class="proto-note">
+        <strong>Rregulli i sigurisë (Pika 10):</strong> Asnjë buton në këtë dritare nuk dërgon SMS/Email automatikisht. Shtypja e aeroplanit të letrës ose përfundimi i diktimit vetëm përgatit propozimin për rishikim te dritarja e konfirmimit, ku pronari zgjedh vetë njoftimin.
+      </p>
+    </div>
+  </div>
+
+  <section class="section-head">
+    <h2>2. Të 7 Gjendjet si Ekrane të Veçanta (<span id="artboardDimLabel">360 × 800 px</span>)</h2>
+    <p>Secila gjendje nga pika 6 e dokumentit si ekran më vete në modalitetin e çelët.</p>
+  </section>
+
+  <div class="artboards-grid" id="artboardsMount"></div>
+
+  <section class="section-head">
+    <h2>3. Asetet: PNG me Sfond Transparent (2x &amp; 3x) dhe Ikonat SVG</h2>
+    <p>Figura origjinale e prerë pa sfond dhe seti i plotë i ikonave vektoriale me etiketa aksesueshmërie.</p>
+  </section>
+
+  <div class="spec-card">
+    <div class="asset-row">
+      <div class="cutout-preview">
+        <img src="assets/avatar/assistant-cutout@2x.png" alt="Figura transparente 2x" />
+      </div>
+      <div style="flex:1;min-width:240px">
+        <h3 style="margin:0 0 8px;font-size:17px">Figura e Asistentes — PNG Transparente (RGBA)</h3>
+        <p style="margin:0 0 12px;color:#4E5B61;font-size:14px;line-height:1.5">
+          Grua profesioniste shqiptare me xhaketë të çelët krem dhe bluzë me qëndisje delikate gjeometrike, në këmbë deri te gjunjët, duart e mbledhura përpara, me shkrirje të butë në fund.
+        </p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <a class="doc-link" style="background:#D92D2D" href="assets/avatar/assistant-cutout@2x.png" download>Shkarko PNG @2x (540×899)</a>
+          <a class="doc-link" href="assets/avatar/assistant-cutout@3x.png" download>Shkarko PNG @3x (810×1348)</a>
+          <a class="doc-link" style="background:#4E5B61" href="assets/avatar/assistant-head@2x.png" download>Foto Rrethore @2x (184×184)</a>
+          <a class="doc-link" style="background:#18252C" href="assets/avatar/figma-penpot-360x800.svg" download>Figma / Penpot (360×800 SVG)</a>
+          <a class="doc-link" style="background:#18252C" href="assets/avatar/figma-penpot-412x915.svg" download>Figma / Penpot (412×915 SVG)</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="icon-grid">
+      <a class="icon-chip" href="assets/avatar/icons/mic.svg" download><img src="assets/avatar/icons/mic.svg" alt="" />mic.svg</a>
+      <a class="icon-chip" href="assets/avatar/icons/mic-off.svg" download><img src="assets/avatar/icons/mic-off.svg" alt="" />mic-off.svg</a>
+      <a class="icon-chip" href="assets/avatar/icons/volume-on.svg" download><img src="assets/avatar/icons/volume-on.svg" alt="" />volume-on.svg</a>
+      <a class="icon-chip" href="assets/avatar/icons/volume-off.svg" download><img src="assets/avatar/icons/volume-off.svg" alt="" />volume-off.svg</a>
+      <a class="icon-chip" href="assets/avatar/icons/trash.svg" download><img src="assets/avatar/icons/trash.svg" alt="" />trash.svg</a>
+      <a class="icon-chip" href="assets/avatar/icons/close.svg" download><img src="assets/avatar/icons/close.svg" alt="" />close.svg</a>
+      <a class="icon-chip" href="assets/avatar/icons/copy.svg" download><img src="assets/avatar/icons/copy.svg" alt="" />copy.svg</a>
+      <a class="icon-chip" href="assets/avatar/icons/thumb-up.svg" download><img src="assets/avatar/icons/thumb-up.svg" alt="" />thumb-up.svg</a>
+      <a class="icon-chip" href="assets/avatar/icons/thumb-down.svg" download><img src="assets/avatar/icons/thumb-down.svg" alt="" />thumb-down.svg</a>
+      <a class="icon-chip" href="assets/avatar/icons/listen.svg" download><img src="assets/avatar/icons/listen.svg" alt="" />listen.svg</a>
+      <a class="icon-chip" href="assets/avatar/icons/send.svg" download><img src="assets/avatar/icons/send.svg" alt="" />send.svg</a>
+    </div>
+  </div>
+
+  <section class="section-head">
+    <h2>4. Specifikimi Teknik (Ngjyrat, Fontet, Përmasat dhe Hapësirat)</h2>
+  </section>
+
+  <div class="spec-card">
+    <table class="spec-table">
+      <thead>
+        <tr>
+          <th>Kategoria</th>
+          <th>Elementi</th>
+          <th>Vlera e Specifikuar</th>
+          <th>Shënime / Kontrasti</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Ngjyrat</strong></td>
+          <td>E kuqe veprimi (Kapsula, Mikrofoni, Dërgo)</td>
+          <td><span class="swatch" style="background:#D92D2D"></span><code>#D92D2D</code> (shtypur/joaktiv <code>#A82424</code>)</td>
+          <td>Kontrast <strong>4.82:1</strong> me <code>#FFFFFF</code> (&ge; 4.5:1 WCAG AA)</td>
+        </tr>
+        <tr>
+          <td><strong>Ngjyrat</strong></td>
+          <td>Sfondi i skenës &amp; flluskave / Gri e bisedës</td>
+          <td><span class="swatch" style="background:#FFFFFF"></span><code>#FFFFFF</code> &rarr; <span class="swatch" style="background:#F4F4F4"></span><code>#F4F4F4</code></td>
+          <td>Gradient i butë me teksturë mikropikash 14×14 px</td>
+        </tr>
+        <tr>
+          <td><strong>Ngjyrat</strong></td>
+          <td>Teksti kryesor / Gri dytësore / Online</td>
+          <td><span class="swatch" style="background:#18252C"></span><code>#18252C</code> • <span class="swatch" style="background:#8A9498"></span><code>#8A9498</code> • <span class="swatch" style="background:#2FB344"></span><code>#2FB344</code></td>
+          <td>Kontrast teksti kryesor <strong>15.4:1</strong> mbi <code>#FFFFFF</code></td>
+        </tr>
+        <tr>
+          <td><strong>Tipografia</strong></td>
+          <td>Familja e fontit</td>
+          <td><code>Roboto</code> / <code>Noto Sans</code></td>
+          <td>Titull <code>18 px / 700</code>, Bisedë <code>17 px / 400</code>, Kapsulë <code>15 px / 700</code>, Online <code>14 px / 400</code></td>
+        </tr>
+        <tr>
+          <td><strong>Përmasat</strong></td>
+          <td>Koka / Skena / Zona e bisedës</td>
+          <td><code>64 px</code> lartësi / <code>58%</code> skena / <code>42%</code> biseda</td>
+          <td>Ekrane bazë <code>360×800 px</code> dhe <code>412×915 px</code></td>
+        </tr>
+        <tr>
+          <td><strong>Komponentët</strong></td>
+          <td>Foto koke / Foto bisede / Mikrofon / Dërgo</td>
+          <td><code>46 px</code> / <code>38 px</code> / <code>64 px</code> / <code>44 px</code> (rrathë 50%)</td>
+          <td>Zona prekjeje: <code>46×46 px</code> në kokë, <code>44×44 px</code> minimum kudo</td>
+        </tr>
+        <tr>
+          <td><strong>Rrezet &amp; Hijet</strong></td>
+          <td>Flluska / Fusha e shkrimit / Kapsula</td>
+          <td><code>14 px</code> / <code>28 px</code> / <code>999 px</code> (padding <code>9×20 px</code>)</td>
+          <td>Hije të buta <code>blur 12–18 px</code>, opacitet <code>7–10%</code>, pa kufij të trashë</td>
+        </tr>
+        <tr>
+          <td><strong>Hapësirat</strong></td>
+          <td>Margjina anësore / Ndarja e elementeve</td>
+          <td><code>14 px</code> anash / <code>8–12 px</code> ndërmjet elementeve</td>
+          <td>Respekton plotësisht <code>prefers-reduced-motion: reduce</code></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</main>
+
+<script>
+const STATES = [
+  {
+    key: '1. Fillimi',
+    note: 'Përshëndetje + gati',
+    state: 'idle',
+    muted: false,
+    history: false,
+    error: false,
+    pill: 'Klikoni për të thënë një detyrë',
+    bubble: 'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?',
+    input: '',
+    placeholder: 'Urdhëro, më trego detyrën…',
+    time: '10:58 PM'
+  },
+  {
+    key: '2. Po dëgjoj',
+    note: 'Mikrofoni me vijë, pulson 1.0→1.09',
+    state: 'listening',
+    muted: false,
+    history: true,
+    error: false,
+    pill: 'Po dëgjoj…',
+    bubble: 'Fol lirshëm. Ndalon vetë pas 3 sekondash heshtjeje.',
+    input: 'Cakto Kledis Dogën të përgatisë pasqyrën nesër',
+    placeholder: 'Urdhëro, më trego detyrën…',
+    time: '10:58 PM'
+  },
+  {
+    key: '3. Po përgatis',
+    note: 'Mikrofon i çaktivizuar',
+    state: 'thinking',
+    muted: false,
+    history: true,
+    error: false,
+    pill: 'Po e përgatis detyrën…',
+    bubble: 'Po e kuptoj çfarë the.',
+    input: 'Cakto Kledis Dogën të përgatisë pasqyrën nesër',
+    placeholder: 'Urdhëro, më trego detyrën…',
+    time: '10:58 PM'
+  },
+  {
+    key: '4. Po flet',
+    note: 'Ndalo audion + 3 vija zanore',
+    state: 'speaking',
+    muted: false,
+    history: true,
+    error: false,
+    pill: 'Po flas',
+    bubble: 'E përgatita detyrën: Përgatit pasqyrën e shpenzimeve. Për Kledis Doga. Afati: nesër. Prioriteti e lartë. Kontrollo fushat dhe shtyp “Konfirmo dhe dërgo”. Njoftimin e zgjedh vetë.',
+    input: '',
+    placeholder: 'Urdhëro, më trego detyrën…',
+    time: '10:59 PM'
+  },
+  {
+    key: '5. Heshtje',
+    note: 'Altoparlanti i prerë në kokë',
+    state: 'idle',
+    muted: true,
+    history: true,
+    error: false,
+    pill: 'Klikoni për të thënë një detyrë',
+    bubble: 'Zëri është ndalur. Mund të vazhdosh me mikrofon ose me shkrim.',
+    input: '',
+    placeholder: 'Urdhëro, më trego detyrën…',
+    time: '10:59 PM'
+  },
+  {
+    key: '6. Gabim',
+    note: 'Flluskë në shqip, pa tekst teknik',
+    state: 'idle',
+    muted: false,
+    history: true,
+    error: true,
+    pill: 'Klikoni për të thënë një detyrë',
+    bubble: 'Nuk u kap zë i qartë. Kontrollo mikrofonin dhe provo përsëri.',
+    input: '',
+    placeholder: 'Urdhëro, më trego detyrën…',
+    time: '11:00 PM'
+  },
+  {
+    key: '7. Faqja bosh',
+    note: 'Pas koshit: vetëm përshëndetja',
+    state: 'idle',
+    muted: false,
+    history: false,
+    error: false,
+    pill: 'Klikoni për të thënë një detyrë',
+    bubble: 'Përshëndetje! Çfarë detyre do të shkruajmë?',
+    input: '',
+    placeholder: 'Urdhëro, më trego detyrën…',
+    time: '11:00 PM'
+  }
+];
+
+function escapeHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderScreen(cfg, interactive) {
+  const disabledAttr = cfg.state === 'thinking' ? 'disabled' : '';
+  return `
+  <div class="phone-frame" data-state="${cfg.state}" data-muted="${cfg.muted}" data-history="${cfg.history}" data-error="${cfg.error}" ${interactive ? 'id="protoScreen"' : ''}>
+    <header class="av-head">
+      <img class="av-head-photo" src="assets/avatar/assistant-head@2x.png" alt="Asistentja e Axhendës" width="46" height="46" />
+      <div class="av-head-meta">
+        <div class="av-head-name">Asistentja e Axhendës</div>
+        <div class="av-head-status"><i aria-hidden="true"></i><span>Online</span></div>
+      </div>
+      <div class="av-head-actions">
+        <button type="button" class="av-icon-btn js-mute" aria-label="${cfg.muted ? 'Ndiz zërin' : 'Hesht zërin'}" aria-pressed="${cfg.muted}">
+          <svg class="av-vol-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path class="av-vol-wave" d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path class="av-vol-wave" d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+          <svg class="av-vol-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>
+        </button>
+        <button type="button" class="av-icon-btn av-trash-btn js-clear" aria-label="Pastro bisedën">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </button>
+        <button type="button" class="av-icon-btn js-close" aria-label="Mbyll dritaren">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="av-scene" aria-label="Asistentja e Axhendës">
+      <div class="av-figure-wrap">
+        <div class="av-figure-stack">
+          <img src="assets/avatar/assistant-cutout@2x.png" srcset="assets/avatar/assistant-cutout@2x.png 2x, assets/avatar/assistant-cutout@3x.png 3x" alt="Asistentja e Axhendës" />
+          <img class="av-layer av-blink" src="assets/avatar/assistant-blink@2x.png" alt="" aria-hidden="true" />
+          <img class="av-layer av-speak" src="assets/avatar/assistant-speak@2x.png" alt="" aria-hidden="true" />
+        </div>
+      </div>
+      <div class="av-overlay-controls">
+        <div class="av-capsule-row">
+          <div class="av-capsule" role="status" aria-live="polite">${escapeHtml(cfg.pill)}</div>
+          <span class="av-sound-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+        </div>
+        <button type="button" class="av-mic-btn js-mic" aria-label="Fol ose ndalo regjistrimin" ${disabledAttr}>
+          <svg class="av-mic-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
+          <svg class="av-mic-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="3" x2="21" y2="21"/><path d="M9 9v2a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M17 16.95A7 7 0 0 1 5 11v-1m14 0v1a7 7 0 0 1-.11 1.23"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/></svg>
+        </button>
+      </div>
+    </section>
+
+    <section class="av-chat" aria-label="Biseda">
+      <div class="av-chat-scroll">
+        <div class="av-time">${escapeHtml(cfg.time)}</div>
+        <div class="av-msg-row">
+          <img class="av-msg-photo" src="assets/avatar/assistant-head@2x.png" alt="" width="38" height="38" />
+          <div class="av-msg-col">
+            <div class="av-bubble">${escapeHtml(cfg.bubble)}</div>
+            <div class="av-bubble-tools" role="group" aria-label="Veprime për mesazhin">
+              <button type="button" class="js-copy" aria-label="Kopjo mesazhin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+              <button type="button" class="js-like" aria-label="Pëlqej" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>
+              <button type="button" class="js-dislike" aria-label="Nuk pëlqej" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg></button>
+              <button type="button" class="js-listen" aria-label="Dëgjo mesazhin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="av-stop-btn js-stop" aria-label="Ndalo audion">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>
+        <span>Ndalo audion</span>
+      </button>
+      <div class="av-input-bar">
+        <input type="text" class="js-input" value="${escapeHtml(cfg.input)}" placeholder="${escapeHtml(cfg.placeholder)}" aria-label="Urdhëro, më trego detyrën" />
+        <button type="button" class="av-send-btn js-send" aria-label="Përgatit detyrën">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </section>
+  </div>`;
+}
+
+// Mount 7 static state artboards
+const artboardsMount = document.getElementById('artboardsMount');
+artboardsMount.innerHTML = STATES.map(st => `
+  <div class="artboard-card">
+    <div class="artboard-tag"><strong>${escapeHtml(st.key)}</strong><span>${escapeHtml(st.note)}</span></div>
+    ${renderScreen(st, false)}
+  </div>
+`).join('');
+
+// Mount interactive prototype
+let currentIdx = 0;
+const liveMount = document.getElementById('liveProtoMount');
+const stateBtns = [...document.querySelectorAll('#protoStateBtns button')];
+
+function selectProtoState(idx) {
+  currentIdx = idx;
+  stateBtns.forEach((b, i) => b.classList.toggle('active', i === idx));
+  liveMount.innerHTML = renderScreen(STATES[idx], true);
+  bindInteractiveProto();
+}
+
+function bindInteractiveProto() {
+  const root = document.getElementById('protoScreen');
+  if (!root) return;
+  const mic = root.querySelector('.js-mic');
+  const stopBtn = root.querySelector('.js-stop');
+  const muteBtn = root.querySelector('.js-mute');
+  const clearBtn = root.querySelector('.js-clear');
+  const listenBtn = root.querySelector('.js-listen');
+  const sendBtn = root.querySelector('.js-send');
+  const input = root.querySelector('.js-input');
+  const likeBtn = root.querySelector('.js-like');
+  const dislikeBtn = root.querySelector('.js-dislike');
+  const copyBtn = root.querySelector('.js-copy');
+
+  mic.onclick = () => {
+    const st = root.getAttribute('data-state');
+    if (st === 'listening') selectProtoState(2);
+    else selectProtoState(1);
+  };
+  stopBtn.onclick = () => {
+    root.setAttribute('data-state', 'idle');
+    root.querySelector('.av-capsule').textContent = 'Kontrollo fushat te dritarja';
+  };
+  muteBtn.onclick = () => {
+    const m = root.getAttribute('data-muted') === 'true';
+    root.setAttribute('data-muted', m ? 'false' : 'true');
+    if (!m && root.getAttribute('data-state') === 'speaking') {
+      root.setAttribute('data-state', 'idle');
+      root.querySelector('.av-capsule').textContent = 'Klikoni për të thënë një detyrë';
+    }
+  };
+  clearBtn.onclick = () => selectProtoState(6);
+  listenBtn.onclick = () => selectProtoState(3);
+  sendBtn.onclick = () => {
+    const txt = input.value.trim() || 'Cakto Dorjela Dajën të dërgojë faturat sot';
+    root.setAttribute('data-state', 'speaking');
+    root.setAttribute('data-history', 'true');
+    root.setAttribute('data-error', 'false');
+    root.querySelector('.av-capsule').textContent = 'Po flas';
+    root.querySelector('.av-bubble').textContent = 'E përgatita detyrën: ' + txt + '. Kontrollo fushat te dritarja dhe zgjidh vetë njoftimin.';
+    input.value = '';
+  };
+  input.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); sendBtn.click(); } };
+  likeBtn.onclick = () => {
+    const next = likeBtn.getAttribute('aria-pressed') !== 'true';
+    likeBtn.setAttribute('aria-pressed', String(next));
+    if (next) dislikeBtn.setAttribute('aria-pressed', 'false');
+  };
+  dislikeBtn.onclick = () => {
+    const next = dislikeBtn.getAttribute('aria-pressed') !== 'true';
+    dislikeBtn.setAttribute('aria-pressed', String(next));
+    if (next) likeBtn.setAttribute('aria-pressed', 'false');
+  };
+  copyBtn.onclick = async () => {
+    try { await navigator.clipboard.writeText(root.querySelector('.av-bubble').textContent); } catch (e) {}
+  };
+}
+
+stateBtns.forEach(btn => {
+  btn.onclick = () => selectProtoState(Number(btn.dataset.idx));
+});
+selectProtoState(0);
+
+// Viewport switcher (360×800 vs 412×915)
+const b360 = document.getElementById('size360');
+const b412 = document.getElementById('size412');
+const dimLabel = document.getElementById('artboardDimLabel');
+b360.onclick = () => {
+  document.documentElement.style.setProperty('--frame-w', '360px');
+  document.documentElement.style.setProperty('--frame-h', '800px');
+  dimLabel.textContent = '360 × 800 px';
+  b360.classList.add('active');
+  b412.classList.remove('active');
+};
+b412.onclick = () => {
+  document.documentElement.style.setProperty('--frame-w', '412px');
+  document.documentElement.style.setProperty('--frame-h', '915px');
+  dimLabel.textContent = '412 × 915 px';
+  b412.classList.add('active');
+  b360.classList.remove('active');
+};
+</script>
+</body>
+</html>
