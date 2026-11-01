@@ -7,7 +7,7 @@
  * confirms in the confirmation window, and notifying stays his own click.
  *
  * Voice, best first:
- *   1. server voice  (Supabase function "assistant-speak", Gemini; WebAudio + WAV fallback)
+ *   1. server voice  (Supabase function "assistant-speak", Gemini; WAV <audio> + WebAudio)
  *   2. the browser's own Albanian voice, when the phone has one
  *   3. text only (the avatar still "talks" on screen, nothing is spoken)
  */
@@ -49,6 +49,14 @@
     const value = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
     return value.length > max ? value.slice(0, max - 1).trim() + '…' : value;
   };
+
+  /* Personalized Albanian greeting for the owner. */
+  function greeting(name) {
+    const who = clip(name, 60);
+    return who
+      ? 'Përshëndetje ' + who + '! Çfarë detyre do të shkruajmë?'
+      : 'Përshëndetje! Çfarë detyre do të shkruajmë?';
+  }
 
   /* What the assistant says (and writes) when a proposal is ready. */
   function summarize(draft, options) {
@@ -166,7 +174,9 @@
     async function serverAudio(text) {
       if (cache.has(text)) return cache.get(text);
       const ctx = o.getAudioContext && o.getAudioContext();
-      if (!o.invoke || (!ctx && !o.playWav)) return null;
+      const canBuffer = !!(ctx && typeof ctx.createBuffer === 'function');
+      const hasWav = typeof o.playWav === 'function';
+      if (!o.invoke || (!canBuffer && !hasWav)) return null;
       const result = await withTimeout(o.invoke('assistant-speak', { body: { text } }), waitMs);
       if (result && (result.error || (result.data && result.data.error))) {
         const status = result.error && result.error.context && result.error.context.status;
@@ -183,7 +193,7 @@
       const samples = pcmToFloat32(base64);
       if (!samples.length) { downUntil = now() + FAIL_BACKOFF_MS; reportError('audio bosh nga serveri'); return null; }
       let buffer = null;
-      if (ctx && ctx.createBuffer) {
+      if (canBuffer && !hasWav) {
         buffer = ctx.createBuffer(1, samples.length, rate);
         buffer.getChannelData(0).set(samples);
       }
@@ -230,7 +240,7 @@
       });
     }
 
-    function playWavFallback(entry, mine) {
+    function playWavElement(entry, mine) {
       return new Promise(resolve => {
         let stopWav = null;
         const maxMs = Math.max(2500, Math.ceil((entry.length / (entry.rate || 24000)) * 1000) + 1500);
@@ -294,16 +304,18 @@
           const entry = await serverAudio(value);
           if (mine !== token) return 'stopped';
           if (entry) {
+            // Prefer HTMLAudioElement (<audio playsinline>) on browsers: plays through the
+            // media speaker channel even when iPhone's silent switch is on or after mic capture.
+            if (typeof o.playWav === 'function') {
+              const playedWav = await playWavElement(entry, mine);
+              if (playedWav === 'server' || playedWav === 'stopped') return playedWav;
+            }
+            if (mine !== token) return 'stopped';
             const ctx = o.getAudioContext && o.getAudioContext();
             if (ctx && await ensureRunning(ctx)) {
               if (mine !== token) return 'stopped';
               const played = await playBuffer(ctx, entry, mine);
               if (played === 'server' || played === 'stopped') return played;
-            }
-            if (mine !== token) return 'stopped';
-            if (typeof o.playWav === 'function') {
-              const playedWav = await playWavFallback(entry, mine);
-              if (playedWav === 'server' || playedWav === 'stopped') return playedWav;
             }
             reportError('audioja u bllokua nga pajisja — prek ekranin ose rrit volumin');
           }
@@ -325,7 +337,17 @@
     function unlock() {
       try {
         const ctx = o.getAudioContext && o.getAudioContext();
-        if (ctx && ctx.state && ctx.state !== 'running' && ctx.resume) ctx.resume().catch(() => {});
+        if (ctx) {
+          if (ctx.state && ctx.state !== 'running' && ctx.resume) ctx.resume().catch(() => {});
+          if (ctx.state === 'running' && ctx.createBuffer && ctx.createBufferSource && !ctx._silentPrimed) {
+            ctx._silentPrimed = true;
+            const b = ctx.createBuffer(1, 1, 22050);
+            const s = ctx.createBufferSource();
+            s.buffer = b;
+            s.connect(ctx.destination);
+            s.start(0);
+          }
+        }
       } catch (e) { /* audio stays locked */ }
       try { o.unlockAudio && o.unlockAudio(); } catch (e) { /* ignore */ }
       try { o.speechSynthesis && o.speechSynthesis.getVoices && o.speechSynthesis.getVoices(); } catch (e) { /* ignore */ }
@@ -336,14 +358,15 @@
 
   /* ---------- window controller ---------- */
   const TEXT = {
-    greeting: 'Përshëndetje! Kliko mikrofonin dhe më thuaj detyrën.',
+    greeting: 'Përshëndetje! Çfarë detyre do të shkruajmë?',
+    greetingPill: 'Po ju përshëndes…',
     ready: 'Kliko mikrofonin për të folur',
     opening: 'Po hap mikrofonin… prit një çast',
     openingHint: 'Lejo mikrofonin nëse të kërkohet.',
     listening: 'Po të dëgjoj…',
     listeningHint: 'Fol lirshëm. Ndalon vetë pas 3 sekondash heshtjeje.',
     thinking: 'Po e përgatis detyrën…',
-    thinkingHint: 'Po e kuptoj çfarë the.',
+    thinkingHint: 'Po nxjerr detyrën nga fjalët e tua…',
     review: 'Kontrollo fushat te dritarja',
     reminder: 'Punonjësi NUK do të njoftohet. Kliko katrorin “Njofto punonjësit” nëse do ta njoftosh, ose shtyp “Konfirmo dhe dërgo” sërish për ta ruajtur pa njoftim.',
     savedNotified: 'Detyra u ruajt dhe punonjësit e zgjedhur u njoftuan.',
@@ -356,6 +379,7 @@
     const els = o.els || {};
     const speaker = o.speaker || { speak: () => Promise.resolve('text'), stop() {}, unlock() {} };
     const today = o.today || (() => '');
+    const ownerName = o.ownerName || (() => '');
     let state = 'closed', muted = false, speechToken = 0;
 
     const setText = (el, text) => { if (el) el.textContent = text; };
@@ -409,7 +433,18 @@
         const wasClosed = state === 'closed';
         toggle(els.stage, 'show', true);
         try { speaker.unlock(); } catch (e) { /* audio stays locked */ }
-        if (wasClosed) { paint('idle', TEXT.ready, TEXT.greeting); if (els.liveField) els.liveField.value = ''; }
+        if (wasClosed) {
+          paint('idle', TEXT.ready, greeting(ownerName()));
+          if (els.liveField) els.liveField.value = '';
+        }
+      },
+      /* Opens the window AND greets the owner aloud in Albanian. */
+      greet(customName) {
+        toggle(els.stage, 'show', true);
+        try { speaker.unlock(); } catch (e) { /* audio stays locked */ }
+        if (els.liveField) els.liveField.value = '';
+        const hi = greeting(customName != null ? customName : ownerName());
+        return say(hi, { pill: TEXT.greetingPill, after: TEXT.ready });
       },
       close() {
         speechToken++;
@@ -429,7 +464,8 @@
 
       beforeListen() {                                      // the microphone must never hear the avatar
         api.open(); stopSpeaking();
-        paint('idle', TEXT.opening, TEXT.openingHint);
+        const who = clip(ownerName(), 60);
+        paint('idle', TEXT.opening, who ? 'Përshëndetje ' + who + '! ' + TEXT.openingHint : TEXT.openingHint);
       },
       listening() {
         if (state === 'closed') return;
@@ -437,7 +473,20 @@
         if (els.liveField) els.liveField.value = '';
         paint('listening', TEXT.listening, TEXT.listeningHint);
       },
-      heard(text) { if (els.liveField && state !== 'closed') els.liveField.value = String(text || ''); },
+      listeningCountdown(msLeft) {
+        if (state !== 'listening') return;
+        if (msLeft != null && msLeft > 0 && msLeft < 2800) {
+          setText(els.pill, 'Po të dëgjoj… ndalon pas ' + (msLeft / 1000).toFixed(1) + 's');
+        } else {
+          setText(els.pill, TEXT.listening);
+        }
+      },
+      heard(text) {
+        if (els.liveField && state !== 'closed') {
+          els.liveField.value = String(text || '');
+          try { els.liveField.scrollLeft = els.liveField.scrollWidth; } catch (e) { /* ignore */ }
+        }
+      },
       thinking() { if (state !== 'closed') paint('thinking', TEXT.thinking, TEXT.thinkingHint); },
 
       draft(draft) {
@@ -456,7 +505,7 @@
       idle(message) {
         if (state === 'closed') return;
         stopSpeaking();
-        paint('idle', TEXT.ready, message || TEXT.greeting);
+        paint('idle', TEXT.ready, message || greeting(ownerName()));
       },
 
       toggleMute() {
@@ -473,7 +522,7 @@
     return api;
   }
 
-  const api = { create, createSpeaker, summarize, speakDate, pcmToFloat32, pcmToWav, TEXT };
+  const api = { create, createSpeaker, summarize, greeting, speakDate, pcmToFloat32, pcmToWav, TEXT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AvatarAssistant = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

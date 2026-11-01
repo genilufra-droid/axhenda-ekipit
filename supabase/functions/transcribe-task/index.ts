@@ -1,9 +1,9 @@
-// Axhenda: voice/text -> task draft with Gemini. Only the owner may call it.
+// Axhenda: voice/text -> task draft with Gemini (and Groq Whisper + Llama backup). Only the owner may call it.
 // Contract: multipart `audio` (optional), `liveTranscript` (optional), `today`, `vocabulary`, `currentDraft`.
 // Returns { ok, transcript, draft:{title,description,assignee,due,priority} }.
 // Errors are short Albanian messages; provider details stay in the function logs.
-// Optional secret GEMINI_MODEL is tried first, then the aliases below.
-const MODELS = ['gemini-2.5-flash', 'gemini-flash-latest'];
+// Optional secret GEMINI_MODEL is tried first, then the fast current models below.
+const MODELS = ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite'];
 const MAX_AUDIO = 10 * 1024 * 1024;
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -42,6 +42,64 @@ async function askGemini(attempts: { model: string; config?: Record<string, unkn
   return { res: last, body: lastBody };
 }
 
+async function askGroqBackup(
+  groqKey: string,
+  audio: File | null,
+  liveTranscript: string,
+  promptText: string,
+  vocabulary: string,
+): Promise<{ ok: true; result: any } | { ok: false; status: number }> {
+  try {
+    let spoken = liveTranscript;
+    if (audio) {
+      const fd = new FormData();
+      const ext = (audio.type || '').includes('mp4') ? 'mp4' : (audio.type || '').includes('ogg') ? 'ogg' : (audio.type || '').includes('wav') ? 'wav' : 'webm';
+      fd.append('file', audio, 'task.' + ext);
+      fd.append('model', 'whisper-large-v3-turbo');
+      fd.append('language', 'sq');
+      if (vocabulary) fd.append('prompt', vocabulary.slice(0, 220));
+      const tr = await timed('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + groqKey },
+        body: fd,
+      }, 12000);
+      if (!tr.ok) {
+        console.error('GROQ_WHISPER_FAILED', tr.status);
+        if (!spoken) return { ok: false, status: tr.status };
+      } else {
+        const tj = await tr.json();
+        if (typeof tj?.text === 'string' && tj.text.trim()) spoken = tj.text.trim();
+      }
+    }
+    if (!spoken) return { ok: false, status: 400 };
+    const chat = await timed('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.1,
+        max_tokens: 900,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: promptText },
+          { role: 'user', content: spoken },
+        ],
+      }),
+    }, 12000);
+    if (!chat.ok) return { ok: false, status: chat.status };
+    const cj = await chat.json();
+    const raw = cj?.choices?.[0]?.message?.content || '';
+    const parsed = JSON.parse(cleanJsonText(raw));
+    const obj = Array.isArray(parsed) ? parsed[0] : parsed;
+    if (!obj || typeof obj !== 'object') return { ok: false, status: 502 };
+    if (!obj.transcript) obj.transcript = spoken;
+    return { ok: true, result: obj };
+  } catch (e) {
+    console.error('GROQ_BACKUP_ERROR', String(e));
+    return { ok: false, status: timedOut(e) ? 504 : 502 };
+  }
+}
+
 function bytesToBase64(bytes: Uint8Array) {
   let binary = '';
   for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
@@ -71,8 +129,9 @@ Deno.serve(async (req: Request) => {
   try {
     const url = Deno.env.get('SUPABASE_URL');
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const geminiKey = Deno.env.get('GEMINI_API_KEY');
-    if (!url || !serviceKey || !geminiKey) return fail('Asistenti nuk është konfiguruar. Lajmëro administratorin.', 500);
+    const geminiKey = (Deno.env.get('GEMINI_API_KEY') || '').trim();
+    const groqKey = (Deno.env.get('GROQ_API_KEY') || '').trim();
+    if (!url || !serviceKey || (!geminiKey && !groqKey)) return fail('Asistenti nuk është konfiguruar. Lajmëro administratorin.', 500);
 
     const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
     if (!token) return fail('Hyr përsëri në aplikacion.', 401);
@@ -89,6 +148,7 @@ Deno.serve(async (req: Request) => {
     console.log('STAGE owner ok');
     const form = await req.formData();
     const audio = form.get('audio');
+    const audioFile = audio instanceof File ? audio : null;
     const liveTranscript = String(form.get('liveTranscript') || '').trim().slice(0, 4000);
     const vocabulary = String(form.get('vocabulary') || '').trim().slice(0, 1500);
     let currentDraft: any = null;
@@ -96,10 +156,10 @@ Deno.serve(async (req: Request) => {
     const today = validDate(form.get('today')) || new Date().toISOString().slice(0, 10);
 
     const parts: any[] = [];
-    if (audio instanceof File) {
-      if (!audio.size) return fail('Audioja është bosh. Provo përsëri.', 400);
-      if (audio.size > MAX_AUDIO) return fail('Audioja është shumë e gjatë (maksimumi 10 MB).', 413);
-      parts.push({ inlineData: { mimeType: audio.type || 'audio/webm', data: bytesToBase64(new Uint8Array(await audio.arrayBuffer())) } });
+    if (audioFile) {
+      if (!audioFile.size) return fail('Audioja është bosh. Provo përsëri.', 400);
+      if (audioFile.size > MAX_AUDIO) return fail('Audioja është shumë e gjatë (maksimumi 10 MB).', 413);
+      parts.push({ inlineData: { mimeType: audioFile.type || 'audio/webm', data: bytesToBase64(new Uint8Array(await audioFile.arrayBuffer())) } });
     } else if (!liveTranscript) {
       return fail('Nuk u dëgjua asgjë. Provo përsëri.', 400);
     }
@@ -107,37 +167,55 @@ Deno.serve(async (req: Request) => {
     const staff = await rest('/rest/v1/profiles?select=display_name,username&role=in.(employee,punonj%C3%ABs,punonjes)');
     const names = staff.ok ? (await staff.json()).map((p: any) => p.display_name || p.username).filter(Boolean) : [];
 
-    parts.push({ text: `Je asistenti i aplikacionit Axhenda. Dëgjo audion ose analizo tekstin e pronarit dhe kthe vetëm JSON valid, pa markdown:
+    const instruction = `Je asistenti i aplikacionit Axhenda. Dëgjo audion ose analizo tekstin e pronarit dhe kthe vetëm një objekt JSON valid, pa markdown:
 {"transcript":"fjalët e plota","title":"titulli","description":"detajet","assignee":"emrat me presje","due":"YYYY-MM-DD ose bosh","priority":"Ulet|Mesme|Lart"}
 Rregulla: shkruaj saktë fjalët e pronarit; mos shpik persona ose fakte; përdor vetëm emra nga lista; përfshi të gjithë të përmendurit; "sot" = data e sotme, "nesër" = dita pas saj; "urgjent" ose "prioritet i lartë" = Lart; "prioritet i ulët" = Ulet; pa prioritet = Mesme. Nëse ka draft dhe kërkohet ndryshim, ndrysho vetëm atë pjesë. Mos e ruaj dhe mos e dërgo detyrën, vetëm përgatit draftin.
 Punonjësit: ${JSON.stringify(names)}
 Fjalë të shpeshta: ${vocabulary}
 Data e sotme: ${today}
 Drafti ekzistues: ${JSON.stringify(currentDraft || {})}
-Teksti live: ${liveTranscript}` });
+Teksti live: ${liveTranscript}`;
 
-    console.log('STAGE calling gemini', parts.length);
-    const custom = (Deno.env.get('GEMINI_MODEL') || '').trim();
-    const candidates = [...new Set([custom, ...MODELS].filter(Boolean))];
-    // Disable thinking first for fast transcription; fall back to plain config if a model rejects thinkingConfig.
-    const attempts = [
-      ...candidates.map((model) => ({ model, config: { thinkingConfig: { thinkingBudget: 0 } } })),
-      ...candidates.map((model) => ({ model })),
-    ];
-    const { res: ai, body: aiBody } = await askGemini(attempts, geminiKey,
-      { contents: [{ parts }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1, maxOutputTokens: 1200 } }, 20000);
-    if (!ai) return fail('Serveri u vonua. Provo përsëri.', 504);
-    if (!ai.ok) {
-      if (ai.status === 429) return fail('Kufiri falas i AI u arrit. Provo pas pak ose përdor përpunimin lokal.', 429);
-      return fail('AI nuk u përgjigj. Provo përsëri.', 502);
+    parts.push({ text: instruction });
+
+    let result: any = null;
+    let lastStatus = 502;
+
+    if (geminiKey) {
+      console.log('STAGE calling gemini', parts.length);
+      const custom = (Deno.env.get('GEMINI_MODEL') || '').trim();
+      const candidates = [...new Set([custom, ...MODELS].filter(Boolean))];
+      const attempts = candidates.map((model) => ({ model }));
+      const { res: ai, body: aiBody } = await askGemini(attempts, geminiKey,
+        { contents: [{ parts }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1, maxOutputTokens: 1000 } }, 12000);
+      if (!ai) {
+        lastStatus = 504;
+      } else if (!ai.ok) {
+        lastStatus = ai.status === 429 ? 429 : 502;
+      } else {
+        try {
+          const text = JSON.parse(aiBody)?.candidates?.[0]?.content?.parts?.find((p: any) => p.text)?.text || '';
+          const parsed = JSON.parse(cleanJsonText(text));
+          const obj = Array.isArray(parsed) ? parsed[0] : parsed;
+          if (obj && typeof obj === 'object') result = obj;
+        } catch {
+          console.error('GEMINI_PARSE_ERROR', aiBody.slice(0, 500));
+          lastStatus = 502;
+        }
+      }
     }
-    let result: any;
-    try {
-      const text = JSON.parse(aiBody)?.candidates?.[0]?.content?.parts?.find((p: any) => p.text)?.text || '';
-      result = JSON.parse(cleanJsonText(text));
-    } catch {
-      console.error('GEMINI_PARSE_ERROR', aiBody.slice(0, 500));
-      return fail('AI ktheu përgjigje të pakuptueshme. Provo përsëri.', 502);
+
+    if (!result && groqKey) {
+      console.log('STAGE calling groq backup');
+      const groq = await askGroqBackup(groqKey, audioFile, liveTranscript, instruction, vocabulary);
+      if (groq.ok) result = groq.result;
+      else if (!geminiKey) lastStatus = groq.status === 429 ? 429 : groq.status === 504 ? 504 : 502;
+    }
+
+    if (!result) {
+      if (lastStatus === 504) return fail('Serveri u vonua. Provo përsëri.', 504);
+      if (lastStatus === 429) return fail('Kufiri falas i AI u arrit. Provo pas pak ose përdor përpunimin lokal.', 429);
+      return fail(geminiKey ? 'AI nuk u përgjigj. Provo përsëri.' : 'Ndodhi një gabim. Provo përsëri.', 502);
     }
 
     const transcript = String(result.transcript || liveTranscript || result.description || result.title || '').trim();
