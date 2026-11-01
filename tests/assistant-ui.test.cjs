@@ -720,8 +720,9 @@ test('a broken recorder falls back to live recognition instead of doing nothing'
   app.recognizer.result([{text:'Arben Kola përgatit raportin nesër',final:true}]);
   app.quiet(3100);
   await tick();await tick();
-  assert.equal(body instanceof FormData,false,'no audio was recorded, so only text is sent');
-  assert.equal(body.text,'Arben Kola përgatit raportin nesër');
+  assert.equal(body instanceof FormData,true,'the function reads multipart data in every case');
+  assert.equal(body.get('audio'),null,'no audio was recorded, so none is sent');
+  assert.equal(body.get('liveTranscript'),'Arben Kola përgatit raportin nesër');
   assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
   app.$('#voiceCancel').onclick();
 });
@@ -1111,8 +1112,9 @@ test('without any recording the live words are still used and no audio field is 
   app.recognizer.result([{text:'Arben Kola përgatit raportin',final:true}],0);
   app.quiet(3100);
   await tick();await tick();
-  assert.equal(sent instanceof FormData,false,'nothing was recorded, so only text is sent');
-  assert.equal(sent.text,'Arben Kola përgatit raportin');
+  assert.equal(sent instanceof FormData,true,'the function reads multipart data in every case');
+  assert.equal(sent.get('audio'),null,'nothing was recorded, so no audio is sent');
+  assert.equal(sent.get('liveTranscript'),'Arben Kola përgatit raportin');
   assert.ok(app.$('#voiceConfirmOverlay').classList.contains('show'));
   app.$('#voiceCancel').onclick();
 });
