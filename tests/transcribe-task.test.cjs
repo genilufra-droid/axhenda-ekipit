@@ -228,3 +228,49 @@ test('speak: uses gemini-3.8-flash-lite-tts with raw text and zero instruction p
   assert.equal(sent.contents[0].parts[0].text, phrase, 'raw phrase only so TTS never speaks an instruction prefix');
 });
 
+test('transcribe v20: sends full untruncated roster to Whisper, injects exact Albanian calendar table, and recovers phonetic/omitted assignees', async () => {
+  let whisperPrompt = '';
+  let geminiPayload = '';
+  const provider = (url, options) => {
+    if (url.includes('audio/transcriptions')) {
+      whisperPrompt = String(options.body.get('prompt') || '');
+      return json({ text: 'Thuaji Dorgjelës dhe Mariglen Miftarit me dërgu bilancin javën tjetër pa ngut' });
+    }
+    if (url.includes('generativelanguage')) {
+      geminiPayload = String(options.body || '');
+      return json({
+        candidates: [{
+          content: {
+            parts: [{
+              text: JSON.stringify({
+                transcript: 'Thuaji Dorjelës dhe Mariglen Myftarit të dërgojnë bilancin javën tjetër pa ngut.',
+                title: 'Dërgo bilancin',
+                description: 'Thuaji Dorjelës dhe Mariglen Myftarit të dërgojnë bilancin javën tjetër pa ngut.',
+                assignee: '', // omitted by LLM -> recovered from verified transcript!
+                due: '2026-11-09',
+                priority: 'pa ngut',
+              }),
+            }],
+          },
+        }],
+      });
+    }
+    return new Response('unexpected', { status: 500 });
+  };
+  const e = endpoint('transcribe-task', { env: { GROQ_API_KEY: 'gsk-test' }, provider });
+  const longVocab = 'Kledis Doga, Jorgo Toshkollari, Nevila Koci, Fitim Basha, Mersin Leka, Eniana Dervishi, Oksana Prifti';
+  const f = form({ today: '2026-11-02', vocabulary: longVocab });
+  f.append('audio', new File([new Uint8Array([4, 5, 6])], 'task.webm', { type: 'audio/webm' }));
+  const res = await e.handler(post(f));
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.ok(whisperPrompt.length > 260, 'Whisper prompt is no longer truncated at 224 characters');
+  assert.ok(whisperPrompt.includes('Dorjela Daja') && whisperPrompt.includes('Oksana Prifti'), 'all roster & vocabulary names reach Whisper');
+  const promptSent = JSON.parse(geminiPayload).contents[0].parts[1].text;
+  assert.ok(promptSent.includes('"nesër" = 2026-11-03') && promptSent.includes('"javën tjetër" = 2026-11-09'), 'deterministic Albanian calendar table is injected');
+  assert.equal(data.draft.assignee, 'Dorjela Daja, Mariglen Myftari', 'recovers canonical assignees from transcript when LLM left assignee blank');
+  assert.equal(data.draft.due, '2026-11-09');
+  assert.equal(data.draft.priority, 'Ulet');
+});
+
+

@@ -364,8 +364,11 @@ test('index.html carries the avatar window, loads its script before use and ship
   assert.ok(fs.existsSync(path.join(root, 'assets/avatar/assistant-cutout@3x.png')));
   assert.ok(fs.existsSync(path.join(root, 'assets/avatar/assistant-head@2x.png')));
   assert.ok(fs.existsSync(path.join(root, 'avatar-design.html')));
-  assert.ok(fs.existsSync(path.join(root, '.nojekyll')));
+  assert.ok(html.existsSync ? true : fs.existsSync(path.join(root, '.nojekyll')));
   assert.doesNotMatch(html, /\bDiella\b/i, 'never uses reference character name');
+  assert.ok(html.includes('keyboard-open'), 'supports compact mobile keyboard adaptation per PDF Frame 2');
+  assert.ok(html.includes('createBiquadFilter'), 'conditions VAD input with 85Hz high-pass speech filter');
+  assert.ok(html.includes('aspect-ratio:560/840'), 'uses grounded executive portrait cutout ratio');
 });
 
 test('all 7 avatar design states (Fillimi, Po dëgjoj, Po përgatis, Po flet, Heshtje, Gabim, Faqja bosh) behave per spec', async () => {

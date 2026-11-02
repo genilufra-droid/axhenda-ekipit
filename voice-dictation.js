@@ -90,21 +90,49 @@
    * multiple ranked alternatives (maxAlternatives > 1). A single-alternative
    * result is never rewritten. */
   const ALBANIAN_TASK_KEYS = [
-    'cakto', 'thuaji', 'thuaj', 'pergatit', 'pergatise', 'pergatisin', 'dergo', 'dergoje', 'dergojne',
-    'kontrollo', 'kontrolloje', 'kontrollojne', 'verifiko', 'rregullo', 'mbaro', 'perfundo', 'shiko',
-    'fature', 'faturen', 'faturat', 'pasqyren', 'raportin', 'shpenzimeve', 'mirembajtjen', 'mirembajtje',
-    'furnitoreve', 'klientit', 'pagesen', 'kontraten', 'preventivin', 'magazinen', 'detyren', 'detyre',
-    'neser', 'pasneser', 'sot', 'urgjent', 'prioritet', 'larte', 'ulet', 'mesem', 'mengjes', 'pasdite',
-    'darke', 'oren', 'afat', 'vonese', 'catine', 'zyren', 'projektin', 'dokumentet', 'llogarine',
+    'cakto', 'caktoji', 'caktoja', 'thuaji', 'thuaj', 'thuja', 'jepja', 'jepi', 'ngarko', 'ngarkoja',
+    'pergatit', 'pergatise', 'pergatisin', 'dergo', 'dergoje', 'dergojne', 'kontrollo', 'kontrolloje', 'kontrollojne',
+    'verifiko', 'verifikoje', 'rregullo', 'rregulloje', 'mbaro', 'perfundo', 'perfundoje', 'shiko', 'shikoje',
+    'nenshkruaj', 'mirato', 'konfirmo', 'organizo', 'planifiko', 'arkivo', 'perditeso', 'ndrysho', 'anulo',
+    'lajmero', 'njofto', 'kujto', 'kujtoja', 'telefon', 'telefono', 'shkruaj', 'sheno', 'regjistro', 'dorezo',
+    'fature', 'faturen', 'faturat', 'pasqyren', 'pasqyra', 'raportin', 'raporti', 'raportet', 'bilancin', 'buxhetin',
+    'shpenzimeve', 'shpenzimet', 'fitimin', 'mirembajtjen', 'mirembajtje', 'mirmbajtje', 'furnitoreve', 'furnitorin',
+    'klientit', 'klientin', 'klientet', 'pagesen', 'pagesat', 'kontraten', 'kontratat', 'preventivin', 'oferten',
+    'magazinen', 'inventarin', 'stoku', 'stokun', 'porosine', 'porosite', 'detyren', 'detyre', 'detyrat',
+    'kantierin', 'kantieri', 'instalimin', 'riparimin', 'servisin', 'pajisjet', 'makinerite', 'automjetin',
+    'mbledhjen', 'mbledhje', 'takimin', 'takim', 'prezantimin', 'analizen', 'dokumentet', 'dosjen', 'llogarine',
+    'banka', 'banken', 'tatimet', 'tvsh', 'doganen', 'importin', 'eksportin', 'sigurimin', 'lejen', 'tenderin',
+    'trajnim', 'rekrutim', 'orarin', 'turnin', 'pagen', 'rrogen', 'rezervimin', 'transportin', 'furnizimin',
+    'pastrimin', 'higjienen', 'kondicionerin', 'hidraulik', 'elektrik', 'catine', 'fasaden', 'zyren', 'projektin',
+    'neser', 'pasneser', 'sot', 'sonte', 'urgjent', 'urgjente', 'menjehere', 'shpejt', 'prioritet', 'larte', 'ulet',
+    'mesem', 'mesme', 'mengjes', 'pasdite', 'mbremje', 'darke', 'oren', 'afat', 'afatin', 'vonese', 'ngut', 'nxitim',
+    'hene', 'henen', 'marte', 'marten', 'merkure', 'merkuren', 'enjte', 'enjten', 'premte', 'premten', 'shtune', 'dielen',
+    'javen', 'javes', 'muajin', 'janar', 'shkurt', 'mars', 'prill', 'maj', 'qershor', 'korrik', 'gusht', 'shtator', 'tetor', 'nentor', 'dhjetor',
   ];
+  const ALBANIAN_GRAMMAR_KEYS = new Set([
+    'te', 'ne', 'per', 'me', 'nga', 'tek', 'dhe', 'edhe', 'qe', 'mos', 'nuk', 'do', 'kur', 'deri', 'pas', 'para',
+    'nje', 'dy', 'tre', 'tri', 'kater', 'pese', 'sot', 'neser', 'tani', 'tash', 'duhet', 'mund', 'lutem', 'brenda',
+  ]);
+  const FOREIGN_NOISE_KEYS = new Set([
+    'the', 'and', 'with', 'from', 'that', 'this', 'have', 'will', 'your', 'what', 'when', 'where', 'please', 'check', 'send', 'call',
+  ]);
   let hintWordKeys = [];
+
+  function phoneticKey(k) {
+    return String(k || '')
+      .replace(/rr/g, 'r').replace(/ll/g, 'l')
+      .replace(/gj/g, 'j').replace(/ia/g, 'ja').replace(/ie/g, 'je');
+  }
 
   function setHintWords(words) {
     const keys = new Set();
     for (const item of Array.isArray(words) ? words : []) {
-      for (const token of clean(item).split(' ')) {
+      for (const token of clean(item).split(/[\s,.;:/()-]+/)) {
         const k = wordKey(token);
-        if (k && k.length >= 3) keys.add(k);
+        if (k && k.length >= 3) {
+          keys.add(k);
+          keys.add(phoneticKey(k));
+        }
       }
     }
     hintWordKeys = [...keys];
@@ -116,14 +144,19 @@
       : Math.max(0.45, 0.88 - index * 0.07);
     let score = base - index * 0.025;
     const words = clean(text).split(' ');
+    let sqHits = 0, foreignHits = 0;
     for (const raw of words) {
       const k = wordKey(raw);
       if (!k) continue;
-      if (hintWordKeys.some(hk => sameKey(k, hk))) score += 0.20;
-      else if (ALBANIAN_TASK_KEYS.some(tk => sameKey(k, tk))) score += 0.08;
+      const pk = phoneticKey(k);
+      if (FOREIGN_NOISE_KEYS.has(k)) { foreignHits++; score -= 0.22; continue; }
+      if (ALBANIAN_GRAMMAR_KEYS.has(k)) { sqHits++; score += 0.035; }
+      if (hintWordKeys.some(hk => sameKey(k, hk) || sameKey(pk, hk))) { sqHits++; score += 0.22; }
+      else if (ALBANIAN_TASK_KEYS.some(tk => sameKey(k, tk) || sameKey(pk, tk) || (tk.length >= 4 && k.startsWith(tk)))) { sqHits++; score += 0.085; }
     }
     const diacritics = (text.match(/[ëçËÇ]/g) || []).length;
-    score += Math.min(0.12, diacritics * 0.03);
+    score += Math.min(0.16, diacritics * 0.035);
+    if (sqHits >= 2 && foreignHits === 0) score += 0.05;
     return score;
   }
 
