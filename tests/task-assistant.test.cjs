@@ -52,3 +52,27 @@ test('accepts valid AI proposals but keeps original transcript for review',()=>{
 test('local today is not shifted by UTC conversion',()=>{
   assert.equal(dateKey(now),'2026-10-28');assert.equal(parse('Raporti sot',[],now).due,'2026-10-28');
 });
+
+test('understands inflected Albanian dative/accusative names, spoken relative deadlines, named months, and colloquial priorities',()=>{
+  const team=['Kledis Doga','Dorjela Daja','Jorgo Toshkollari','Arben Kola'];
+  const d1=parse('Thuaji Dorjelës dhe Kledisit të dërgojnë faturat pas 3 ditësh menjëherë',team,now);
+  assert.equal(d1.assignee,'Dorjela Daja, Kledis Doga');
+  assert.equal(d1.due,'2026-10-31');
+  assert.equal(d1.priority,'Lart');
+  assert.match(d1.title,/dërgojnë faturat/i);
+
+  const d2=parse('Jepja Jorgos kontrollin e çatisë javën tjetër pa ngut',team,now);
+  assert.equal(d2.assignee,'Jorgo Toshkollari');
+  assert.equal(d2.due,'2026-11-04');
+  assert.equal(d2.priority,'Ulet');
+
+  const d3=parse('Ngarko Arben Kolës kontratën më 15 nëntor sa ma shpejt',team,now);
+  assert.equal(d3.assignee,'Arben Kola');
+  assert.equal(d3.due,'2026-11-15');
+  assert.equal(d3.priority,'Lart');
+
+  const norm=normalize({transcript:'Thuaji Dorjelës për faturën',draft:{title:'Dërgo faturën',assignee:'Dorgjela Dajes',due:'2026-10-29',priority:'Lart'}},'',team,now);
+  assert.equal(norm.assignee,'Dorjela Daja');
+  assert.equal(norm.warnings.length,0);
+});
+

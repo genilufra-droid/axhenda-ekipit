@@ -423,3 +423,18 @@ test('N-best Google sq-AL alternatives select genuine Albanian orthography and k
   Voice.setHintWords([]);
 });
 
+test('N-best ranker rejects English false-positive noise in favor of spoken Albanian with inflected hints',()=>{
+  const Voice=require('../voice-dictation.js');
+  Voice.setHintWords(['Dorjela Daja','Jorgo Toshkollari']);
+  const multiAlt={
+    0:{transcript:'please check the call with dori',confidence:0.79},
+    1:{transcript:'thuaji Dorjelës të verifikojë bilancin sot në mëngjes',confidence:0.74},
+    length:2,
+    isFinal:true,
+  };
+  const out=readResults({resultIndex:0,results:[multiAlt]},-1);
+  assert.equal(out.finalText,'thuaji Dorjelës të verifikojë bilancin sot në mëngjes');
+  Voice.setHintWords([]);
+});
+
+
