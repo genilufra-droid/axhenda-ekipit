@@ -30,7 +30,7 @@ function clock(){
 }
 function analysers(){const list=[];return list;}
 
-function setup({invoke,mediaDevices,MediaRecorder,SpeechRecognition,role='owner',userName='',AudioContext=true,AudioElement=false,AvatarAssistant,notify,userAgent='',maxTouchPoints=0}={}){
+function setup({invoke,mediaDevices,MediaRecorder,SpeechRecognition,role='owner',userName='',tasks=[],AudioContext=true,AudioElement=false,AvatarAssistant,notify,userAgent='',maxTouchPoints=0}={}){
   const els=new Map(),events={},windowEvents={};
   let saved=0,stopped=0,notified=0;
   const $=selector=>{
@@ -48,7 +48,7 @@ function setup({invoke,mediaDevices,MediaRecorder,SpeechRecognition,role='owner'
     }return els.get(selector);
   };
   const document={activeElement:null,addEventListener(name,fn){events[name]=fn;}};
-  const state={chat:{contacts:[{name:'Arben Kola'}]},priority:'Mesme'};
+  const state={tasks,chat:{contacts:[{name:'Arben Kola'}],msgs:{group:[]}},priority:'Mesme'};
   const time=clock();
   const rafQueue=new Map();let rafSeq=0;
   const requestAnimationFrame=cb=>{const id=++rafSeq;rafQueue.set(id,cb);return id;};
@@ -1129,16 +1129,125 @@ test('without any recording the live words are still used and no audio field is 
   app.$('#voiceCancel').onclick();
 });
 
-test('the visible avatar card opens the stage for the owner and blocks employees',()=>{
+test('the visible avatar card greets the actual logged-in user (owner or employee), never hardcodes Besnik Koci, and blocks signed-out/guest roles',()=>{
   const AvatarModule=require('../avatar-assistant.js');
-  const ownerApp=setup({AvatarAssistant:AvatarModule,role:'owner',userName:'Besnik Koci'});
-  ownerApp.$('#assistantOpenCard').onclick();
-  assert.ok(ownerApp.$('#assistantStage').classList.contains('show'),'owner opens avatar window');
-  assert.equal(ownerApp.$('#assistantStageText').textContent,'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?');
+  const otherOwner=setup({AvatarAssistant:AvatarModule,role:'owner',userName:'Gentian Lufra'});
+  otherOwner.$('#assistantOpenCard').onclick();
+  assert.ok(otherOwner.$('#assistantStage').classList.contains('show'),'owner opens avatar window');
+  assert.equal(otherOwner.$('#assistantStageText').textContent,'Përshëndetje Gentian Lufra! Çfarë detyre do të shkruajmë?');
 
-  const empApp=setup({AvatarAssistant:AvatarModule,role:'employee'});
+  const anonOwner=setup({AvatarAssistant:AvatarModule,role:'owner'});
+  anonOwner.$('#lblOwn').textContent='Besnik Koci'; // even if stale label existed, fallback ignores hardcoded name
+  anonOwner.$('#assistantOpenCard').onclick();
+  assert.equal(anonOwner.$('#assistantStageText').textContent,'Përshëndetje! Çfarë detyre do të shkruajmë?');
+
+  const empApp=setup({
+    AvatarAssistant:AvatarModule,
+    role:'employee',
+    userName:'Dorjela Daja',
+    tasks:[
+      {id:'t1',title:'Dërgo faturat',assignee:'Dorjela Daja',done:false},
+      {id:'t2',title:'Kontrollo çatinë',assignee:'Arben Kola',done:false},
+    ],
+  });
   empApp.$('#assistantOpenCard').onclick();
-  assert.ok(!empApp.$('#assistantStage').classList.contains('show'),'employee cannot open task avatar');
+  assert.ok(empApp.$('#assistantStage').classList.contains('show'),'employee opens identical avatar stage');
+  assert.equal(
+    empApp.$('#assistantStageText').textContent,
+    'Përshëndetje Dorjela Daja! Ke 1 detyrë në pritje. Cilën detyrë do të pranosh, raportosh ose shënosh të kryer?',
+  );
+
+  const guestApp=setup({AvatarAssistant:AvatarModule,role:'guest'});
+  guestApp.$('#assistantOpenCard').onclick();
+  assert.ok(!guestApp.$('#assistantStage').classList.contains('show'),'unauthenticated/guest role cannot open avatar');
+});
+
+test('full employee avatar flow: greets Dorjela Daja, auto-listens, reads tasks on demand, and confirms completion ONLY on her own task',async()=>{
+  const AvatarModule=require('../avatar-assistant.js');
+  const PCM=Buffer.from(new Int16Array([0,16384,-16384]).buffer).toString('base64');
+  const spokenCalls=[];
+  let sentMyTasks=null;
+  const tasks=[
+    {id:'t-dor-1',title:'Dërgo faturat e furnitorëve',assignee:'Dorjela Daja',due:'1970-01-02',priority:'Lart',done:false},
+    {id:'t-dor-2',title:'Përgatit pasqyrën mujore',assignee:'Dorjela Daja',due:'',priority:'Mesme',done:false},
+    {id:'t-arb-1',title:'Kontrollo çatinë',assignee:'Arben Kola',due:'',priority:'Lart',done:false},
+  ];
+  const app=setup({
+    AvatarAssistant:AvatarModule,
+    AudioElement:true,
+    SpeechRecognition:true,
+    MediaRecorder:recorderClass(),
+    role:'employee',
+    userName:'Dorjela Daja',
+    tasks,
+    invoke:async(name,options)=>{
+      if(name==='assistant-speak'){
+        spokenCalls.push(options.body.text);
+        return {data:{audioBase64:PCM,mimeType:'audio/pcm;rate=24000'}};
+      }
+      if(name==='transcribe-task'){
+        sentMyTasks=JSON.parse(options.body.get('myTasks')||'[]');
+        return {
+          data:{
+            ok:true,
+            mode:'employee',
+            transcript:'E përfundova dërgimin e faturave të furnitorëve me email',
+            employeeProposal:{
+              action:'complete',
+              taskId:'t-dor-1',
+              taskTitle:'Dërgo faturat e furnitorëve',
+              note:'U dërguan të gjitha faturat me email',
+            },
+          },
+        };
+      }
+      throw new Error('unexpected function: '+name);
+    },
+  });
+
+  // 1. Employee taps avatar card -> hears personalized Albanian greeting with her open task count
+  app.$('#assistantOpenCard').onclick();
+  await tick();await tick();await tick();await tick();
+  assert.equal(spokenCalls[0],'Përshëndetje Dorjela Daja! Ke 2 detyra në pritje. Cilën detyrë do të pranosh, raportosh ose shënosh të kryer?');
+  app.audioEl.onended();
+  await tick();await tick();await tick();await tick();
+  assert.equal(app.$('#assistantStagePill').textContent,'Po dëgjoj…');
+
+  // 2. Employee dictates completion -> only her 2 tasks are sent to server (never Arben's!)
+  app.speak(500);
+  app.recognizer.result([{text:'E përfundova dërgimin e faturave',final:true}],0);
+  app.quiet(3100);
+  await tick();await tick();await tick();await tick();
+  assert.equal(sentMyTasks.length,2,'only Dorjela tasks are included in myTasks');
+  assert.ok(!sentMyTasks.some(t=>t.id==='t-arb-1'),'Arben task never sent for Dorjela');
+  assert.equal(app.$('#voiceConfirmOverlay').classList.contains('show'),false,'owner task creation modal never opens for employee');
+  assert.ok(app.$('#empVoiceConfirmOverlay').classList.contains('show'),'employee confirmation modal opens');
+  assert.equal(app.$('#empVoiceTaskSelect').value,'t-dor-1');
+  assert.equal(app.$('#empVoiceAction').value,'complete');
+  assert.equal(tasks[0].done,false,'not marked done before explicit confirmation');
+
+  // Finish speaking the review summary, then confirm + tick Chat update
+  app.audioEl.onended();
+  await tick();
+  app.$('#empVoiceSendChat').checked=true;
+  await app.$('#empVoiceConfirm').onclick();
+  await tick();await tick();
+  assert.equal(app.saved,0,'employee never calls owner addTask()');
+  assert.equal(tasks[0].done,true,'Dorjela task marked done after confirmation');
+  assert.equal(tasks[0].doneBy,'Dorjela Daja');
+  assert.equal(tasks[0].reports.length,1);
+  assert.match(tasks[0].reports[0].text,/faturat me email/);
+  assert.equal(tasks[2].done,false,'Arben task remains untouched');
+  assert.equal(app.context.state.chat.msgs.group.length,1,'optional group chat update posted');
+  app.audioEl.onended();
+  await tick();
+
+  // 3. Employee asks "Cilat detyra kam?" via bottom input -> reads remaining 1 open task aloud without modal
+  app.$('#assistantLiveField').value='Cilat detyra kam në pritje?';
+  app.$('#assistantSendBtn').onclick();
+  await tick();await tick();
+  assert.equal(app.$('#empVoiceConfirmOverlay').classList.contains('show'),false);
+  assert.match(spokenCalls.at(-1),/Ke 1 detyrë në pritje: 1\. Përgatit pasqyrën mujore/);
 });
 
 test('full owner avatar flow: greets Besnik Koci aloud in Albanian, auto-listens, writes live words, prepares draft and speaks summary',async()=>{

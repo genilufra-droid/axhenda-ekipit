@@ -108,7 +108,11 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(out);
 }
 
-async function authorizeOwner(req: Request, url: string, key: string) {
+async function authorizeUser(
+  req: Request,
+  url: string,
+  key: string,
+): Promise<{ error: Response } | { ok: true; role: 'owner' | 'employee'; userId: string }> {
   const auth = req.headers.get('Authorization') || '';
   if (!auth.startsWith('Bearer ')) return { error: json({ error: 'Kërkohet hyrja në llogari.' }, 401) };
   const headers = { apikey: key, Authorization: auth };
@@ -120,8 +124,12 @@ async function authorizeOwner(req: Request, url: string, key: string) {
     { headers: { apikey: key, Authorization: `Bearer ${key}` } },
   );
   const rows = profRes.ok ? await profRes.json() : [];
-  if (rows?.[0]?.role !== 'owner') return { error: json({ error: 'Vetëm pronari mund të përdorë asistentin me zë.' }, 403) };
-  return { ok: true };
+  const rawRole = String(rows?.[0]?.role || '').trim().toLowerCase();
+  if (['owner', 'pronar'].includes(rawRole)) return { ok: true, role: 'owner', userId: String(user.id || '') };
+  if (['employee', 'punonjës', 'punonjes', 'manager', 'menaxher'].includes(rawRole)) {
+    return { ok: true, role: 'employee', userId: String(user.id || '') };
+  }
+  return { error: json({ error: 'Roli juaj nuk ka qasje te asistenti me zë.' }, 403) };
 }
 
 interface Roster {
@@ -321,6 +329,7 @@ async function extractWithGroqChat(
   transcriptText: string,
   promptContext: string,
   groqKey: string,
+  systemContent = 'Je ekspert i gjuhës shqipe (standarde dhe të folur / gegërisht e toskërisht) dhe asistent ekzekutiv. Kthe VETËM një objekt JSON valid me fushat: transcript, title, description, assignee, due, priority.',
 ): Promise<Record<string, unknown> | null> {
   if (!groqKey || !transcriptText) return null;
   for (const model of GROQ_CHAT_MODELS) {
@@ -333,10 +342,7 @@ async function extractWithGroqChat(
           temperature: 0,
           response_format: { type: 'json_object' },
           messages: [
-            {
-              role: 'system',
-              content: 'Je ekspert i gjuhës shqipe (standarde dhe të folur / gegërisht e toskërisht) dhe asistent ekzekutiv. Kthe VETËM një objekt JSON valid me fushat: transcript, title, description, assignee, due, priority.',
-            },
+            { role: 'system', content: systemContent },
             { role: 'user', content: `${promptContext}\n\nTranskripti i verifikuar shqip: "${transcriptText}"` },
           ],
         }),
@@ -351,6 +357,109 @@ async function extractWithGroqChat(
   return null;
 }
 
+async function runModelCascade(
+  parts: Array<Record<string, unknown>>,
+  systemInstructionText: string,
+  prompt: string,
+  whisperText: string,
+  liveTranscript: string,
+  geminiKey: string,
+  groqKey: string,
+  groqSystemContent?: string,
+): Promise<{ parsed: Record<string, unknown> | null; lastStatus: number; timedOut: boolean }> {
+  let parsed: Record<string, unknown> | null = null;
+  let lastStatus = 502;
+  let timedOut = false;
+
+  if (geminiKey) {
+    for (const model of MODELS) {
+      let res: Response;
+      try {
+        const generationConfig: Record<string, unknown> = {
+          temperature: 0.05,
+          responseMimeType: 'application/json',
+        };
+        if (model.thinkingLevel) {
+          generationConfig.thinkingConfig = { thinkingLevel: model.thinkingLevel };
+        }
+        res = await fetch(`${GEMINI}${model.id}:generateContent`, {
+          method: 'POST',
+          headers: { 'x-goog-api-key': geminiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemInstructionText }] },
+            contents: [{ role: 'user', parts }],
+            generationConfig,
+          }),
+          signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
+        });
+      } catch (e) {
+        if ((e as Error)?.name === 'TimeoutError' || (e as Error)?.name === 'AbortError') timedOut = true;
+        continue;
+      }
+
+      if (res.ok) {
+        const payload = await res.json().catch(() => null);
+        const respParts = payload?.candidates?.[0]?.content?.parts;
+        let rawText = '';
+        if (Array.isArray(respParts)) {
+          for (const p of respParts) {
+            if (p && !p.thought && typeof p.text === 'string' && p.text.trim()) rawText = p.text;
+          }
+          if (!rawText) rawText = String(respParts[0]?.text || '');
+        }
+        parsed = parseJsonObject(rawText);
+        if (parsed) break;
+        lastStatus = 502;
+        continue;
+      }
+      lastStatus = res.status;
+      if (res.status === 400 && !model.thinkingLevel) break;
+    }
+  }
+
+  if (!parsed && groqKey) {
+    const bestTranscript = whisperText || liveTranscript;
+    if (bestTranscript) {
+      parsed = await extractWithGroqChat(
+        bestTranscript,
+        `${systemInstructionText}\n\n${prompt}`,
+        groqKey,
+        groqSystemContent,
+      );
+    }
+  }
+
+  return { parsed, lastStatus, timedOut };
+}
+
+interface EmployeeTaskItem {
+  id: string;
+  title: string;
+  due: string;
+  priority: string;
+  done: boolean;
+}
+
+function parseEmployeeTasksJson(raw: string): EmployeeTaskItem[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((x) => x && typeof x === 'object' && x.id && x.title)
+      .slice(0, 50)
+      .map((x) => ({
+        id: String(x.id).slice(0, 80),
+        title: String(x.title).trim().slice(0, 220),
+        due: validDate(String(x.due || '')) ? String(x.due) : '',
+        priority: String(x.priority || 'Mesme').slice(0, 20),
+        done: Boolean(x.done),
+      }));
+  } catch {
+    return [];
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'Metoda nuk lejohet.' }, 405);
@@ -363,7 +472,7 @@ Deno.serve(async (req) => {
     return json({ error: 'Shërbimi AI nuk është konfiguruar.' }, 500);
   }
 
-  const gate = await authorizeOwner(req, supabaseUrl, serviceKey);
+  const gate = await authorizeUser(req, supabaseUrl, serviceKey);
   if ('error' in gate) return gate.error;
 
   let form: FormData;
@@ -380,6 +489,94 @@ Deno.serve(async (req) => {
   if (audioFile && audioFile.size > MAX_AUDIO) return json({ error: 'Regjistrimi është shumë i gjatë.' }, 413);
   if (!audioFile && !liveTranscript) return json({ error: ' nuk u dëgjua asnjë fjalë. Fol përsëri.' }, 400);
 
+  // ===== EMPLOYEE MODE: strictly updates/reads ONLY the logged-in employee's tasks =====
+  if (gate.role === 'employee') {
+    const myTasks = parseEmployeeTasksJson(String(form.get('myTasks') || ''));
+    const audioBuf = audioFile ? await audioFile.arrayBuffer() : null;
+    const audioBytes = audioBuf ? new Uint8Array(audioBuf) : null;
+    const mimeType = audioFile ? (audioFile.type || 'audio/webm').split(';')[0] : '';
+
+    const taskTitlesHint = myTasks.map((t) => t.title).slice(0, 15).join('; ');
+    const empWhisperPrompt = [
+      taskTitlesHint ? `Detyrat e mia: ${taskTitlesHint}.` : '',
+      vocabulary ? ` Fjalor: ${vocabulary}.` : '',
+      ' Përditësim detyre në shqip me ë dhe ç të sakta: e përfundova, e mbarova, e kreva, e bëra, u krye, e mora detyrën, e mora përsipër, e pranova, raportoj, shënim pune, mungon, në pritje, cilat detyra kam sot.',
+    ].join('').trim();
+
+    const whisperText = audioBytes && groqKey
+      ? await transcribeWithGroqWhisper(audioBytes, mimeType, empWhisperPrompt, groqKey)
+      : '';
+
+    const empSystem = [
+      'Je asistenti i gjuhës shqipe për punonjësit në aplikacionin "Axhenda e Ekipit".',
+      'Punonjësi flet ose shkruan në shqip (standarde ose bisedore/gegërisht/toskërisht) për të pyetur cilat detyra ka, për të pranuar një detyrë ("e mora përsipër / e pranova"), për ta shënuar si të kryer ("e përfundova / e mbarova / e kreva / e bona / e dërgova"), ose për të lënë një raport/shënim pune.',
+      'KUJDES ME MOHIMIN: Nëse punonjësi thotë "nuk e përfundova dot", "ende s\'e kam mbaruar", "ka problem / mungon diçka", kthe action = "report" (KURRË "complete").',
+      'Zgjidh taskId VETËM nga lista e detyrave të punonjësit më poshtë; nëse asnjë detyrë nuk përputhet qartë dhe janë më shumë se një, kthe taskId = "".',
+    ].join('\n');
+
+    const tasksBlock = myTasks.length
+      ? myTasks.map((t, idx) => `${idx + 1}. [id=${t.id}] "${t.title}" (${t.done ? 'Kryer' : 'Në pritje'}${t.due ? ', afati ' + t.due : ''})`).join('\n')
+      : 'Punonjësi aktualisht nuk ka detyra të listuara.';
+
+    const empPrompt = [
+      `Data e sotme: ${today}`,
+      `Lista e detyrave të këtij punonjësi:\n${tasksBlock}`,
+      whisperText ? `Transkript akustik ndihmës #1 (Whisper sq): "${whisperText}"` : '',
+      liveTranscript ? `Transkript paraprak ndihmës #2 (Browser sq-AL): "${liveTranscript}"` : '',
+      'Kthe VETËM JSON me këto fusha:',
+      '1. transcript: Fjalët e sakta të punonjësit në shqip të pastër (me ë dhe ç).',
+      '2. action: "list" (kur pyet cilat detyra ka), "complete" (kur thotë se e ka përfunduar/kryer detyrën), "acknowledge" (kur thotë se e mori përsipër / e pranoi / po nis punën), ose "report" (për çdo raportim ecurie, pengesë ose shënim).',
+      '3. taskId: ID-ja e saktë nga lista më sipër (p.sh. vlera brenda [id=...]) ose "" nëse nuk ka përputhje të qartë.',
+      '4. note: Shënimi i pastër në shqip që përmbledh çfarë raportoi punonjësi.',
+    ].filter(Boolean).join('\n');
+
+    const empParts: Array<Record<string, unknown>> = [{ text: empPrompt }];
+    if (audioBytes) empParts.unshift({ inlineData: { mimeType, data: toBase64(audioBytes) } });
+
+    const { parsed, lastStatus, timedOut } = await runModelCascade(
+      empParts,
+      empSystem,
+      empPrompt,
+      whisperText,
+      liveTranscript,
+      geminiKey,
+      groqKey,
+      'Je ekspert i gjuhës shqipe për raportimin e detyrave të punonjësve. Kthe VETËM një objekt JSON valid me fushat: transcript, action, taskId, note.',
+    );
+
+    if (!parsed) {
+      if (timedOut) return json({ error: 'Përpunimi i kërkesës vonoi shumë. Provo përsëri.' }, 504);
+      if (lastStatus === 429) return json({ error: 'Shërbimi AI është i ngarkuar. Provo pas pak sekondash.' }, 429);
+      return json({ error: 'Shërbimi AI nuk u përgjigj. Provo përsëri.' }, 502);
+    }
+
+    const verifiedTranscript = String(parsed.transcript || whisperText || liveTranscript || '').trim().slice(0, 4000);
+    const rawAction = String(parsed.action || '').trim().toLowerCase();
+    const negated = /\b(?:nuk|s\s*e|s\s*kam|se\s+kam|ende\s+(?:jo|nuk|s)|akoma\s+(?:jo|nuk|s)|pamundur)\b/.test(fold(verifiedTranscript));
+    let action: 'complete' | 'acknowledge' | 'report' | 'list' =
+      (['complete', 'acknowledge', 'report', 'list'] as const).includes(rawAction as any)
+        ? (rawAction as 'complete' | 'acknowledge' | 'report' | 'list')
+        : 'report';
+    if (negated && action === 'complete') action = 'report';
+
+    const requestedId = String(parsed.taskId || '').trim();
+    const matchedTask = myTasks.find((t) => t.id === requestedId) ||
+      (action !== 'list' && myTasks.filter((t) => !t.done).length === 1 ? myTasks.find((t) => !t.done) || null : null);
+
+    return json({
+      ok: true,
+      mode: 'employee',
+      transcript: verifiedTranscript,
+      employeeProposal: {
+        action,
+        taskId: matchedTask ? matchedTask.id : '',
+        taskTitle: matchedTask ? matchedTask.title : '',
+        note: String(parsed.note || verifiedTranscript || '').trim().slice(0, 1500),
+      },
+    });
+  }
+
+  // ===== OWNER MODE: full team roster + task creation/editing draft (v20 unchanged) =====
   // Load audio bytes and full DB employee roster simultaneously (~30ms) so Whisper gets EVERY employee & alias!
   const [audioBuf, roster] = await Promise.all([
     audioFile ? audioFile.arrayBuffer() : Promise.resolve(null),
@@ -439,63 +636,15 @@ Deno.serve(async (req) => {
     parts.unshift({ inlineData: { mimeType, data: toBase64(audioBytes) } });
   }
 
-  let parsed: Record<string, unknown> | null = null;
-  let lastStatus = 502;
-  let timedOut = false;
-
-  if (geminiKey) {
-    for (const model of MODELS) {
-      let res: Response;
-      try {
-        const generationConfig: Record<string, unknown> = {
-          temperature: 0.05,
-          responseMimeType: 'application/json',
-        };
-        if (model.thinkingLevel) {
-          generationConfig.thinkingConfig = { thinkingLevel: model.thinkingLevel };
-        }
-        res = await fetch(`${GEMINI}${model.id}:generateContent`, {
-          method: 'POST',
-          headers: { 'x-goog-api-key': geminiKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemInstructionText }] },
-            contents: [{ role: 'user', parts }],
-            generationConfig,
-          }),
-          signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
-        });
-      } catch (e) {
-        if ((e as Error)?.name === 'TimeoutError' || (e as Error)?.name === 'AbortError') timedOut = true;
-        continue;
-      }
-
-      if (res.ok) {
-        const payload = await res.json().catch(() => null);
-        const respParts = payload?.candidates?.[0]?.content?.parts;
-        let rawText = '';
-        if (Array.isArray(respParts)) {
-          for (const p of respParts) {
-            if (p && !p.thought && typeof p.text === 'string' && p.text.trim()) rawText = p.text;
-          }
-          if (!rawText) rawText = String(respParts[0]?.text || '');
-        }
-        parsed = parseJsonObject(rawText);
-        if (parsed) break;
-        lastStatus = 502;
-        continue;
-      }
-      lastStatus = res.status;
-      if (res.status === 400 && !model.thinkingLevel) break;
-    }
-  }
-
-  // Fallback to Groq Whisper + Groq Chat (`gpt-oss-120b` / `qwen3.8-27b`) if Gemini was unavailable
-  if (!parsed && groqKey) {
-    const bestTranscript = whisperText || liveTranscript;
-    if (bestTranscript) {
-      parsed = await extractWithGroqChat(bestTranscript, `${systemInstructionText}\n\n${prompt}`, groqKey);
-    }
-  }
+  const { parsed, lastStatus, timedOut } = await runModelCascade(
+    parts,
+    systemInstructionText,
+    prompt,
+    whisperText,
+    liveTranscript,
+    geminiKey,
+    groqKey,
+  );
 
   if (!parsed) {
     if (timedOut) return json({ error: 'Përgatitja e detyrës vonoi shumë. Provo përsëri.' }, 504);

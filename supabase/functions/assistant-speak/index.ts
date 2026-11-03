@@ -62,7 +62,9 @@ Deno.serve(async (req: Request) => {
       { headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } });
     if (!roleRes.ok) return fail('Nuk u verifikua roli.', 502);
     const role = String((await roleRes.json())?.[0]?.role || '').trim().toLowerCase();
-    if (!['owner', 'pronar'].includes(role)) return fail('Vetëm Pronari mund ta përdorë zërin.', 403);
+    if (!['owner', 'pronar', 'manager', 'menaxher', 'employee', 'punonjës', 'punonjes'].includes(role)) {
+      return fail('Roli nuk ka qasje te zëri.', 403);
+    }
 
     let body: any = null;
     try { body = await req.json(); } catch { body = null; }

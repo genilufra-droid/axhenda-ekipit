@@ -617,7 +617,7 @@
   <div class="role-switch">
     <label id="lblEmp" class="on">Punonjës</label>
     <div class="switch"><input type="checkbox" id="roleToggle"><span class="slider"></span></div>
-    <label id="lblOwn">Besnik Koci</label>
+    <label id="lblOwn">Pronari</label>
   </div>
 </header>
 
@@ -673,12 +673,12 @@
 
       <div class="chat" id="taskList"></div>
 
-      <!-- Visible Avatar Assistant launcher (owner) -->
-      <div class="assistant-card owner-only" id="assistantOpenCard" role="button" tabindex="0" aria-label="Hap Asistenten e Axhendës">
+      <!-- Visible Avatar Assistant launcher (Owner & Employees) -->
+      <div class="assistant-card" id="assistantOpenCard" role="button" tabindex="0" aria-label="Hap Asistenten e Axhendës">
         <img class="assistant-card-avatar" src="assets/avatar/assistant-head@2x.png" alt="" width="44" height="44" decoding="async" />
         <div class="assistant-card-info">
           <div class="assistant-card-name">Asistentja e Axhendës</div>
-          <div class="assistant-card-sub">Klikoni për të thënë një detyrë me zë në shqip</div>
+          <div class="assistant-card-sub" id="assistantOpenCardSub">Klikoni për të thënë një detyrë me zë në shqip</div>
         </div>
         <span class="assistant-card-cta">Asistentja</span>
       </div>
@@ -931,6 +931,42 @@
     <div class="modal-foot">
       <button class="act ghost" id="voiceCancel">Anulo</button>
       <button class="act" id="voiceConfirm">✅ Konfirmo dhe dërgo</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== EMPLOYEE VOICE UPDATE CONFIRMATION MODAL ===== -->
+<div class="overlay" id="empVoiceConfirmOverlay" role="dialog" aria-modal="true" aria-labelledby="empVoiceHeading">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="ic">✅</span>
+      <div style="flex:1;min-width:0"><p class="mt" id="empVoiceHeading">Konfirmo përditësimin e detyrës</p><p class="ms" id="empVoiceSource">Kontrollo detyrën dhe veprimin para ruajtjes.</p></div>
+      <button class="x" id="empVoiceCancelTop">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="assistant-warning" id="empVoiceWarnings" role="status"></div>
+      <div class="field">
+        <label for="empVoiceTaskSelect">Detyra jote *</label>
+        <select id="empVoiceTaskSelect"></select>
+      </div>
+      <div class="field">
+        <label for="empVoiceAction">Veprimi *</label>
+        <select id="empVoiceAction">
+          <option value="complete">✅ Shëno detyrën si të Kryer</option>
+          <option value="acknowledge">👍 Prano detyrën (E mora përsipër)</option>
+          <option value="report">📝 Shto raport / shënim pune</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="empVoiceNote">Shënimi / raporti yt në shqip</label>
+        <textarea id="empVoiceNote" rows="4" placeholder="Shkruaj ose korrigjo shënimin..."></textarea>
+      </div>
+      <label class="notify-all-label"><input type="checkbox" id="empVoiceSendChat" /> Dërgo këtë përditësim edhe në Chat-in e ekipit për pronarin</label>
+      <div class="hint">Asgjë nuk ndryshohet pa shtypur “Konfirmo veprimin”. Mund të përditësosh vetëm detyrat e caktuara për ty.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="act ghost" id="empVoiceCancel">Anulo</button>
+      <button class="act" id="empVoiceConfirm">✅ Konfirmo veprimin</button>
     </div>
   </div>
 </div>
@@ -1352,16 +1388,28 @@ function canSeeEmployees(){
 }
 function applyRole(){
   const on=cloud.role==='owner';
+  const activeName=String(cloud?.userName||'').trim();
   $('#roleToggle').checked=on;
   $('#roleToggle').disabled=true;
   document.body.classList.toggle('owner',on);
   document.body.classList.toggle('can-employees',canSeeEmployees());
   $('#lblEmp').classList.toggle('on',!on);
   $('#lblOwn').classList.toggle('on',on);
+  $('#lblOwn').textContent=(on&&activeName)?activeName:'Pronari';
+  $('#lblEmp').textContent=(!on&&activeName)?activeName:'Punonjës';
   $('#lockedNote').style.display=on?'none':'block';
-  if(state.chat){ state.chat.me = on?'Besnik Koci':(state.chat.contacts[0]?.name||'Besnik Koci'); save(); }
+  if($('#assistantOpenCardSub')) $('#assistantOpenCardSub').textContent=on
+    ?'Klikoni për të thënë një detyrë me zë në shqip'
+    :'Klikoni për të dëgjuar, pranuar ose përfunduar detyrat tuaja në shqip';
+  if($('#assistantLiveField')) $('#assistantLiveField').placeholder=on
+    ?'Urdhëro, më trego detyrën…'
+    :'P.sh. E përfundova detyrën… ose cilat detyra kam?';
+  if(state.chat){
+    state.chat.me=activeName||(on?'Pronari':(state.chat.contacts[0]?.name||'Punonjës'));
+    save();
+  }
   applyView();
-  toast(on?'Modaliteti: Besnik Koci 👑':'Modaliteti: Punonjës');
+  toast(on?('Modaliteti: '+(activeName||'Pronar')+' 👑'):('Modaliteti: '+(activeName||'Punonjës')));
 }
 $('#roleToggle').addEventListener('change',applyRole);
 $('#lblEmp').addEventListener('click',()=>{$('#roleToggle').checked=false;applyRole();});
@@ -1396,8 +1444,10 @@ function renderPending(){
 /* TASK ASSISTANT: text, live voice dictation with real voice-activity detection,
    safe local fallback and explicit confirmation. Nothing is saved or sent before
    the owner presses "Konfirmo dhe dërgo". */
-let voiceDraft=null, voiceDraftComposerPrefix=null, assistantCancel=()=>{}, assistantStartListening=null, assistantBusy=false, assistantReturnFocus=null, voiceSaving=false;
+let voiceDraft=null, voiceDraftComposerPrefix=null, assistantCancel=()=>{}, assistantStartListening=null, assistantProcessEmployeeText=null, assistantBusy=false, assistantReturnFocus=null, voiceSaving=false;
+let empVoiceDraft=null, empVoiceSaving=false;
 let voiceNotifyReminded=false;   // the owner is reminded once that notifying is his own choice
+const assistantHtmlEsc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const assistantPeople=()=>{
   const fromChat=(state.chat?.contacts||[]).filter(c=>!c.readonly).map(c=>c.name);
   const fromEmp=(typeof employees!=='undefined'&&Array.isArray(employees)?employees:[])
@@ -1405,14 +1455,18 @@ const assistantPeople=()=>{
     .map(e=>[e.emri,e.mbiemri].filter(Boolean).join(' ').trim());
   return [...new Set([...fromChat,...fromEmp].filter(Boolean))];
 };
+const isEmployeeAssistant=()=>cloud?.role==='employee';
 const assistantOwnerName=()=>{
   const fromCloud=String(cloud?.userName||'').trim();
   if(fromCloud)return fromCloud;
-  const fromLbl=String($('#lblOwn')?.textContent||'').trim();
-  if(fromLbl)return fromLbl;
-  const fromChat=String(state?.chat?.me||'').trim();
-  return fromChat;
+  const fromMeta=String((typeof currentUser!=='undefined'&&currentUser&&(currentUser.user_metadata?.display_name||currentUser.user_metadata?.full_name))||'').trim();
+  return fromMeta;
 };
+function myAssignedTasks(){
+  const list=Array.isArray(state?.tasks)?state.tasks:[];
+  const ident={userName:assistantOwnerName(),username:cloud?.username||'',email:(typeof currentUser!=='undefined'&&currentUser?.email)||''};
+  return list.filter(t=>TaskAssistant.taskMatchesUser(t,ident));
+}
 function parseVoiceTask(raw){return TaskAssistant.parse(raw,assistantPeople());}
 function assistantStatus(text){$('#assistantStatus').textContent=text;}
 
@@ -1481,7 +1535,10 @@ const assistantAvatar=(function(){
         return {started,stop(){wavPlaying=false;el.onended=null;el.onerror=null;try{el.pause();}catch(e){}clearWav();}};
       }:undefined,
       onReady:()=>setSub('Online',false),
-      onError:reason=>{if(reason&&reason!=='pa lidhje me serverin')setSub('Pa zë serveri ('+reason+')',true);},
+      onError:reason=>{
+        if(isEmployeeAssistant()&&/Pronari|403|qasje/i.test(String(reason||''))){setSub('Online',false);return;}
+        if(reason&&reason!=='pa lidhje me serverin')setSub('Pa zë serveri ('+reason+')',true);
+      },
       speechSynthesis:window.speechSynthesis,
       Utterance:window.SpeechSynthesisUtterance,
     });
@@ -1491,6 +1548,8 @@ const assistantAvatar=(function(){
         chatTime:$('#assistantMsgTime'),bubble:$('#assistantBubble'),clearBtn:$('#assistantClearChat'),stopAudio:$('#assistantStopAudio'),
         liveField:$('#assistantLiveField'),avatar:$('#assistantStageAvatar'),mic:$('#assistantStageMic'),mute:$('#assistantMute')},
       speaker,today:()=>TaskAssistant.dateKey(new Date()),ownerName:assistantOwnerName,
+      role:()=>(isEmployeeAssistant()?'employee':'owner'),
+      openTaskCount:()=>myAssignedTasks().filter(t=>!t.done).length,
     });
   }catch(e){return null;}
 })();
@@ -1509,8 +1568,11 @@ function assistantEvent(type,data){
       case 'heard':a.heard(data);break;
       case 'thinking':a.thinking();break;
       case 'draft':a.draft(data);break;
+      case 'empDraft':return a.employeeDraft?a.employeeDraft(data):false;
+      case 'sayText':return a.sayText?a.sayText(data):false;
       case 'reminder':a.reminder();break;
       case 'saved':a.saved(data);break;
+      case 'empSaved':return a.employeeSaved?a.employeeSaved(data):false;
       case 'discarded':a.discarded();break;
       case 'idle':a.idle(data);break;
       case 'mute':a.toggleMute();break;
@@ -1524,7 +1586,7 @@ function assistantEvent(type,data){
   return false;
 }
 $('#assistantOpenCard').onclick=()=>{
-  if(cloud.role!=='owner'){toast('Vetëm pronari mund të përgatisë detyra','err');return;}
+  if(cloud.role!=='owner'&&cloud.role!=='employee'){toast('Hyr në llogari për të përdorur asistenten','err');return;}
   const greeted=assistantEvent('greet');
   try{$('#assistantStageMic').focus();}catch(e){}
   if(greeted&&typeof greeted.then==='function'){
@@ -1571,10 +1633,14 @@ $('#assistantMsgDislike').onclick=()=>{
 };
 $('#assistantMsgReplay').onclick=()=>assistantEvent('replay');
 $('#assistantSendBtn').onclick=()=>{
-  if(cloud.role!=='owner'){toast('Vetëm pronari mund të përgatisë detyra','err');return;}
+  if(cloud.role!=='owner'&&cloud.role!=='employee'){toast('Hyr në llogari për të përdorur asistenten','err');return;}
   if(assistantAvatar&&assistantAvatar.state==='listening'){$('#assistantStageMic').onclick();return;}
   const typed=($('#assistantLiveField').value||'').trim();
   if(!typed){try{$('#assistantLiveField').focus();}catch(e){}return;}
+  if(isEmployeeAssistant()){
+    if(typeof assistantProcessEmployeeText==='function')assistantProcessEmployeeText(typed);
+    return;
+  }
   setVoiceComposer(typed);
   $('#aiTaskBtn').onclick();
 };
@@ -1703,16 +1769,130 @@ function cancelVoiceDraft(restoreFocus=true){
 $('#voiceCancel').onclick=()=>cancelVoiceDraft();
 $('#voiceCancelTop').onclick=()=>cancelVoiceDraft();
 $('#voiceConfirmOverlay').addEventListener('click',e=>{if(e.target===$('#voiceConfirmOverlay'))cancelVoiceDraft();});
+
+function speakEmployeeTasksList(){
+  const mine=myAssignedTasks();
+  const summary=typeof AvatarAssistant!=='undefined'&&AvatarAssistant.summarizeEmployeeTasks
+    ?AvatarAssistant.summarizeEmployeeTasks(mine,{today:TaskAssistant.dateKey(new Date())})
+    :(mine.filter(t=>!t.done).length?'Ke '+mine.filter(t=>!t.done).length+' detyra në pritje.':'Aktualisht nuk ke detyra në pritje.');
+  assistantStatus(summary);
+  assistantEvent('sayText',summary);
+  return true;
+}
+function showEmployeeVoiceDraft(raw,data=null,source='Përpunim lokal — kontrollo para konfirmimit'){
+  const transcript=String(data?.transcript||raw||'').trim();
+  empVoiceSaving=false;
+  if(!transcript){assistantStatus('Nuk u kap tekst. Provo përsëri.');return false;}
+  const mine=myAssignedTasks();
+  const proposal=data?TaskAssistant.normalizeEmployeeAction(data,raw,mine):TaskAssistant.parseEmployeeAction(transcript,mine);
+  assistantEvent('heard',transcript);
+  if(proposal.action==='list')return speakEmployeeTasksList();
+  empVoiceDraft=proposal;
+  assistantReturnFocus=document.activeElement;
+  const sel=$('#empVoiceTaskSelect');
+  if(!mine.length){
+    sel.innerHTML='<option value="">— Nuk ke detyra të caktuara —</option>';
+    sel.value='';
+  }else{
+    const sorted=[...mine].sort((a,b)=>(Number(!!a.done)-Number(!!b.done))||((b.createdAt||0)-(a.createdAt||0)));
+    sel.innerHTML=(proposal.taskId?'':'<option value="">— Zgjidh detyrën —</option>')+sorted.map(t=>{
+      const badge=t.done?' [Kryer]':' [Në pritje]';
+      return '<option value="'+assistantHtmlEsc(t.id)+'">'+assistantHtmlEsc(t.title)+badge+'</option>';
+    }).join('');
+    sel.value=proposal.taskId||'';
+  }
+  $('#empVoiceHeading').textContent='Konfirmo përditësimin e detyrës';
+  $('#empVoiceAction').value=['complete','acknowledge','report'].includes(proposal.action)?proposal.action:'report';
+  $('#empVoiceNote').value=proposal.note||transcript;
+  $('#empVoiceSendChat').checked=false;
+  $('#empVoiceWarnings').textContent=(proposal.warnings||[]).join('\n');
+  $('#empVoiceSource').textContent=source;
+  $('#empVoiceConfirmOverlay').classList.add('show');
+  $('#empVoiceNote').focus();
+  assistantEvent('empDraft',proposal);
+  return true;
+}
+function closeEmployeeVoiceDraft(restoreFocus=true){
+  empVoiceDraft=null;$('#empVoiceConfirmOverlay').classList.remove('show');
+  const previous=assistantReturnFocus;assistantReturnFocus=null;
+  if(restoreFocus)previous?.focus();
+}
+function cancelEmployeeVoiceDraft(restoreFocus=true){
+  closeEmployeeVoiceDraft(restoreFocus);
+  assistantEvent('discarded');
+}
+$('#empVoiceCancel').onclick=()=>cancelEmployeeVoiceDraft();
+$('#empVoiceCancelTop').onclick=()=>cancelEmployeeVoiceDraft();
+$('#empVoiceConfirmOverlay').addEventListener('click',e=>{if(e.target===$('#empVoiceConfirmOverlay'))cancelEmployeeVoiceDraft();});
+
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    if(voiceDraft){e.preventDefault();cancelVoiceDraft();}else if(!assistantEvent('escape'))assistantCancel();
+    if(empVoiceDraft){e.preventDefault();cancelEmployeeVoiceDraft();}
+    else if(voiceDraft){e.preventDefault();cancelVoiceDraft();}
+    else if(!assistantEvent('escape'))assistantCancel();
   }
-  if(e.key==='Tab'&&voiceDraft){
-    const items=[...$('#voiceConfirmOverlay').querySelectorAll('button,input,textarea,select')].filter(el=>!el.disabled);
-    if(e.shiftKey&&document.activeElement===items[0]){e.preventDefault();items.at(-1).focus();}
-    else if(!e.shiftKey&&document.activeElement===items.at(-1)){e.preventDefault();items[0].focus();}
+  if(e.key==='Tab'&&(voiceDraft||empVoiceDraft)){
+    const overlay=empVoiceDraft?$('#empVoiceConfirmOverlay'):$('#voiceConfirmOverlay');
+    const items=[...overlay.querySelectorAll('button,input,textarea,select')].filter(el=>!el.disabled);
+    if(items.length){
+      if(e.shiftKey&&document.activeElement===items[0]){e.preventDefault();items.at(-1).focus();}
+      else if(!e.shiftKey&&document.activeElement===items.at(-1)){e.preventDefault();items[0].focus();}
+    }
   }
 });
+
+$('#empVoiceConfirm').onclick=async()=>{
+  if(!empVoiceDraft||empVoiceSaving)return;
+  if(cloud.role!=='employee'){toast('Kjo dritare është vetëm për punonjësit','err');return;}
+  const taskId=String($('#empVoiceTaskSelect').value||'').trim();
+  const mine=myAssignedTasks();
+  const task=mine.find(x=>String(x.id)===taskId);
+  if(!task){toast('Zgjidh një nga detyrat e caktuara për ty','err');$('#empVoiceTaskSelect').focus();return;}
+  const action=String($('#empVoiceAction').value||'report');
+  const note=String($('#empVoiceNote').value||'').trim();
+  if(action==='report'&&!note){toast('Shkruaj shënimin ose raportin e punës','err');$('#empVoiceNote').focus();return;}
+  empVoiceSaving=true;
+  const nowTs=Date.now();
+  const actor=assistantOwnerName()||'Punonjës';
+  const uidKey=(typeof currentUser!=='undefined'&&currentUser?.id)||cloud?.userId||actor;
+  if(action==='complete'){
+    task.done=true;
+    task.doneAt=nowTs;
+    task.doneBy=actor;
+    task.ackBy=task.ackBy||{};
+    if(!task.ackBy[uidKey])task.ackBy[uidKey]=nowTs;
+  }else if(action==='acknowledge'){
+    task.ackBy=task.ackBy||{};
+    task.ackBy[uidKey]=nowTs;
+  }
+  if(note){
+    task.reports=Array.isArray(task.reports)?task.reports:[];
+    task.reports.push({id:(typeof uid==='function'?uid():String(nowTs)),by:actor,action,text:note,at:nowTs});
+  }
+  const actionLabel=action==='complete'?'Detyrë e kryer nga punonjësi':action==='acknowledge'?'Detyrë e pranuar nga punonjësi':'Raport pune nga punonjësi';
+  if(typeof logAudit==='function')logAudit(actionLabel,task.title+(note?' — '+note:''));
+  const sendChat=!!$('#empVoiceSendChat').checked;
+  let chatSent=false;
+  if(sendChat){
+    const badge=action==='complete'?'✅ KRYER':action==='acknowledge'?'👍 PRANUAR':'📝 RAPORT';
+    const chatText=badge+' ['+task.title+'] nga '+actor+(note?': '+note:'');
+    try{
+      if(typeof currentUser!=='undefined'&&currentUser&&authClient&&typeof authClient.from==='function'){
+        const {error}=await authClient.from('chat_messages').insert({sender_id:currentUser.id,recipient_id:null,message:chatText});
+        if(!error){chatSent=true;if(typeof secureRefreshChat==='function')secureRefreshChat();}
+      }else if(state.chat?.msgs?.group){
+        state.chat.msgs.group.push({id:(typeof uid==='function'?uid():String(nowTs)),from:actor,text:chatText,at:nowTs});
+        chatSent=true;
+      }
+    }catch(e){}
+  }
+  if(typeof save==='function')save();
+  if(typeof render==='function')render();
+  closeEmployeeVoiceDraft();
+  toast(action==='complete'?'Detyra u shënua si e kryer ✓':action==='acknowledge'?'Detyra u pranua ✓':'Raporti i punës u ruajt ✓','ok');
+  assistantStatus(actionLabel+': '+task.title);
+  assistantEvent('empSaved',{action,title:task.title,chatSent});
+};
 $('#voiceConfirm').onclick=()=>{
   if(!voiceDraft||voiceSaving)return;
   if(cloud.role!=='owner'){toast('Vetëm pronari mund të shtojë detyra','err');return;}
@@ -1770,8 +1950,10 @@ $('#voiceConfirm').onclick=()=>{
   function liveState(text){$('#voiceLiveState').textContent=text;}
   function liveComposer(session,text){
     const prefix=session.composerPrefix, words=String(text||'');
-    const separator=prefix&&words&&!/\s$/.test(prefix)?' ':'';
-    setVoiceComposer(prefix+separator+words);
+    if(!isEmployeeAssistant()){
+      const separator=prefix&&words&&!/\s$/.test(prefix)?' ':'';
+      setVoiceComposer(prefix+separator+words);
+    }
     assistantEvent('heard',words);
   }
   function liveHint(text){$('#voiceLiveHint').textContent=text;}
@@ -1796,7 +1978,7 @@ $('#voiceConfirm').onclick=()=>{
   function stopUi(){
     liveShow(false);meter(0);
     const lf=$('#assistantLiveField');
-    if(lf)lf.placeholder='Urdhëro, më trego detyrën…';
+    if(lf)lf.placeholder=isEmployeeAssistant()?'P.sh. E përfundova detyrën… ose cilat detyra kam?':'Urdhëro, më trego detyrën…';
   }
 
   /* ---------- microphone energy monitor (voice activity detection) ---------- */
@@ -1939,10 +2121,13 @@ $('#voiceConfirm').onclick=()=>{
     recognition.continuous=true;
     recognition.maxAlternatives=5;
     try{
-      VoiceDictation.setHintWords?.(assistantPeople());
+      const empTitles=isEmployeeAssistant()?myAssignedTasks().map(t=>t.title).slice(0,15):[];
+      VoiceDictation.setHintWords?.(isEmployeeAssistant()?empTitles:assistantPeople());
       const Phrase=window.SpeechRecognitionPhrase;
       if(typeof Phrase==='function'&&recognition.phrases!==undefined){
-        const boost=[...assistantPeople(),'cakto','thuaji','jepja','përgatit','dërgo','kontrollo','verifiko','nënshkruaj','mirato','rregullo','faturën','pasqyrën','raportin','mirëmbajtjen','shpenzimeve','furnitorëve','kontratën','preventivin','kantierin','çatinë','nesër','pasnesër','javën tjetër','sot','urgjent','menjëherë','prioritet i lartë','prioritet i ulët','pa vonesë','pa ngut'];
+        const boost=isEmployeeAssistant()
+          ?[...empTitles,'e përfundova','e mbarova','e kreva','u krye','e mora detyrën','e mora përsipër','e pranova','raportoj','shënim pune','cilat detyra kam','detyrat e mia','në pritje']
+          :[...assistantPeople(),'cakto','thuaji','jepja','përgatit','dërgo','kontrollo','verifiko','nënshkruaj','mirato','rregullo','faturën','pasqyrën','raportin','mirëmbajtjen','shpenzimeve','furnitorëve','kontratën','preventivin','kantierin','çatinë','nesër','pasnesër','javën tjetër','sot','urgjent','menjëherë','prioritet i lartë','prioritet i ulët','pa vonesë','pa ngut'];
         recognition.phrases=boost.filter(Boolean).slice(0,60).map(w=>new Phrase(w,5.0));
       }
     }catch(e){}
@@ -2090,6 +2275,7 @@ $('#voiceConfirm').onclick=()=>{
   function process(raw,blob=null,dictationSession=null){
     const text=String(raw||'').trim();
     const sendAudio=!!(blob&&blob.size);
+    const empMode=isEmployeeAssistant();
     if(!text&&!sendAudio){
       if(active===dictationSession)active=null;
       stopUi();idle();
@@ -2097,12 +2283,19 @@ $('#voiceConfirm').onclick=()=>{
       assistantEvent('idle','Nuk u kap zë. Provo përsëri.');
       return Promise.resolve();
     }
+    if(empMode&&!sendAudio&&TaskAssistant.parseEmployeeAction(text,myAssignedTasks()).action==='list'){
+      if(active===dictationSession)active=null;
+      stopUi();idle();
+      assistantEvent('heard',text);
+      speakEmployeeTasksList();
+      return Promise.resolve();
+    }
     const id=++requestId;
     assistantBusy=true;ai.disabled=true;button.disabled=true;
     const session={controller:new AbortController(),dictation:dictationSession};active=session;
-    liveState('Po përgatis detyrën…');
+    liveState(empMode?'Po kontrolloj detyrën…':'Po përgatis detyrën…');
     assistantEvent('thinking');
-    assistantStatus('Po përgatis detyrën… (deri në 28 s) Escape për anulim.');
+    assistantStatus(empMode?'Po kontrolloj detyrat tuaja… (deri në 28 s) Escape për anulim.':'Po përgatis detyrën… (deri në 28 s) Escape për anulim.');
     assistantDiag('');
     let timer, serverTranscript='';
     return (async()=>{
@@ -2112,10 +2305,14 @@ $('#voiceConfirm').onclick=()=>{
         // or (without a recording) the text as `liveTranscript`.
         const body=new FormData();
         body.append('today',TaskAssistant.dateKey(new Date()));
+        if(empMode){
+          const empTasksPayload=myAssignedTasks().slice(0,50).map(t=>({id:t.id,title:t.title,due:t.due||'',priority:t.priority||'Mesme',done:!!t.done}));
+          body.append('myTasks',JSON.stringify(empTasksPayload));
+        }
         if(sendAudio){
           const ext=blob.type.includes('mp4')?'mp4':blob.type.includes('ogg')?'ogg':'webm';
           body.append('audio',blob,'task.'+ext);
-          const vocabulary=voiceVocabulary();
+          const vocabulary=empMode?myAssignedTasks().map(t=>t.title).slice(0,20).join(', '):voiceVocabulary();
           if(vocabulary)body.append('vocabulary',vocabulary);
           if(text)body.append('liveTranscript',text);
         }else body.append('liveTranscript',text);
@@ -2132,6 +2329,15 @@ $('#voiceConfirm').onclick=()=>{
         if(typeof transcript==='string')serverTranscript=transcript.trim();
         if(dictationSession)dictationSession.finalText=serverTranscript;
         if(dictationSession&&serverTranscript)liveComposer(dictationSession,serverTranscript);
+        if(empMode){
+          if(!result.data?.employeeProposal){const error=new Error('përgjigjja nuk përmbante propozim');error.assistantMessage='përgjigjja nuk përmbante propozim';throw error;}
+          stopUi();
+          const openedEmp=showEmployeeVoiceDraft(text,result.data,'Propozim nga AI — konfirmo veprimin');
+          if(result.data?.employeeProposal?.action!=='list'){
+            assistantStatus(openedEmp?'Konfirmo veprimin te dritarja dhe shtyp “Konfirmo veprimin”.':'Nuk u kap tekst. Provo përsëri.');
+          }
+          return;
+        }
         if(!result.data?.draft){const error=new Error('përgjigjja nuk përmbante propozim');error.assistantMessage='përgjigjja nuk përmbante propozim';throw error;}
         stopUi();
         const opened=showVoiceDraft(text,result.data,'Propozim nga AI — kontrolloje para ruajtjes',dictationSession?.composerPrefix??null);
@@ -2147,9 +2353,14 @@ $('#voiceConfirm').onclick=()=>{
         const fallback=serverTranscript||text;
         const details=[audio,dictationDiag(dictationSession)].filter(Boolean).join(' · ');
         if(fallback){
-          showVoiceDraft(fallback,null,'Përpunim lokal — AI nuk u përdor',dictationSession?.composerPrefix??null);
-          assistantStatus('AI në server nuk u përdor ('+reason+'). U përdor përpunimi lokal — kontrollo fushat.');
-          if(reason!=='offline')assistantDiag('arsyeja: '+reason+details+' · '+diagContext());
+          if(empMode){
+            showEmployeeVoiceDraft(fallback,null,'Përpunim në shqip — kontrollo para konfirmimit');
+            assistantStatus('Kontrollo përditësimin te dritarja dhe shtyp “Konfirmo veprimin”.');
+          }else{
+            showVoiceDraft(fallback,null,'Përpunim lokal — AI nuk u përdor',dictationSession?.composerPrefix??null);
+            assistantStatus('AI në server nuk u përdor ('+reason+'). U përdor përpunimi lokal — kontrollo fushat.');
+            if(reason!=='offline')assistantDiag('arsyeja: '+reason+details+' · '+diagContext());
+          }
         }else{
           assistantStatus('Audioja nuk u transkriptua: '+reason.replace(/\.+$/,'')+'. Provo përsëri ose shkruaj kërkesën dhe shtyp ✨ AI.');
           assistantEvent('idle','Nuk u kuptua detyra: '+reason.replace(/\.+$/,'')+'. Provo përsëri.');
@@ -2198,15 +2409,15 @@ $('#voiceConfirm').onclick=()=>{
 
   async function startDictation(){
     if(active||assistantBusy)return;
-    if(cloud.role!=='owner'){toast('Vetëm pronari mund të përgatisë detyra','err');return;}
+    if(cloud.role!=='owner'&&cloud.role!=='employee'){toast('Hyr në llogari për të përdorur asistenten','err');return;}
     if(!navigator.mediaDevices?.getUserMedia){
       assistantStatus('Ky browser nuk jep qasje te mikrofoni. Shkruaj kërkesën dhe shtyp ✨ AI.');
       assistantEvent('open');
-      assistantEvent('idle','Ky browser nuk jep qasje te mikrofoni (hap faqen me HTTPS ose shkruaj detyrën dhe shtyp ✨ AI).');
+      assistantEvent('idle','Ky browser nuk jep qasje te mikrofoni (hap faqen me HTTPS ose shkruaj mesazhin poshtë).');
       return;
     }
     assistantEvent('beforeListen');
-    const session={chunks:[],cancelled:false,stopped:false,released:false,audioDone:false,composerPrefix:$('#tTitle').value};
+    const session={chunks:[],cancelled:false,stopped:false,released:false,audioDone:false,composerPrefix:isEmployeeAssistant()?'':$('#tTitle').value};
     session.blobPromise=new Promise(resolve=>{session.resolveBlob=resolve;});
     /* On a phone the microphone is shared: the recorder and the live recogniser can
      * both be opened, but never at the same instant (the recorder goes first, the
@@ -2229,14 +2440,14 @@ $('#voiceConfirm').onclick=()=>{
       onResult:result=>handleResult(session,result),
       onCancel:()=>{
         if(active===session)active=null;
-        setVoiceComposer(session.composerPrefix);
+        if(!isEmployeeAssistant())setVoiceComposer(session.composerPrefix);
         stopUi();idle();
         assistantStatus('Regjistrimi u anulua. Asnjë detyrë nuk u ruajt dhe asnjë njoftim nuk u dërgua.');
         assistantEvent('idle','Regjistrimi u anulua. Asgjë nuk u ruajt dhe asnjë njoftim nuk u dërgua.');
       },
       onError:message=>{
         if(active===session)active=null;
-        setVoiceComposer(session.composerPrefix);
+        if(!isEmployeeAssistant())setVoiceComposer(session.composerPrefix);
         stopUi();idle();
         assistantStatus(message||'Mikrofoni nuk u hap.');
         assistantEvent('idle',message||'Mikrofoni nuk u hap.');
@@ -2349,6 +2560,15 @@ $('#voiceConfirm').onclick=()=>{
     return startDictation();
   };
   assistantStartListening=()=>startDictation();
+  assistantProcessEmployeeText=raw=>{
+    if(assistantBusy||active||!isEmployeeAssistant())return;
+    const text=String(raw||'').trim();
+    if(!text)return;
+    if(text.length>4000){toast('Mesazhi duhet të jetë deri në 4000 karaktere','err');return;}
+    assistantEvent('unlock');
+    liveShow(false);
+    process(text);
+  };
   button.onclick=toggleVoiceTask;
   $('#assistantStageMic').onclick=toggleVoiceTask;
   ai.onclick=()=>{
@@ -2571,7 +2791,11 @@ function taskIsMine(t){
   const names=taskAssignees(t);
   const user=String(cloud.userName||'').trim().toLowerCase();
   const emailUser=String(currentUser?.email||'').split('@')[0].toLowerCase();
-  return names.includes(user)||names.includes(emailUser);
+  if(names.includes(user)||names.includes(emailUser))return true;
+  if(typeof TaskAssistant!=='undefined'&&TaskAssistant.taskMatchesUser){
+    return TaskAssistant.taskMatchesUser(t,{userName:cloud.userName,username:cloud.username||'',email:currentUser?.email||''});
+  }
+  return false;
 }
 function markTaskSeen(t){
   if(!taskIsMine(t)||!currentUser)return;
@@ -2598,12 +2822,20 @@ function openDetail(id){
   if(t.due)rows.push(['Afati',`<span class="chip due ${isOverdue(t)?'over':''}">📅 ${dueFmt(t.due)}${isOverdue(t)?' · vonuar':''}</span>`]);
   rows.push(['Ngarkuar',dt(t.createdAt)]);
   if(t.editedAt)rows.push(['Redaktuar',dt(t.editedAt)]);
-  if(t.done&&t.doneAt)rows.push(['Kryer',`<span style="color:#1a8a4f;font-weight:700">${dt(t.doneAt)}</span>`]);
+  if(t.done&&t.doneAt)rows.push(['Kryer',`<span style="color:#1a8a4f;font-weight:700">${dt(t.doneAt)}${t.doneBy?' · '+esc(t.doneBy):''}</span>`]);
   if(t.seenBy){const vals=Object.values(t.seenBy);if(vals.length)rows.push(['Parë',`<span style="color:#2b5bd0;font-weight:700">${dt(Math.min(...vals))}</span>`]);}
   if(t.ackBy){const vals=Object.values(t.ackBy);if(vals.length)rows.push(['Pranuar',`<span style="color:#1a8a4f;font-weight:700">${dt(Math.min(...vals))}</span>`]);}
   let html=rows.map(r=>`<div class="detail-row"><span class="k">${r[0]}</span><span class="v">${r[1]}</span></div>`).join('');
   if(taskIsMine(t)&&!t.ackBy?.[currentUser?.id]) html+=`<div style="margin-top:14px"><button class="act" id="ackTaskBtn" style="width:100%">✅ E mora detyrën</button></div>`;
   if(t.desc)html+=`<div style="margin-top:12px"><div class="detail-row" style="border:none;padding-bottom:6px"><span class="k">Përshkrimi</span></div><div class="detail-desc">${esc(t.desc)}</div></div>`;
+  if((t.reports||[]).length){
+    html+=`<div style="margin-top:14px"><div class="k" style="margin-bottom:8px">💬 Raportime & përditësime (${t.reports.length})</div>`;
+    html+=t.reports.map(r=>{
+      const tag=r.action==='complete'?'✅ Kryer':r.action==='acknowledge'?'👍 Pranuar':'📝 Raport';
+      return `<div class="detail-desc" style="margin-bottom:8px"><div style="font-size:11px;color:#5b6778;margin-bottom:3px"><b>${esc(r.by||'Punonjës')}</b> · ${tag} · ${dt(r.at)}</div>${esc(r.text||'')}</div>`;
+    }).join('');
+    html+='</div>';
+  }
   if((t.files||[]).length){
     html+=`<div style="margin-top:14px"><div class="k" style="margin-bottom:8px">📎 Skedarët (${t.files.length})</div>`;
     html+=t.files.map(f=>`<div class="dfile"><span style="font-size:20px">📄</span><span class="dn">${esc(f.name)}</span><span class="time">${human(f.size)}</span><button class="act ghost sm" data-ddl="${t.id}|${f.id}">⬇</button></div>`).join('');
@@ -2647,7 +2879,7 @@ function applyView(){
 function initChat(){
   if(state.chat) return;
   state.chat={
-    me:'Besnik Koci',
+    me:String(cloud?.userName||'').trim()||'Përdoruesi',
     active:'group',
     contacts:[],
     msgs:{group:[]}
@@ -3494,10 +3726,16 @@ async function unlockApp(user){
   document.body.classList.remove('auth-lock');
   $('#authScreen').style.display='none';
   const {data:profile}=await authClient.from('profiles').select('display_name,username,role,must_change_password').eq('id',user.id).maybeSingle();
+  let empFullName='';
+  try{
+    const {data:empRow}=await authClient.from('punonjesit').select('emri,mbiemri').eq('user_id',user.id).maybeSingle();
+    if(empRow)empFullName=[empRow.emri,empRow.mbiemri].filter(Boolean).join(' ').trim();
+  }catch(e){}
   cloud.userId=user.id;
   cloud.role=['owner','pronar'].includes(String(profile?.role||'').trim().toLowerCase())?'owner':'employee';
   cloud.profileRole=profile?.role||'';
-  cloud.userName=profile?.display_name||user.email.split('@')[0];
+  cloud.username=String(profile?.username||'').trim();
+  cloud.userName=(profile?.display_name||empFullName||user?.user_metadata?.display_name||user?.user_metadata?.full_name||profile?.username||String(user?.email||'').split('@')[0]||'').trim();
   state.chat.me=cloud.userName;
   applyRole();
   if(profile?.must_change_password){
