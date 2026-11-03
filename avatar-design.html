@@ -1017,14 +1017,14 @@
 <script>
 const STATES = [
   {
-    key: '1. Fillimi',
-    note: 'Përshëndetje + gati',
+    key: '1. Fillimi (Pronar)',
+    note: 'Përshëndet emrin e user-it të loguar',
     state: 'idle',
     muted: false,
     history: false,
     error: false,
     pill: 'Klikoni për të thënë një detyrë',
-    bubble: 'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?',
+    bubble: 'Përshëndetje! Çfarë detyre do të shkruajmë?',
     input: '',
     placeholder: 'Urdhëro, më trego detyrën…',
     time: '10:58 PM'
@@ -1117,10 +1117,24 @@ const STATES = [
     error: false,
     keyboard: true,
     pill: 'Klikoni për të thënë një detyrë',
-    bubble: 'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?',
+    bubble: 'Përshëndetje! Çfarë detyre do të shkruajmë?',
     input: 'Cakto Dorjelës faturat nesër|',
     placeholder: 'Urdhëro, më trego detyrën…',
     time: '11:00 PM'
+  },
+  {
+    key: '9. Punonjësi',
+    note: 'Pranim, raportim & përfundim detyre',
+    state: 'speaking',
+    muted: false,
+    history: true,
+    error: false,
+    keyboard: false,
+    pill: 'Po flas',
+    bubble: 'Përshëndetje Dorjela Daja! Gati për konfirmim: po shënon si të kryer detyrën “Dërgo faturat e furnitorëve”. Kontrollo shënimin dhe shtyp “Konfirmo veprimin”.',
+    input: 'E përfundova dërgimin e faturave të furnitorëve',
+    placeholder: 'P.sh. E përfundova detyrën… ose cilat detyra kam?',
+    time: '11:01 PM'
   }
 ];
 

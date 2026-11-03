@@ -39,7 +39,7 @@
       <circle cx="33" cy="602" r="20.5" fill="#FFFFFF"/>
       <image href="assistant-head@2x.png" x="14" y="583" width="38" height="38" clip-path="url(#mc0_412)"/>
       <rect x="62" y="582" width="336" height="66" rx="14" fill="#FFFFFF"/>
-      <text x="76" y="605" font-size="15" fill="#18252C">Përshëndetje Besnik Koci! Çfarë detyre</text>
+      <text x="76" y="605" font-size="15" fill="#18252C">Përshëndetje [Përdorues]! Çfarë detyre</text>
       <text x="76" y="626" font-size="15" fill="#18252C">do të shkruajmë?</text>
       <image href="icons/copy.svg" x="66" y="656" width="16" height="16" opacity="0.65"/>
       <image href="icons/thumb-up.svg" x="96" y="656" width="16" height="16" opacity="0.65"/>
@@ -78,7 +78,7 @@
       <circle cx="33" cy="398" r="20.5" fill="#FFFFFF"/>
       <image href="assistant-head@2x.png" x="14" y="379" width="38" height="38" clip-path="url(#mc1_412)"/>
       <rect x="62" y="378" width="336" height="66" rx="14" fill="#FFFFFF"/>
-      <text x="76" y="401" font-size="15" fill="#18252C">Përshëndetje Besnik Koci! Çfarë detyre</text>
+      <text x="76" y="401" font-size="15" fill="#18252C">Përshëndetje [Përdorues]! Çfarë detyre</text>
       <text x="76" y="422" font-size="15" fill="#18252C">do të shkruajmë?</text>
       <image href="icons/copy.svg" x="66" y="452" width="16" height="16" opacity="0.65"/>
       <image href="icons/thumb-up.svg" x="96" y="452" width="16" height="16" opacity="0.65"/>

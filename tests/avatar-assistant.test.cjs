@@ -439,3 +439,27 @@ test('all 7 avatar design states (Fillimi, Po dëgjoj, Po përgatis, Po flet, He
   assert.equal(els.clearBtn.classList.contains('show'), false);
   assert.equal(els.chat.textContent, 'Përshëndetje Besnik Koci! Çfarë detyre do të shkruajmë?');
 });
+
+test('dynamic greeting & employee mode greet the actual logged-in user and read/confirm employee tasks', async () => {
+  assert.equal(Avatar.greeting('Gentian Lufra'), 'Përshëndetje Gentian Lufra! Çfarë detyre do të shkruajmë?');
+  assert.equal(Avatar.greeting(''), 'Përshëndetje! Çfarë detyre do të shkruajmë?');
+  assert.equal(
+    Avatar.greeting('Dorjela Daja', { role: 'employee', openCount: 2 }),
+    'Përshëndetje Dorjela Daja! Ke 2 detyra në pritje. Cilën detyrë do të pranosh, raportosh ose shënosh të kryer?',
+  );
+  assert.equal(
+    Avatar.greeting('Kledis Doga', { role: 'employee', openCount: 0 }),
+    'Përshëndetje Kledis Doga! Aktualisht nuk ke detyra në pritje. Si mund të të ndihmoj?',
+  );
+
+  const listText = Avatar.summarizeEmployeeTasks([
+    { id: '1', title: 'Dërgo faturat', due: '2026-10-30', done: false },
+    { id: '2', title: 'Arkivo kontratat', due: '', done: true },
+  ], { today: '2026-10-29' });
+  assert.match(listText, /Ke 1 detyrë në pritje: 1\. Dërgo faturat \(afati: nesër\)/);
+
+  const doneSummary = Avatar.summarizeEmployeeAction({ action: 'complete', taskTitle: 'Dërgo faturat' });
+  assert.match(doneSummary, /po shënon si të kryer detyrën “Dërgo faturat”/);
+  assert.match(doneSummary, /Konfirmo veprimin/);
+});
+

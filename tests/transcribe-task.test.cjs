@@ -54,13 +54,41 @@ test('transcribe: audio is sent to Gemini inline and the key never appears in th
   assert.ok(call.options.body.includes('inlineData'));
   assert.ok(!call.url.includes(SECRET));
 });
-test('transcribe: only the owner, only signed in, and nothing empty', async () => {
-  const employee = endpoint('transcribe-task', { role: 'employee' });
-  assert.equal((await employee.handler(post(form({ liveTranscript: 'a' })))).status, 403);
-  assert.equal(employee.geminiCalls().length, 0);
+test('transcribe: requires signed-in team member, blocks unknown roles, and scopes employee to employeeProposal only', async () => {
+  const guest = endpoint('transcribe-task', { role: 'guest' });
+  assert.equal((await guest.handler(post(form({ liveTranscript: 'a' })))).status, 403);
+  assert.equal(guest.geminiCalls().length, 0);
+  const emptyRole = endpoint('transcribe-task', { role: '' });
+  assert.equal((await emptyRole.handler(post(form({ liveTranscript: 'a' })))).status, 403);
   assert.equal((await endpoint('transcribe-task', { badSession: true }).handler(post(form({ liveTranscript: 'a' })))).status, 401);
   assert.equal((await endpoint('transcribe-task').handler(post(form({ liveTranscript: 'a' }), null))).status, 401);
   assert.equal((await endpoint('transcribe-task').handler(post(form({})))).status, 400);
+
+  // Employee mode returns employeeProposal (never owner draft) and rejects foreign taskId
+  const myTasks = JSON.stringify([
+    { id: 'emp-1', title: 'Dërgo faturat', due: '2026-11-04', priority: 'Lart', done: false },
+    { id: 'emp-2', title: 'Përgatit pasqyrën', due: '', priority: 'Mesme', done: false },
+  ]);
+  const empOk = endpoint('transcribe-task', {
+    role: 'employee',
+    provider: gemini({ transcript: 'E përfundova dërgimin e faturave', action: 'complete', taskId: 'emp-1', note: 'U dërguan me email' }),
+  });
+  const empRes = await empOk.handler(post(form({ liveTranscript: 'E përfundova dërgimin e faturave', myTasks, today: '2026-11-03' })));
+  const empData = await empRes.json();
+  assert.equal(empRes.status, 200);
+  assert.equal(empData.mode, 'employee');
+  assert.equal(empData.draft, undefined, 'employee never receives owner task creation draft');
+  assert.equal(empData.employeeProposal.action, 'complete');
+  assert.equal(empData.employeeProposal.taskId, 'emp-1');
+
+  // Negated completion ("Nuk e përfundova dot...") is downgraded to "report" on the server too
+  const empNeg = endpoint('transcribe-task', {
+    role: 'punonjës',
+    provider: gemini({ transcript: 'Nuk e përfundova dot faturën sepse mungon vula', action: 'complete', taskId: 'foreign-999', note: 'Mungon vula' }),
+  });
+  const negData = await (await empNeg.handler(post(form({ liveTranscript: 'Nuk e përfundova dot', myTasks })))).json();
+  assert.equal(negData.employeeProposal.action, 'report');
+  assert.equal(negData.employeeProposal.taskId, '', 'foreign taskId not in myTasks is stripped');
 });
 test('transcribe: provider failures return a short Albanian message, never provider text or secrets', async () => {
   const leak = () => new Response('RAW PROVIDER DETAIL ' + SECRET, { status: 500 });
@@ -75,12 +103,14 @@ test('transcribe: provider failures return a short Albanian message, never provi
   assert.ok(!(await garbage.text()).includes('jo json'));
   assert.equal((await endpoint('transcribe-task', { env: { GEMINI_API_KEY: '' } }).handler(post(form({ liveTranscript: 'a' })))).status, 500);
 });
-test('speak: owner gets audio, others and signed-out callers do not', async () => {
+test('speak: signed-in owner and employee get audio, unauthorized roles and signed-out callers do not', async () => {
   const ok = () => json({ candidates: [{ content: { parts: [{ inlineData: { data: 'QUJD', mimeType: 'audio/pcm;rate=24000' } }] } }] });
   const body = JSON.stringify({ text: 'Përshëndetje' });
   const res = await endpoint('assistant-speak', { provider: ok }).handler(post(body));
   assert.deepEqual(await res.json(), { ok: true, audioBase64: 'QUJD', mimeType: 'audio/pcm;rate=24000' });
-  assert.equal((await endpoint('assistant-speak', { role: 'employee', provider: ok }).handler(post(body))).status, 403);
+  const empRes = await endpoint('assistant-speak', { role: 'employee', provider: ok }).handler(post(body));
+  assert.deepEqual(await empRes.json(), { ok: true, audioBase64: 'QUJD', mimeType: 'audio/pcm;rate=24000' });
+  assert.equal((await endpoint('assistant-speak', { role: 'guest', provider: ok }).handler(post(body))).status, 403);
   assert.equal((await endpoint('assistant-speak', { provider: ok }).handler(post(body, null))).status, 401);
   assert.equal((await endpoint('assistant-speak', { provider: ok }).handler(post('{}'))).status, 400);
 });

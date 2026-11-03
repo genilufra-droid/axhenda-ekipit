@@ -260,7 +260,197 @@
     };
   }
 
-  const api = { parse, normalize, validDate, dateKey, resolveKnownPerson };
+  /* Checks whether a task belongs to the logged-in employee (handles full name,
+   * Albanian diacritics/inflections, username, and email local-part). */
+  function taskMatchesUser(task, identity) {
+    if (!task || !task.assignee) return false;
+    const info = typeof identity === 'string' ? { userName: identity } : (identity || {});
+    const fullName = fold(info.userName || '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    const userHandle = fold(info.username || '').replace(/[^a-z0-9._-]/g, '').trim();
+    const emailHandle = fold(String(info.email || '').split('@')[0] || '').replace(/[^a-z0-9._-]/g, '').trim();
+    if (!fullName && !userHandle && !emailHandle) return false;
+
+    const assignees = String(task.assignee || '')
+      .split(/[,;\n]+/)
+      .map(s => fold(s).replace(/[^a-z0-9\s._-]/g, ' ').replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+    if (!assignees.length) return false;
+
+    const userWords = fullName ? fullName.split(' ') : [];
+    for (const a of assignees) {
+      if (fullName && a === fullName) return true;
+      if (userHandle && a === userHandle) return true;
+      if (emailHandle && a === emailHandle) return true;
+      const aWords = a.split(' ').filter(Boolean);
+      if (userWords.length && aWords.length === userWords.length &&
+          aWords.every((aw, idx) => sameAlbanianNameToken(aw, userWords[idx]) || sameAlbanianNameToken(userWords[idx], aw))) {
+        return true;
+      }
+      if (aWords.length === 1 && userWords.length >= 1 && aWords[0].length >= 4 &&
+          sameAlbanianNameToken(aWords[0], userWords[0])) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  const EMP_STOPWORDS = new Set([
+    'detyra', 'detyren', 'detyres', 'detyrat', 'detyrave', 'puna', 'punen', 'punes',
+    'perfundova', 'perfunduam', 'perfundua', 'perfunduar', 'mbarova', 'mbaruam', 'mbaruar',
+    'kreva', 'kryem', 'kryer', 'krye', 'bera', 'bona', 'bana', 'bere', 'mbylla', 'mbyllur',
+    'mora', 'persiper', 'pranova', 'pranoj', 'pranuar', 'nisa', 'fillova', 'merrem', 'pashe',
+    'raportoj', 'raport', 'shenim', 'koment', 'pronarin', 'pronarit', 'ekipit',
+    'sot', 'neser', 'tani', 'tashti', 'sapo', 'edhe', 'por', 'sepse', 'qe', 'te', 'me', 'ne', 'per', 'nga', 'tek',
+  ]);
+
+  function albanianStem(word) {
+    const w = fold(word).replace(/[^a-z0-9]/g, '');
+    if (w.length < 5) return w;
+    return w.replace(/(?:ave|eve|ive|in|en|at|et|it|es|se|ve|te|ja|ia|ne|a|e|i|u)$/, s => (w.length - s.length >= 4 ? '' : s));
+  }
+
+  function contentStems(raw) {
+    return fold(raw)
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(w => w.length >= 3 && !EMP_STOPWORDS.has(w))
+      .map(albanianStem)
+      .filter(w => w.length >= 3);
+  }
+
+  /* Parses an employee's spoken or typed Albanian update against their own assigned tasks.
+   * Actions: 'list' | 'complete' | 'acknowledge' | 'report'. */
+  function parseEmployeeAction(raw, myTasks = []) {
+    const original = String(raw || '').trim();
+    const text = fold(original).replace(/\s+/g, ' ').trim();
+    const tasks = Array.isArray(myTasks) ? myTasks.filter(t => t && t.id && t.title) : [];
+    const openTasks = tasks.filter(t => !t.done);
+    const warnings = [];
+
+    const negated = /\b(?:nuk|s\s*e|s\s*kam|se\s+kam|ende\s+(?:jo|nuk|s)|akoma\s+(?:jo|nuk|s)|pamundur)\b/.test(text);
+    const hasComplete = !negated && (
+      /\b(?:e\s+)?(?:perfundova|perfunduam|mbarova|mbaruam|kreva|kryem|mbylla|mbyllem)\b/.test(text) ||
+      /\b(?:u\s+(?:perfundua|mbarua|krye|mbyll)|ka\s+(?:perfunduar|mbaruar)|eshte\s+(?:perfunduar|kryer|mbaruar)|e\s+kam\s+(?:perfunduar|mbaruar|kryer|bere|bo|ba|mbyllur))\b/.test(text) ||
+      /\b(?:e\s+(?:bera|bona|bana)|sheno(?:je)?\s+(?:si\s+)?(?:te\s+)?kryer|beje\s+kryer|detyra\s+u\s+(?:krye|perfundua)|kryer\s+detyr)\b/.test(text) ||
+      /\b(?:e\s+)?(?:dergova|cova|dorezova|pergatita|kontrollova|verifikova|rregullova|ndreqa|pagova|nenshkrova|firmosa|pastrova|sistemova)\b/.test(text)
+    );
+    const hasAck = !negated && !hasComplete && (
+      /\b(?:e\s+mora(?:\s+detyren|\s+persiper)?|mora\s+persiper|e\s+pranova|pranoj(?:\s+detyren)?|e\s+kam\s+pranuar|po\s+nis(?:\s+punen)?|nisa\s+punen|fillova\s+(?:punen|me)|po\s+merrem\s+me|e\s+pashe\s+detyren)\b/.test(text)
+    );
+    const hasReportCue = /\b(?:raportoj|raport|shenim|koment|mungon|problem|vonohet|presim|mbetur)\b/.test(text) || negated;
+    const hasListQuery = !hasComplete && !hasAck && !hasReportCue && (
+      /\b(?:cilat|cfare|cka|sa)\s+detyr/.test(text) ||
+      /\b(?:lexo|me\s+lexo|trego|me\s+trego|shfaq)\s+detyr/.test(text) ||
+      /\bdetyrat\s+e\s+mia\b/.test(text) ||
+      /\bcfare\s+kam\s+(?:sot|ne\s+pritje|per\s+te\s+bere|per\s+sot)\b/.test(text) ||
+      /\bkam\s+ndonje\s+detyre\b/.test(text)
+    );
+
+    if (hasListQuery) {
+      return { original, action: 'list', taskId: '', taskTitle: '', note: '', warnings: [] };
+    }
+
+    const action = hasComplete ? 'complete' : hasAck ? 'acknowledge' : 'report';
+    const pool = openTasks.length ? openTasks : tasks;
+    let matched = null;
+
+    // 1. Ordinal reference ("detyrën e parë", "të dytën", "të tretën")
+    if (/\b(?:detyren\s+e\s+pare|te\s+paren|e\s+para)\b/.test(text) && pool[0]) matched = pool[0];
+    else if (/\b(?:detyren\s+e\s+dyte|te\s+dyten|e\s+dyta)\b/.test(text) && pool[1]) matched = pool[1];
+    else if (/\b(?:detyren\s+e\s+trete|te\s+treten|e\s+treta)\b/.test(text) && pool[2]) matched = pool[2];
+
+    // 2. Albanian stem & substring similarity against the employee's tasks
+    // Words spoken in the main clause (before "sepse / pasi / meqë / por") identify the target task,
+    // whereas words after a causal conjunction describe the reason/blocker.
+    if (!matched && tasks.length) {
+      const clauses = original.split(/\b(?:sepse|pasi|meq[eë]|meqen[eë]se|mir[eë]po|por)\b/i);
+      const mainStems = contentStems(clauses[0] || '');
+      const reasonStems = contentStems(clauses.slice(1).join(' '));
+      let bestScore = 0;
+      for (const t of tasks) {
+        const tStems = contentStems(`${t.title || ''} ${t.desc || ''} ${t.category || ''}`);
+        if (!tStems.length) continue;
+        const hitsStem = qs => tStems.some(ts => ts === qs || (qs.length >= 4 && ts.length >= 4 && (ts.startsWith(qs) || qs.startsWith(ts))));
+        let overlap = 0;
+        mainStems.forEach((qs, idx) => {
+          if (hitsStem(qs)) overlap += 3 + 0.25 / (idx + 1);
+        });
+        reasonStems.forEach(qs => {
+          if (hitsStem(qs)) overlap += 1.2;
+        });
+        if (overlap > 0 && !t.done && (action === 'complete' || action === 'acknowledge')) overlap += 0.5;
+        if (overlap > bestScore) {
+          bestScore = overlap;
+          matched = t;
+        }
+      }
+    }
+
+    // 3. Unambiguous single open task fallback
+    if (!matched) {
+      if (openTasks.length === 1) matched = openTasks[0];
+      else if (tasks.length === 1) matched = tasks[0];
+    }
+
+    if (!tasks.length) {
+      warnings.push('Aktualisht nuk ke asnjë detyrë të caktuar në emrin tënd.');
+    } else if (!matched) {
+      warnings.push('Zgjidh detyrën përkatëse nga lista më poshtë para konfirmimit.');
+    }
+
+    return {
+      original,
+      action,
+      taskId: matched ? String(matched.id) : '',
+      taskTitle: matched ? String(matched.title) : '',
+      note: original,
+      warnings,
+    };
+  }
+
+  function normalizeEmployeeAction(data, raw, myTasks = []) {
+    const transcript = typeof data?.transcript === 'string' && data.transcript.trim()
+      ? data.transcript.trim()
+      : String(raw || '').trim();
+    const tasks = Array.isArray(myTasks) ? myTasks.filter(t => t && t.id && t.title) : [];
+    const local = parseEmployeeAction(transcript, tasks);
+    const prop = data?.employeeProposal;
+    if (!prop || typeof prop !== 'object') return local;
+
+    const validActions = ['complete', 'acknowledge', 'report', 'list'];
+    const negated = /\b(?:nuk|s\s*e|s\s*kam|se\s+kam|ende\s+(?:jo|nuk|s)|akoma\s+(?:jo|nuk|s)|pamundur)\b/.test(fold(transcript));
+    let action = validActions.includes(String(prop.action)) ? String(prop.action) : local.action;
+    if (negated && action === 'complete') action = 'report';
+    if (action === 'list') {
+      return { original: transcript, action: 'list', taskId: '', taskTitle: '', note: '', warnings: [] };
+    }
+
+    let chosen = null;
+    if (prop.taskId) {
+      chosen = tasks.find(t => String(t.id) === String(prop.taskId)) || null;
+    }
+    if (!chosen && local.taskId) {
+      chosen = tasks.find(t => String(t.id) === String(local.taskId)) || null;
+    }
+    const warnings = [];
+    if (!tasks.length) warnings.push('Aktualisht nuk ke asnjë detyrë të caktuar në emrin tënd.');
+    else if (!chosen) warnings.push('Zgjidh detyrën përkatëse nga lista më poshtë para konfirmimit.');
+
+    const note = typeof prop.note === 'string' && prop.note.trim()
+      ? prop.note.trim().slice(0, 1500)
+      : local.note;
+
+    return {
+      original: transcript,
+      action,
+      taskId: chosen ? String(chosen.id) : '',
+      taskTitle: chosen ? String(chosen.title) : '',
+      note,
+      warnings,
+    };
+  }
+
+  const api = { parse, normalize, validDate, dateKey, resolveKnownPerson, taskMatchesUser, parseEmployeeAction, normalizeEmployeeAction };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TaskAssistant = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

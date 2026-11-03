@@ -1,6 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {parse,normalize,validDate,dateKey}=require('../task-assistant.js');
+const {parse,normalize,validDate,dateKey,taskMatchesUser,parseEmployeeAction,normalizeEmployeeAction}=require('../task-assistant.js');
 const now=new Date(2026,9,28,0,15);
 const people=['Arben Kola','Ana','Ana Hoxha','Beni'];
 test('recognizes Albanian contacts, priority and tomorrow',()=>{
@@ -75,4 +75,43 @@ test('understands inflected Albanian dative/accusative names, spoken relative de
   assert.equal(norm.assignee,'Dorjela Daja');
   assert.equal(norm.warnings.length,0);
 });
+
+test('taskMatchesUser matches logged-in employee across full name, inflections, username, and email without leaking others',()=>{
+  const dorjela={userName:'Dorjela Daja',username:'dorjela',email:'dorjela.daja@axhenda.local'};
+  assert.equal(taskMatchesUser({assignee:'Dorjela Daja'},dorjela),true);
+  assert.equal(taskMatchesUser({assignee:'Arben Kola, Dorjelës Dajës'},dorjela),true);
+  assert.equal(taskMatchesUser({assignee:'dorjela'},dorjela),true);
+  assert.equal(taskMatchesUser({assignee:'dorjela.daja'},dorjela),true);
+  assert.equal(taskMatchesUser({assignee:'Arben Kola'},dorjela),false);
+  assert.equal(taskMatchesUser({assignee:''},dorjela),false);
+});
+
+test('parseEmployeeAction & normalizeEmployeeAction understand list, complete, acknowledge, report, and negation safety',()=>{
+  const myTasks=[
+    {id:'t1',title:'Dërgo faturat e furnitorëve',due:'2026-10-29',priority:'Lart',done:false},
+    {id:'t2',title:'Përgatit pasqyrën mujore të shpenzimeve',due:'2026-10-31',priority:'Mesme',done:false},
+  ];
+  assert.equal(parseEmployeeAction('Cilat detyra kam në pritje?',myTasks).action,'list');
+  assert.equal(parseEmployeeAction('Më lexo detyrat e mia',myTasks).action,'list');
+
+  const done=parseEmployeeAction('E përfundova dërgimin e faturave të furnitorëve me email',myTasks);
+  assert.equal(done.action,'complete');
+  assert.equal(done.taskId,'t1');
+
+  const ack=parseEmployeeAction('E mora përsipër pasqyrën e shpenzimeve',myTasks);
+  assert.equal(ack.action,'acknowledge');
+  assert.equal(ack.taskId,'t2');
+
+  const negated=parseEmployeeAction('Nuk e përfundova dot pasqyrën sepse mungon fatura e ujit',myTasks);
+  assert.equal(negated.action,'report','negated completion must never mark task as done');
+  assert.equal(negated.taskId,'t2');
+
+  const safeNorm=normalizeEmployeeAction({
+    transcript:'E përfundova faturën',
+    employeeProposal:{action:'complete',taskId:'foreign-task-id',note:'U dërgua fatura'},
+  },'',myTasks);
+  assert.equal(safeNorm.action,'complete');
+  assert.equal(safeNorm.taskId,'t1','foreign taskId is rejected and matched safely against own tasks');
+});
+
 

@@ -50,15 +50,24 @@
     return value.length > max ? value.slice(0, max - 1).trim() + '…' : value;
   };
 
-  /* Personalized Albanian greeting for the owner. */
-  function greeting(name) {
+  /* Personalized Albanian greeting for the logged-in user (Owner or Employee). */
+  function greeting(name, options) {
     const who = clip(name, 60);
+    const opts = options || {};
+    if (opts.role === 'employee') {
+      const hello = who ? 'Përshëndetje ' + who + '!' : 'Përshëndetje!';
+      const count = typeof opts.openCount === 'number' ? opts.openCount : null;
+      if (count === 0) return hello + ' Aktualisht nuk ke detyra në pritje. Si mund të të ndihmoj?';
+      if (count === 1) return hello + ' Ke 1 detyrë në pritje. Cilën detyrë do të pranosh, raportosh ose shënosh të kryer?';
+      if (count != null && count > 1) return hello + ' Ke ' + count + ' detyra në pritje. Cilën detyrë do të pranosh, raportosh ose shënosh të kryer?';
+      return hello + ' Cilën detyrë do të pranosh, raportosh ose shënosh të kryer?';
+    }
     return who
       ? 'Përshëndetje ' + who + '! Çfarë detyre do të shkruajmë?'
       : 'Përshëndetje! Çfarë detyre do të shkruajmë?';
   }
 
-  /* What the assistant says (and writes) when a proposal is ready. */
+  /* What the assistant says (and writes) when an owner task proposal is ready. */
   function summarize(draft, options) {
     const d = draft || {};
     const today = options && options.today;
@@ -69,6 +78,34 @@
     parts.push('Prioriteti ' + (PRIORITY[d.priority] || PRIORITY.Mesme) + '.');
     parts.push('Kontrollo fushat dhe shtyp “Konfirmo dhe dërgo”. Njoftimin e zgjedh vetë.');
     return parts.join(' ');
+  }
+
+  /* Reads an employee's open assigned tasks aloud in natural Albanian. */
+  function summarizeEmployeeTasks(tasks, options) {
+    const open = Array.isArray(tasks) ? tasks.filter(t => t && !t.done) : [];
+    const today = options && options.today;
+    if (!open.length) return 'Aktualisht nuk ke asnjë detyrë të hapur në pritje.';
+    const shown = open.slice(0, 4).map((t, idx) => {
+      const when = speakDate(t.due, today);
+      return (idx + 1) + '. ' + clip(t.title, 90) + (when ? ' (afati: ' + when + ')' : '');
+    });
+    const extra = open.length > 4 ? ' Dhe ' + (open.length - 4) + ' të tjera.' : '';
+    const intro = open.length === 1 ? 'Ke 1 detyrë në pritje: ' : 'Ke ' + open.length + ' detyra në pritje: ';
+    return intro + shown.join('; ') + '.' + extra + ' Thuaj cilën ke pranuar, përfunduar ose çfarë do të raportosh.';
+  }
+
+  /* Reads an employee's prepared task update before confirmation. */
+  function summarizeEmployeeAction(proposal) {
+    const p = proposal || {};
+    const title = clip(p.taskTitle, 110);
+    const target = title ? 'detyrën “' + title + '”' : 'detyrën tënde';
+    if (p.action === 'complete') {
+      return 'Gati për konfirmim: po shënon si të kryer ' + target + '. Kontrollo shënimin dhe shtyp “Konfirmo veprimin”.';
+    }
+    if (p.action === 'acknowledge') {
+      return 'Gati për konfirmim: po pranon ' + target + '. Kontrollo dhe shtyp “Konfirmo veprimin”.';
+    }
+    return 'Gati për konfirmim: po shton raport pune te ' + (title ? '“' + title + '”' : 'detyra jote') + '. Kontrollo dhe shtyp “Konfirmo veprimin”.';
   }
 
   /* ---------- speaker ---------- */
@@ -362,17 +399,22 @@
     greetingPill: 'Po flas',
     speaking: 'Po flas',
     ready: 'Klikoni për të thënë një detyrë',
+    readyEmp: 'Klikoni për të folur për detyrën',
     opening: 'Po hap mikrofonin…',
     openingHint: 'Lejo mikrofonin nëse të kërkohet.',
     listening: 'Po dëgjoj…',
     listeningHint: 'Fol lirshëm. Ndalon vetë pas 3 sekondash heshtjeje.',
     thinking: 'Po e përgatis detyrën…',
     thinkingHint: 'Po e kuptoj çfarë the.',
+    thinkingEmp: 'Po kontrolloj detyrën…',
+    thinkingHintEmp: 'Po gjej detyrën tënde dhe po përgatis përditësimin.',
     review: 'Kontrollo fushat te dritarja',
+    reviewEmp: 'Konfirmo veprimin te dritarja',
     reminder: 'Punonjësi NUK do të njoftohet. Kliko katrorin “Njofto punonjësit” nëse do ta njoftosh, ose shtyp “Konfirmo dhe dërgo” sërish për ta ruajtur pa njoftim.',
     savedNotified: 'Detyra u ruajt dhe punonjësit e zgjedhur u njoftuan.',
     saved: 'Detyra u ruajt. Asnjë njoftim nuk u dërgua.',
     discarded: 'Asgjë nuk u ruajt. Klikoni mikrofonin për një detyrë tjetër.',
+    discardedEmp: 'Asgjë nuk u ndryshua. Klikoni mikrofonin kur të jesh gati.',
   };
 
   function formatClock(date) {
@@ -390,6 +432,14 @@
     const speaker = o.speaker || { speak: () => Promise.resolve('text'), stop() {}, unlock() {} };
     const today = o.today || (() => '');
     const ownerName = o.ownerName || (() => '');
+    const roleFn = o.role || (() => 'owner');
+    const openCountFn = o.openTaskCount || (() => null);
+    const isEmp = () => roleFn() === 'employee';
+    const readyPill = () => (isEmp() ? TEXT.readyEmp : TEXT.ready);
+    const currentGreeting = customName => greeting(
+      customName != null ? customName : ownerName(),
+      isEmp() ? { role: 'employee', openCount: openCountFn() } : undefined,
+    );
     const clockNow = o.clock || (() => formatClock(new Date()));
     let state = 'closed', muted = false, speechToken = 0, hasHistory = false, afterSpeakPill = TEXT.ready;
 
@@ -423,7 +473,7 @@
     function stopSpeaking() {
       speechToken++;
       try { speaker.stop(); } catch (e) { /* nothing was playing */ }
-      if (state === 'speaking') paint('idle', afterSpeakPill || TEXT.ready, null);
+      if (state === 'speaking') paint('idle', afterSpeakPill || readyPill(), null);
     }
 
     function say(text, options) {
@@ -431,7 +481,7 @@
       const mine = ++speechToken;
       try { speaker.stop(); } catch (e) { /* nothing was playing */ }
       const pill = opts.pill != null ? opts.pill : TEXT.speaking;
-      const after = opts.after != null ? opts.after : TEXT.ready;
+      const after = opts.after != null ? opts.after : readyPill();
       afterSpeakPill = after;
       if (muted) {
         paint('idle', after, text, false);
@@ -462,18 +512,18 @@
         try { speaker.unlock(); } catch (e) { /* audio stays locked */ }
         if (wasClosed) {
           markHistory(false);
-          paint('idle', TEXT.ready, greeting(ownerName()), false);
+          paint('idle', readyPill(), currentGreeting(), false);
           if (els.liveField) els.liveField.value = '';
         }
       },
-      /* Opens the window AND greets the owner aloud in Albanian. */
+      /* Opens the window AND greets the logged-in user aloud in Albanian. */
       greet(customName) {
         toggle(els.stage, 'show', true);
         try { speaker.unlock(); } catch (e) { /* audio stays locked */ }
         markHistory(false);
         if (els.liveField) els.liveField.value = '';
-        const hi = greeting(customName != null ? customName : ownerName());
-        return say(hi, { pill: TEXT.greetingPill, after: TEXT.ready });
+        const hi = currentGreeting(customName);
+        return say(hi, { pill: TEXT.greetingPill, after: readyPill() });
       },
       /* Clears conversation back to initial greeting ("Faqja bosh" / trash action). */
       clear() {
@@ -481,14 +531,14 @@
         stopSpeaking();
         markHistory(false);
         if (els.liveField) els.liveField.value = '';
-        paint('idle', TEXT.ready, greeting(ownerName()), false);
+        paint('idle', readyPill(), currentGreeting(), false);
       },
       /* Replays the current bubble text aloud ("dëgjo" button below bubble). */
       replay() {
         if (state === 'closed' || state === 'listening' || state === 'thinking') return Promise.resolve('busy');
         const current = els.chat && els.chat.textContent ? String(els.chat.textContent).trim() : '';
         if (!current) return Promise.resolve('empty');
-        return say(current, { pill: TEXT.speaking, after: afterSpeakPill || TEXT.ready });
+        return say(current, { pill: TEXT.speaking, after: afterSpeakPill || readyPill() });
       },
       close() {
         speechToken++;
@@ -536,7 +586,7 @@
       thinking() {
         if (state !== 'closed') {
           markHistory(true);
-          paint('thinking', TEXT.thinking, TEXT.thinkingHint, false);
+          paint('thinking', isEmp() ? TEXT.thinkingEmp : TEXT.thinking, isEmp() ? TEXT.thinkingHintEmp : TEXT.thinkingHint, false);
         }
       },
 
@@ -544,6 +594,16 @@
         if (state === 'closed') return Promise.resolve('closed');
         markHistory(true);
         return say(summarize(draft, { today: today() }), { pill: TEXT.speaking, after: TEXT.review });
+      },
+      employeeDraft(proposal) {
+        if (state === 'closed') return Promise.resolve('closed');
+        markHistory(true);
+        return say(summarizeEmployeeAction(proposal), { pill: TEXT.speaking, after: TEXT.reviewEmp });
+      },
+      sayText(text, options) {
+        if (state === 'closed') api.open();
+        markHistory(true);
+        return say(String(text || ''), options || { pill: TEXT.speaking, after: readyPill() });
       },
       reminder() {
         if (state === 'closed') return Promise.resolve('closed');
@@ -557,21 +617,34 @@
         const notified = !!(info && info.notified);
         return say(notified ? TEXT.savedNotified : TEXT.saved, { pill: TEXT.speaking, after: TEXT.ready });
       },
+      employeeSaved(info) {
+        if (state === 'closed') return Promise.resolve('closed');
+        markHistory(true);
+        if (els.liveField) els.liveField.value = '';
+        const d = info || {};
+        const title = clip(d.title, 90);
+        const msg = d.action === 'complete'
+          ? 'Detyra' + (title ? ' “' + title + '”' : '') + ' u shënua si e kryer.' + (d.chatSent ? ' Përditësimi u dërgua edhe në Chat.' : '')
+          : d.action === 'acknowledge'
+          ? 'Detyra' + (title ? ' “' + title + '”' : '') + ' u pranua.' + (d.chatSent ? ' Pronari u njoftua në Chat.' : '')
+          : 'Raporti për detyrën' + (title ? ' “' + title + '”' : '') + ' u ruajt.' + (d.chatSent ? ' U dërgua edhe në Chat.' : '');
+        return say(msg, { pill: TEXT.speaking, after: TEXT.readyEmp });
+      },
       discarded() {
         if (state !== 'closed') {
           stopSpeaking();
           markHistory(true);
-          afterSpeakPill = TEXT.ready;
-          paint('idle', TEXT.ready, TEXT.discarded, false);
+          afterSpeakPill = readyPill();
+          paint('idle', readyPill(), isEmp() ? TEXT.discardedEmp : TEXT.discarded, false);
         }
       },
       /* Dictation ended without a proposal (cancelled, no voice, failure). */
       idle(message) {
         if (state === 'closed') return;
         stopSpeaking();
-        afterSpeakPill = TEXT.ready;
+        afterSpeakPill = readyPill();
         if (message) markHistory(true);
-        paint('idle', TEXT.ready, message || greeting(ownerName()), !!message);
+        paint('idle', readyPill(), message || currentGreeting(), !!message);
       },
 
       toggleMute() {
@@ -596,7 +669,7 @@
     return api;
   }
 
-  const api = { create, createSpeaker, summarize, greeting, speakDate, pcmToFloat32, pcmToWav, formatClock, TEXT };
+  const api = { create, createSpeaker, summarize, summarizeEmployeeTasks, summarizeEmployeeAction, greeting, speakDate, pcmToFloat32, pcmToWav, formatClock, TEXT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AvatarAssistant = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
