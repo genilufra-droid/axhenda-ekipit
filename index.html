@@ -587,7 +587,15 @@
   .auth-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:var(--bg)}
   .auth-card{width:min(420px,100%);background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:var(--shadow)}
   .auth-card h1{margin:0 0 6px;font-size:22px}.auth-card p{color:var(--muted);font-size:13px;margin:0 0 18px}.auth-card input{width:100%;margin:7px 0}.auth-card button{width:100%;margin-top:10px}.auth-error{color:var(--dang);font-size:13px;min-height:18px;margin-top:8px}
-  .auth-lock>header,.auth-lock>.wrap,.auth-lock>.overlay,.auth-lock>#toast{display:none!important}
+  .auth-error.ok{color:var(--ok);font-weight:600}
+  .auth-lock>header,.auth-lock>.wrap,.auth-lock>.overlay:not(#resetPasswordOverlay){display:none!important}
+  .reset-chan-group{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+  .reset-chan-btn{border:1.5px solid var(--line);background:var(--panel2);color:var(--txt);border-radius:10px;padding:10px 12px;font-size:13.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:.15s}
+  .reset-chan-btn.active{border-color:var(--brand);background:#eef3ff;color:#2b5bd0}
+  .reset-status{border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.45;display:none}
+  .reset-status.show{display:block}
+  .reset-status.err{background:#fff1f1;border:1px solid #f5c2c7;color:#b42318}
+  .reset-status.ok{background:#ecfdf3;border:1px solid #abefc6;color:#067647}
   @media(max-width:900px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
@@ -1165,6 +1173,56 @@
     </div>
     <div style="font-size:11px;color:#666;margin-top:10px">
       <strong>Si të konfigurosh SMS API:</strong> Shih skedarin <code>supabase/functions/send-sms/README.md</code>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PASSWORD RESET MODAL (accessible from login screen) ===== -->
+<div class="overlay" id="resetPasswordOverlay">
+  <div class="modal" style="max-width:430px">
+    <div class="modal-head">
+      <span class="ic">🔑</span>
+      <div style="flex:1">
+        <p class="mt">Rivendos fjalëkalimin</p>
+        <p class="ms" id="resetPasswordSub">Merr një kod verifikimi 6-shifror me SMS ose Email</p>
+      </div>
+      <button class="x" id="resetPasswordClose" type="button" aria-label="Mbyll">&times;</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:12px">
+      <div id="resetStatusMsg" class="reset-status" role="status" aria-live="polite"></div>
+
+      <div id="resetStep1" style="display:flex;flex-direction:column;gap:12px">
+        <div class="field">
+          <label for="resetIdentifier">Username, Email ose Nr. telefoni</label>
+          <input type="text" id="resetIdentifier" placeholder="p.sh. kledis, emri@gmail.com ose +35569..." autocomplete="username" />
+        </div>
+        <div class="field">
+          <label>Ku dëshiron ta marrësh kodin 6-shifror?</label>
+          <div class="reset-chan-group" role="radiogroup" aria-label="Kanali i verifikimit">
+            <button type="button" class="reset-chan-btn active" id="resetChanSms" data-reset-chan="sms" aria-pressed="true">📱 SMS në telefon</button>
+            <button type="button" class="reset-chan-btn" id="resetChanEmail" data-reset-chan="email" aria-pressed="false">✉️ Email</button>
+          </div>
+        </div>
+        <button type="button" class="act" id="resetSendCodeBtn" style="width:100%">📤 Dërgo kodin 6-shifror</button>
+        <button type="button" class="act ghost sm" id="resetToStep2Btn" style="width:100%">Kam tashmë një kod 6-shifror →</button>
+      </div>
+
+      <div id="resetStep2" style="display:none;flex-direction:column;gap:12px">
+        <div class="field">
+          <label for="resetCodeInput">Kodi 6-shifror i ardhur</label>
+          <input type="text" id="resetCodeInput" inputmode="numeric" maxlength="6" placeholder="Shkruaj 6 shifrat (p.sh. 482910)" autocomplete="one-time-code" style="letter-spacing:4px;font-weight:700;font-size:16px;text-align:center" />
+        </div>
+        <div class="field">
+          <label for="resetNewPassword">Fjalëkalimi i ri (minimum 8 karaktere)</label>
+          <input type="password" id="resetNewPassword" placeholder="Të paktën 8 karaktere" autocomplete="new-password" />
+        </div>
+        <div class="field">
+          <label for="resetConfirmPassword">Përsërit fjalëkalimin e ri</label>
+          <input type="password" id="resetConfirmPassword" placeholder="Shkruaj sërish fjalëkalimin e ri" autocomplete="new-password" />
+        </div>
+        <button type="button" class="act" id="resetConfirmBtn" style="width:100%">✅ Ruaj fjalëkalimin e ri</button>
+        <button type="button" class="act ghost sm" id="resetBackBtn" style="width:100%">← Ndrysho mënyrën ose ridërgo kodin</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3682,21 +3740,133 @@ async function changeMyPassword(){
   if(error||data?.error){toast('Ndryshimi dështoi: '+(data?.error||error.message),'err');return;}
   toast('Password-i u ndryshua ✓','ok');
 }
-async function forgotPasswordFlow(){
-  const identifier=prompt('Vendos username ose email:')||''; if(!identifier)return;
-  let channel=(prompt('Shkruaj SMS ose EMAIL. Mund ta shkruash me germa të mëdha ose të vogla: sms, Sms, email, Email:')||'').trim().toLowerCase();
-  channel=channel.replace(/[\s-]/g,'');
-  if(channel==='e-mail') channel='email';
-  if(channel!=='sms'&&channel!=='email'){toast('Shkruaj vetëm SMS ose EMAIL','err');return;}
-  const req=await authClient.functions.invoke('request-password-reset',{body:{identifier,channel}});
-  if(req.error||req.data?.error){toast('Kërkesa dështoi: '+(req.data?.error||req.error?.message),'err');return;}
-  const code=prompt('Vendos kodin 6-shifror që të erdhi:')||''; if(!code)return;
-  const p=prompt('Vendos password-in e ri (minimum 8 karaktere):')||'';
-  if(!p||p.length<8){toast('Password-i duhet të ketë të paktën 8 karaktere','err');return;}
-  const done=await authClient.functions.invoke('confirm-password-reset',{body:{identifier,code,new_password:p}});
-  if(done.error||done.data?.error){toast('Rikthimi dështoi: '+(done.data?.error||done.error?.message),'err');return;}
-  toast('Password-i u rikthye ✓','ok');
+let resetChannel='sms', resetChannelManual=false;
+function setResetStatus(msg,kind='err'){
+  const el=$('#resetStatusMsg');
+  if(!el)return;
+  if(!msg){el.textContent='';el.className='reset-status';return;}
+  el.textContent=msg;
+  el.className='reset-status show '+(kind==='ok'?'ok':'err');
 }
+function setResetChannel(ch,manual=false){
+  resetChannel=ch==='email'?'email':'sms';
+  if(manual)resetChannelManual=true;
+  const smsBtn=$('#resetChanSms'), emailBtn=$('#resetChanEmail');
+  if(smsBtn){smsBtn.classList.toggle('active',resetChannel==='sms');smsBtn.setAttribute('aria-pressed',String(resetChannel==='sms'));}
+  if(emailBtn){emailBtn.classList.toggle('active',resetChannel==='email');emailBtn.setAttribute('aria-pressed',String(resetChannel==='email'));}
+}
+function setResetStep(step){
+  const s1=$('#resetStep1'), s2=$('#resetStep2'), sub=$('#resetPasswordSub');
+  if(s1)s1.style.display=step===1?'flex':'none';
+  if(s2)s2.style.display=step===2?'flex':'none';
+  if(sub)sub.textContent=step===2?'Vendos kodin 6-shifror dhe fjalëkalimin e ri':'Merr një kod verifikimi 6-shifror me SMS ose Email';
+}
+async function invokeResetEndpoint(slug,payload){
+  const r=await fetch(CLOUD_DEFAULT.url+'/functions/v1/'+slug,{
+    method:'POST',
+    headers:{'Content-Type':'application/json',apikey:CLOUD_DEFAULT.key,Authorization:'Bearer '+CLOUD_DEFAULT.key},
+    body:JSON.stringify(payload)
+  });
+  let data=null;
+  try{data=await r.json();}catch(e){data=null;}
+  return {ok:r.ok&&!data?.error,status:r.status,data:data||{}};
+}
+function forgotPasswordFlow(){
+  const overlay=$('#resetPasswordOverlay');
+  if(!overlay)return;
+  const typedLogin=($('#loginEmail')?.value||'').trim();
+  const idInput=$('#resetIdentifier');
+  if(idInput&&typedLogin&&!idInput.value.trim()) idInput.value=typedLogin;
+  resetChannelManual=false;
+  const curVal=(idInput?.value||'').trim().toLowerCase();
+  setResetChannel(curVal.includes('@')&&!curVal.endsWith('@axhenda.local')?'email':'sms',false);
+  if($('#resetCodeInput'))$('#resetCodeInput').value='';
+  if($('#resetNewPassword'))$('#resetNewPassword').value='';
+  if($('#resetConfirmPassword'))$('#resetConfirmPassword').value='';
+  setResetStatus('');
+  setResetStep(1);
+  overlay.classList.add('show');
+  setTimeout(()=>idInput?.focus(),40);
+}
+function closeResetPasswordModal(){
+  $('#resetPasswordOverlay')?.classList.remove('show');
+}
+async function sendPasswordResetCode(){
+  const identifier=($('#resetIdentifier')?.value||'').trim();
+  if(!identifier){setResetStatus('Shkruaj username-in, email-in ose numrin e telefonit.','err');$('#resetIdentifier')?.focus();return;}
+  const btn=$('#resetSendCodeBtn');
+  const prevTxt=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='⏳ Duke dërguar kodin...';}
+  setResetStatus('');
+  try{
+    const res=await invokeResetEndpoint('request-password-reset',{identifier,channel:resetChannel});
+    if(!res.ok){
+      if(res.data?.suggestChannel&&(res.data.suggestChannel==='sms'||res.data.suggestChannel==='email')){
+        setResetChannel(res.data.suggestChannel,true);
+      }
+      setResetStatus(res.data?.error||'Dërgimi i kodit dështoi (HTTP '+res.status+').','err');
+      return;
+    }
+    setResetStep(2);
+    setResetStatus(res.data?.message||('Kodi 6-shifror u dërgua me '+(resetChannel==='email'?'Email':'SMS')+'.'),'ok');
+    setTimeout(()=>$('#resetCodeInput')?.focus(),40);
+  }catch(e){
+    setResetStatus('Gabim lidhjeje me serverin: '+(e?.message||'kontrollo internetin'),'err');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=prevTxt||'📤 Dërgo kodin 6-shifror';}
+  }
+}
+async function confirmPasswordResetSubmit(){
+  const identifier=($('#resetIdentifier')?.value||'').trim();
+  const code=($('#resetCodeInput')?.value||'').trim().replace(/\s+/g,'');
+  const p=($('#resetNewPassword')?.value||'');
+  const p2=($('#resetConfirmPassword')?.value||'');
+  if(!identifier){setResetStep(1);setResetStatus('Shkruaj username-in ose email-in tënd.','err');$('#resetIdentifier')?.focus();return;}
+  if(!/^\d{6}$/.test(code)){setResetStatus('Shkruaj kodin me saktësisht 6 shifra që të erdhi.','err');$('#resetCodeInput')?.focus();return;}
+  if(!p||p.length<8){setResetStatus('Fjalëkalimi i ri duhet të ketë të paktën 8 karaktere.','err');$('#resetNewPassword')?.focus();return;}
+  if(p!==p2){setResetStatus('Fjalëkalimet nuk përputhen. Shkruaje njësoj në të dyja fushat.','err');$('#resetConfirmPassword')?.focus();return;}
+  const btn=$('#resetConfirmBtn');
+  const prevTxt=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='⏳ Duke ruajtur fjalëkalimin...';}
+  setResetStatus('');
+  try{
+    const res=await invokeResetEndpoint('confirm-password-reset',{identifier,code,new_password:p});
+    if(!res.ok){
+      setResetStatus(res.data?.error||'Rikthimi dështoi (HTTP '+res.status+').','err');
+      return;
+    }
+    closeResetPasswordModal();
+    const loginHint=res.data?.loginHint||identifier;
+    if($('#loginEmail')&&loginHint&&!/^\+?\d+$/.test(loginHint)) $('#loginEmail').value=loginHint;
+    if($('#loginPassword')){$('#loginPassword').value='';$('#loginPassword').focus();}
+    const errEl=$('#loginError');
+    if(errEl){errEl.classList.add('ok');errEl.textContent='✅ Fjalëkalimi u ndryshua me sukses! Hyr me fjalëkalimin e ri.';}
+    toast('Fjalëkalimi u rikthye me sukses ✓','ok');
+  }catch(e){
+    setResetStatus('Gabim lidhjeje me serverin: '+(e?.message||'kontrollo internetin'),'err');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=prevTxt||'✅ Ruaj fjalëkalimin e ri';}
+  }
+}
+$('#resetPasswordClose')?.addEventListener('click',closeResetPasswordModal);
+$('#resetPasswordOverlay')?.addEventListener('click',e=>{if(e.target?.id==='resetPasswordOverlay')closeResetPasswordModal();});
+$('#resetChanSms')?.addEventListener('click',()=>setResetChannel('sms',true));
+$('#resetChanEmail')?.addEventListener('click',()=>setResetChannel('email',true));
+$('#resetIdentifier')?.addEventListener('input',e=>{
+  if(resetChannelManual)return;
+  const v=String(e.target?.value||'').trim().toLowerCase();
+  if(v.includes('@')&&!v.endsWith('@axhenda.local')) setResetChannel('email',false);
+  else if(v) setResetChannel('sms',false);
+});
+$('#resetSendCodeBtn')?.addEventListener('click',sendPasswordResetCode);
+$('#resetToStep2Btn')?.addEventListener('click',()=>{
+  if(!($('#resetIdentifier')?.value||'').trim()){setResetStatus('Shkruaj më parë username-in, email-in ose numrin tënd lart.','err');$('#resetIdentifier')?.focus();return;}
+  setResetStatus('');setResetStep(2);setTimeout(()=>$('#resetCodeInput')?.focus(),40);
+});
+$('#resetBackBtn')?.addEventListener('click',()=>{setResetStatus('');setResetStep(1);});
+$('#resetConfirmBtn')?.addEventListener('click',confirmPasswordResetSubmit);
+$('#resetIdentifier')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();sendPasswordResetCode();}});
+$('#resetConfirmPassword')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();confirmPasswordResetSubmit();}});
 async function resetEmployeePassword(id){
   const e=employees.find(x=>x.id===id);
   if(!e){toast('Punonjësi nuk u gjet','err');return;}
@@ -3755,6 +3925,7 @@ async function unlockApp(user){
 }
 async function loginUser(){
   const email=$('#loginEmail').value.trim(), password=$('#loginPassword').value;
+  $('#loginError').classList.remove('ok');
   if(!email||!password){$('#loginError').textContent='Plotëso email-in dhe fjalëkalimin.';return;}
   $('#loginError').textContent='Duke hyrë...';
   const loginEmail=email.includes('@')?email:email.toLowerCase()+'@axhenda.local';
